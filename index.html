@@ -647,19 +647,43 @@
         e.preventDefault();
         const rect = div.getBoundingClientRect();
 
-        const clone = div.cloneNode(true);
-        clone.classList.add('drag-clone');
-        clone.style.width = rect.width + 'px';
-        clone.style.left = rect.left + 'px';
-        clone.style.top = rect.top + 'px';
-        document.body.appendChild(clone);
+        // Get all items in this section's group
+        const todos = loadTodos();
+        const sectionIndex = todos.findIndex(t => t.id === section.id);
+        const groupIndices = getItemGroup(todos, sectionIndex);
+        const groupIds = groupIndices.map(i => todos[i].id);
 
-        div.classList.add('placeholder');
+        // Create a container for all cloned items
+        const cloneContainer = document.createElement('div');
+        cloneContainer.className = 'drag-clone-container';
+        cloneContainer.style.position = 'fixed';
+        cloneContainer.style.left = rect.left + 'px';
+        cloneContainer.style.top = rect.top + 'px';
+        cloneContainer.style.zIndex = '1000';
+        cloneContainer.style.pointerEvents = 'none';
+        cloneContainer.style.background = 'white';
+        cloneContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+
+        // Clone all items in the group
+        const placeholders = [];
+        groupIds.forEach(id => {
+          const el = document.querySelector(`[data-id="${id}"]`);
+          if (el) {
+            const clone = el.cloneNode(true);
+            clone.style.opacity = '0.95';
+            cloneContainer.appendChild(clone);
+            el.classList.add('placeholder');
+            placeholders.push(el);
+          }
+        });
+
+        document.body.appendChild(cloneContainer);
 
         dragState = {
           id: section.id,
           placeholder: div,
-          clone: clone,
+          placeholders: placeholders,
+          clone: cloneContainer,
           fixedX: rect.left,
           offsetY: e.clientY - rect.top
         };
@@ -1268,7 +1292,11 @@
       saveTodos([...active, ...archived]);
 
       // Clean up
-      dragState.placeholder.classList.remove('placeholder');
+      if (dragState.placeholders) {
+        dragState.placeholders.forEach(el => el.classList.remove('placeholder'));
+      } else {
+        dragState.placeholder.classList.remove('placeholder');
+      }
       dragState = null;
       render();
     });
