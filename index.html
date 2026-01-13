@@ -514,15 +514,15 @@
           return;
         }
 
-        // Cmd+Shift+Up: move item up (check before plain arrow)
-        if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey) {
+        // Option+Up: move item up (check before plain arrow)
+        if (e.key === 'ArrowUp' && e.altKey && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemUp(todo.id);
           return;
         }
 
-        // Cmd+Shift+Down: move item down (check before plain arrow)
-        if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey) {
+        // Option+Down: move item down (check before plain arrow)
+        if (e.key === 'ArrowDown' && e.altKey && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemDown(todo.id);
           return;
@@ -698,15 +698,15 @@
           return;
         }
 
-        // Cmd+Shift+Up: move item up (check before plain arrow)
-        if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey) {
+        // Option+Up: move item up (check before plain arrow)
+        if (e.key === 'ArrowUp' && e.altKey && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemUp(section.id);
           return;
         }
 
-        // Cmd+Shift+Down: move item down (check before plain arrow)
-        if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey) {
+        // Option+Down: move item down (check before plain arrow)
+        if (e.key === 'ArrowDown' && e.altKey && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemDown(section.id);
           return;
