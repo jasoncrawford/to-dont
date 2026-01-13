@@ -524,6 +524,7 @@
         // Ctrl+Cmd+Down: move item down (check before plain arrow)
         if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
           e.preventDefault();
+          e.stopPropagation();
           moveItemDown(todo.id);
           return;
         }
@@ -708,6 +709,7 @@
         // Ctrl+Cmd+Down: move item down (check before plain arrow)
         if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
           e.preventDefault();
+          e.stopPropagation();
           moveItemDown(section.id);
           return;
         }
