@@ -1047,8 +1047,8 @@
 
       const nextActiveId = active[nextIndex].id;
       const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
-      const nextGroupIndices = getItemGroup(todos, nextActualIndex);
-      const insertAt = nextGroupIndices[nextGroupIndices.length - 1] + 1;
+      // Insert right after the next item (not after its group)
+      const insertAt = nextActualIndex + 1;
 
       // Extract the group
       const group = groupIndices.map(i => todos[i]);
