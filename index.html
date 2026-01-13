@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decay Todo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px 60px;
+      background: white;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 0;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .todo-item .drag-handle {
+      position: absolute;
+      left: -24px;
+      width: 16px;
+      margin-top: 4px;
+      cursor: grab;
+      color: #ccc;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .todo-item:hover .drag-handle {
+      opacity: 1;
+    }
+
+    .todo-item.drag-clone {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .todo-item.drag-clone .drag-handle {
+      opacity: 1;
+    }
+
+    .todo-item.drag-clone .actions {
+      opacity: 0;
+    }
+
+    .todo-item.placeholder {
+      visibility: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      padding: 20px 0 8px 0;
+      position: relative;
+    }
+
+    .section-header .text {
+      font-weight: 600;
+      font-size: 14px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      outline: none;
+      min-height: 1.4em;
+    }
+
+    .section-header .text:empty:before {
+      content: "Section name...";
+      color: #ccc;
+    }
+
+    .section-header .actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      margin-left: 10px;
+    }
+
+    .section-header:hover .actions {
+      opacity: 1;
+    }
+
+    .section-header .actions button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 14px;
+      color: #999;
+      border-radius: 3px;
+    }
+
+    .section-header .actions button:hover {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .section-header .drag-handle {
+      position: absolute;
+      left: -24px;
+      width: 16px;
+      margin-top: 2px;
+      cursor: grab;
+      color: #ccc;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .section-header:hover .drag-handle {
+      opacity: 1;
+    }
+
+    .todo-item .checkbox {
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      margin-right: 10px;
+      margin-top: 3px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: transparent;
+      transition: all 0.15s;
+    }
+
+    .todo-item:hover .checkbox {
+      border-color: #999;
+    }
+
+    .todo-item.completed .checkbox {
+      background: #e0e0e0;
+      border-color: #ccc;
+      color: #999;
+    }
+
+    .todo-item.completed .text {
+      text-decoration: line-through;
+      color: #999;
+    }
+
+    .todo-item .text {
+      outline: none;
+      min-height: 1.6em;
+    }
+
+    .todo-item .date {
+      font-size: 13px;
+      color: #bbb;
+      margin-left: 12px;
+      margin-top: 3px;
+      white-space: nowrap;
+    }
+
+    .todo-item .actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      margin-left: 10px;
+    }
+
+    .todo-item:hover .actions {
+      opacity: 1;
+    }
+
+    .todo-item .actions button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 14px;
+      color: #999;
+      border-radius: 3px;
+    }
+
+    .todo-item .actions button:hover {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .todo-item .actions .important-btn.active {
+      color: #e53935;
+    }
+
+    /* Important item escalation */
+    .todo-item.important-level-1 .text { color: #c62828; }
+    .todo-item.important-level-2 .text { color: #b71c1c; font-weight: 600; }
+    .todo-item.important-level-3 .text { color: #b71c1c; font-weight: 700; }
+    .todo-item.important-level-4 .text { color: #b71c1c; font-weight: 700; text-transform: uppercase; }
+    .todo-item.important-level-5 .text { color: #d50000; font-weight: 800; text-transform: uppercase; }
+
+    .new-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 0;
+    }
+
+    .new-item .checkbox {
+      width: 18px;
+      height: 18px;
+      border: 1.5px dashed #ddd;
+      border-radius: 3px;
+      margin-right: 10px;
+      margin-top: 3px;
+      flex-shrink: 0;
+    }
+
+    .new-item .text {
+      outline: none;
+      min-height: 1.6em;
+    }
+
+    .new-item .text:empty:before {
+      content: "New item...";
+      color: #ccc;
+    }
+
+    .new-item .text:focus:empty:before {
+      content: "";
+    }
+
+    /* Archive section */
+    .archive-header {
+      margin-top: 50px;
+      padding-top: 20px;
+      font-size: 13px;
+      color: #999;
+      cursor: pointer;
+    }
+
+    .archive-header:hover {
+      color: #666;
+    }
+
+    .archive-list {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .archive-list.expanded {
+      display: block;
+    }
+
+    .archive-list .todo-item {
+      opacity: 0.4;
+    }
+
+    .archive-list .todo-item .actions {
+      opacity: 0;
+    }
+
+    .archive-list .todo-item:hover .actions {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewToggle" style="margin-bottom: 20px; font-size: 13px; color: #999;">
+    <span id="customViewBtn" style="cursor: pointer; text-decoration: underline;">Custom order</span>
+    <span style="margin: 0 8px;">|</span>
+    <span id="autoViewBtn" style="cursor: pointer;">Auto sort</span>
+  </div>
+  <div id="todoList"></div>
+
+  <div class="new-item">
+    <div class="checkbox"></div>
+    <div class="text" contenteditable="true" id="newItemInput"></div>
+  </div>
+
+  <div id="testMode" style="position: fixed; top: 20px; right: 20px; font-size: 13px; color: #999;">
+    <span id="timeDisplay">Day 0</span>
+    <button id="advanceDay" style="margin-left: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px;">+1 day</button>
+    <button id="resetTime" style="margin-left: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px;">reset</button>
+  </div>
+
+  <div id="archiveSection" style="display: none;">
+    <div class="archive-header" id="archiveToggle">Faded away ▸</div>
+    <div class="archive-list" id="archiveList"></div>
+  </div>
+
+  <script>
+    const FADE_DURATION_DAYS = 14;
+    const IMPORTANT_ESCALATION_DAYS = 14;
+    const UPDATE_INTERVAL = 60000;
+
+    // Test mode: virtual time offset in days (persisted)
+    let timeOffsetDays = parseInt(localStorage.getItem('decay-todos-time-offset') || '0', 10);
+
+    // View mode: 'custom' or 'auto'
+    let viewMode = localStorage.getItem('decay-todos-view-mode') || 'custom';
+
+    // Drag state
+    let dragState = null;
+
+    function loadTodos() {
+      const data = localStorage.getItem('decay-todos');
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveTodos(todos) {
+      localStorage.setItem('decay-todos', JSON.stringify(todos));
+    }
+
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
+    function getVirtualNow() {
+      return Date.now() + (timeOffsetDays * 24 * 60 * 60 * 1000);
+    }
+
+    function getDaysSince(timestamp) {
+      return (getVirtualNow() - timestamp) / (1000 * 60 * 60 * 24);
+    }
+
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date(getVirtualNow());
+      const isToday = date.toDateString() === now.toDateString();
+
+      if (isToday) {
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function getFadeOpacity(timestamp) {
+      const progress = Math.min(getDaysSince(timestamp) / FADE_DURATION_DAYS, 1);
+      return 1 - progress;
+    }
+
+    function getImportanceLevel(timestamp) {
+      const progress = getDaysSince(timestamp) / IMPORTANT_ESCALATION_DAYS;
+      return Math.min(Math.floor(progress * 5) + 1, 5);
+    }
+
+    function shouldArchive(todo) {
+      if (todo.type === 'section') return false;
+      if (todo.important || todo.completed || todo.archived) return false;
+      return getDaysSince(todo.createdAt) >= FADE_DURATION_DAYS;
+    }
+
+    function archiveOldItems(todos) {
+      let changed = false;
+      todos.forEach(todo => {
+        if (shouldArchive(todo)) {
+          todo.archived = true;
+          todo.archivedAt = Date.now();
+          changed = true;
+        }
+      });
+      if (changed) saveTodos(todos);
+      return todos;
+    }
+
+    function createTodoElement(todo) {
+      const div = document.createElement('div');
+      div.className = 'todo-item';
+      div.dataset.id = todo.id;
+
+      if (todo.completed) div.classList.add('completed');
+
+      if (!todo.completed && !todo.archived) {
+        if (todo.important) {
+          div.classList.add(`important-level-${getImportanceLevel(todo.createdAt)}`);
+        } else {
+          div.style.opacity = Math.max(0.2, getFadeOpacity(todo.createdAt));
+        }
+      }
+
+      const dragHandle = document.createElement('div');
+      dragHandle.className = 'drag-handle';
+      dragHandle.textContent = '⋮⋮';
+
+      // Hide drag handle in auto-sort view
+      if (viewMode === 'auto') {
+        dragHandle.style.display = 'none';
+      }
+
+      dragHandle.onmousedown = (e) => {
+        if (todo.archived || viewMode === 'auto') return;
+        e.preventDefault();
+        const rect = div.getBoundingClientRect();
+
+        // Create floating clone that looks identical
+        const clone = div.cloneNode(true);
+        clone.classList.add('drag-clone');
+        clone.style.width = rect.width + 'px';
+        clone.style.left = rect.left + 'px';
+        clone.style.top = rect.top + 'px';
+        document.body.appendChild(clone);
+
+        // Mark original as placeholder
+        div.classList.add('placeholder');
+
+        dragState = {
+          id: todo.id,
+          placeholder: div,
+          clone: clone,
+          fixedX: rect.left,
+          offsetY: e.clientY - rect.top
+        };
+      };
+
+      const checkbox = document.createElement('div');
+      checkbox.className = 'checkbox';
+      checkbox.textContent = todo.completed ? '✓' : '';
+
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.contentEditable = !todo.archived;
+      text.textContent = todo.text;
+
+      const date = document.createElement('span');
+      date.className = 'date';
+      date.textContent = formatDate(todo.createdAt);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const importantBtn = document.createElement('button');
+      importantBtn.className = `important-btn ${todo.important ? 'active' : ''}`;
+      importantBtn.textContent = '!';
+      importantBtn.title = todo.archived ? 'Rescue item' : (todo.important ? 'Remove urgency' : 'Mark urgent');
+      importantBtn.onclick = (e) => { e.stopPropagation(); toggleImportant(todo.id); };
+      actions.appendChild(importantBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '×';
+      deleteBtn.title = 'Delete';
+      deleteBtn.onclick = (e) => { e.stopPropagation(); deleteTodo(todo.id); };
+      actions.appendChild(deleteBtn);
+
+      // Click to toggle complete (but not if clicking text to edit)
+      div.onclick = (e) => {
+        if (e.target === text) return;
+        toggleComplete(todo.id);
+      };
+
+      // Save on blur
+      text.onblur = () => {
+        updateTodoText(todo.id, text.textContent);
+      };
+
+      text.onkeydown = (e) => {
+        const todoList = document.getElementById('todoList');
+        const items = Array.from(todoList.querySelectorAll('.todo-item'));
+        const currentIndex = items.indexOf(div);
+
+        // Ctrl+Cmd+Up: move item up (check before plain arrow)
+        if (e.key === 'ArrowUp' && e.ctrlKey && e.metaKey) {
+          e.preventDefault();
+          moveItemUp(todo.id);
+          return;
+        }
+
+        // Ctrl+Cmd+Down: move item down (check before plain arrow)
+        if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
+          e.preventDefault();
+          moveItemDown(todo.id);
+          return;
+        }
+
+        // Enter: behavior depends on cursor position
+        if (e.key === 'Enter') {
+          const content = text.textContent;
+
+          if (!content.trim()) {
+            e.preventDefault();
+            convertToSection(todo.id);
+            return;
+          }
+
+          const sel = window.getSelection();
+          const range = sel.getRangeAt(0);
+          const cursorPos = range.startOffset;
+
+          // Check if cursor is at start, end, or middle
+          const atStart = cursorPos === 0 && range.startContainer === text.firstChild ||
+                         (range.startContainer === text && cursorPos === 0);
+          const atEnd = (range.startContainer === text.lastChild && cursorPos === text.lastChild.length) ||
+                       (range.startContainer === text && cursorPos === text.childNodes.length) ||
+                       (range.startContainer.nodeType === 3 && cursorPos === range.startContainer.length && !range.startContainer.nextSibling);
+
+          if (atStart) {
+            e.preventDefault();
+            text.blur();
+            insertTodoBefore(todo.id);
+          } else if (atEnd) {
+            e.preventDefault();
+            text.blur();
+            insertTodoAfter(todo.id);
+          }
+          // Middle: let default behavior add newline
+          return;
+        }
+
+        // Up arrow: move to previous item
+        if (e.key === 'ArrowUp' && currentIndex > 0) {
+          e.preventDefault();
+          text.blur();
+          const prevText = items[currentIndex - 1].querySelector('.text');
+          if (prevText) {
+            prevText.focus();
+            // Move cursor to end
+            const range = document.createRange();
+            range.selectNodeContents(prevText);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+          return;
+        }
+
+        // Down arrow: move to next item
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          text.blur();
+          if (currentIndex < items.length - 1) {
+            const nextText = items[currentIndex + 1].querySelector('.text');
+            if (nextText) {
+              nextText.focus();
+              const range = document.createRange();
+              range.selectNodeContents(nextText);
+              range.collapse(false);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } else {
+            // Last item, go to new item input
+            document.getElementById('newItemInput').focus();
+          }
+        }
+      };
+
+      div.appendChild(dragHandle);
+      div.appendChild(checkbox);
+      div.appendChild(text);
+      div.appendChild(date);
+      div.appendChild(actions);
+
+      return div;
+    }
+
+    function createSectionElement(section) {
+      const div = document.createElement('div');
+      div.className = 'section-header';
+      div.dataset.id = section.id;
+
+      const dragHandle = document.createElement('div');
+      dragHandle.className = 'drag-handle';
+      dragHandle.textContent = '⋮⋮';
+
+      if (viewMode === 'auto') {
+        dragHandle.style.display = 'none';
+      }
+
+      dragHandle.onmousedown = (e) => {
+        if (viewMode === 'auto') return;
+        e.preventDefault();
+        const rect = div.getBoundingClientRect();
+
+        const clone = div.cloneNode(true);
+        clone.classList.add('drag-clone');
+        clone.style.width = rect.width + 'px';
+        clone.style.left = rect.left + 'px';
+        clone.style.top = rect.top + 'px';
+        document.body.appendChild(clone);
+
+        div.classList.add('placeholder');
+
+        dragState = {
+          id: section.id,
+          placeholder: div,
+          clone: clone,
+          fixedX: rect.left,
+          offsetY: e.clientY - rect.top
+        };
+      };
+
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.contentEditable = true;
+      text.textContent = section.text;
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '×';
+      deleteBtn.title = 'Delete section';
+      deleteBtn.onclick = (e) => { e.stopPropagation(); deleteTodo(section.id); };
+      actions.appendChild(deleteBtn);
+
+      text.onblur = () => {
+        updateTodoText(section.id, text.textContent);
+      };
+
+      text.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          text.blur();
+          insertTodoAfter(section.id);
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          text.blur();
+          const todoList = document.getElementById('todoList');
+          const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+          const currentIndex = items.indexOf(div);
+          if (currentIndex < items.length - 1) {
+            const nextText = items[currentIndex + 1].querySelector('.text');
+            if (nextText) nextText.focus();
+          } else {
+            document.getElementById('newItemInput').focus();
+          }
+        }
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          text.blur();
+          const todoList = document.getElementById('todoList');
+          const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+          const currentIndex = items.indexOf(div);
+          if (currentIndex > 0) {
+            const prevText = items[currentIndex - 1].querySelector('.text');
+            if (prevText) prevText.focus();
+          }
+        }
+
+        if (e.key === 'ArrowUp' && e.ctrlKey && e.metaKey) {
+          e.preventDefault();
+          moveItemUp(section.id);
+          return;
+        }
+
+        if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
+          e.preventDefault();
+          moveItemDown(section.id);
+          return;
+        }
+      };
+
+      div.appendChild(dragHandle);
+      div.appendChild(text);
+      div.appendChild(actions);
+
+      return div;
+    }
+
+    function reorderTodo(draggedId, targetId) {
+      const todos = loadTodos();
+      const draggedIndex = todos.findIndex(t => t.id === draggedId);
+      const targetIndex = todos.findIndex(t => t.id === targetId);
+
+      if (draggedIndex === -1 || targetIndex === -1) return;
+
+      const [dragged] = todos.splice(draggedIndex, 1);
+      const newTargetIndex = todos.findIndex(t => t.id === targetId);
+      todos.splice(newTargetIndex, 0, dragged);
+
+      saveTodos(todos);
+      render();
+    }
+
+    function render() {
+      let todos = loadTodos();
+      todos = archiveOldItems(todos);
+
+      const active = todos.filter(t => !t.archived);
+      const archived = todos.filter(t => t.archived);
+
+      let displayOrder = active;
+      if (viewMode === 'auto') {
+        // Filter out sections in auto mode, sort only todos
+        displayOrder = [...active].filter(t => t.type !== 'section').sort((a, b) => {
+          if (a.important && !b.important) return -1;
+          if (!a.important && b.important) return 1;
+          if (a.important && b.important) return a.createdAt - b.createdAt;
+          return b.createdAt - a.createdAt;
+        });
+      }
+
+      const todoList = document.getElementById('todoList');
+      todoList.innerHTML = '';
+      displayOrder.forEach(item => {
+        if (item.type === 'section') {
+          todoList.appendChild(createSectionElement(item));
+        } else {
+          todoList.appendChild(createTodoElement(item));
+        }
+      });
+
+      const archiveSection = document.getElementById('archiveSection');
+      const archiveList = document.getElementById('archiveList');
+
+      if (archived.length > 0) {
+        archiveSection.style.display = 'block';
+        archiveList.innerHTML = '';
+        archived.sort((a, b) => b.archivedAt - a.archivedAt);
+        archived.forEach(todo => archiveList.appendChild(createTodoElement(todo)));
+      } else {
+        archiveSection.style.display = 'none';
+        archiveList.classList.remove('expanded');
+      }
+    }
+
+    function addTodo(text) {
+      if (!text.trim()) return;
+      const todos = loadTodos();
+      // Add to end (where the input is)
+      todos.push({
+        id: generateId(),
+        text: text.trim(),
+        createdAt: getVirtualNow(),
+        important: false,
+        completed: false,
+        archived: false
+      });
+      saveTodos(todos);
+      render();
+    }
+
+    function convertToSection(id) {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+
+      todo.type = 'section';
+      todo.text = '';
+      delete todo.completed;
+      delete todo.important;
+      saveTodos(todos);
+      render();
+
+      // Focus the section
+      setTimeout(() => {
+        const el = document.querySelector(`[data-id="${id}"] .text`);
+        if (el) el.focus();
+      }, 0);
+    }
+
+    function insertTodoAfter(afterId) {
+      const todos = loadTodos();
+      const index = todos.findIndex(t => t.id === afterId);
+      if (index === -1) return;
+
+      const newTodo = {
+        id: generateId(),
+        text: '',
+        createdAt: getVirtualNow(),
+        important: false,
+        completed: false,
+        archived: false
+      };
+
+      todos.splice(index + 1, 0, newTodo);
+      saveTodos(todos);
+      render();
+
+      // Focus the new item
+      setTimeout(() => {
+        const el = document.querySelector(`[data-id="${newTodo.id}"] .text`);
+        if (el) el.focus();
+      }, 0);
+    }
+
+    function insertTodoBefore(beforeId) {
+      const todos = loadTodos();
+      const index = todos.findIndex(t => t.id === beforeId);
+      if (index === -1) return;
+
+      const newTodo = {
+        id: generateId(),
+        text: '',
+        createdAt: getVirtualNow(),
+        important: false,
+        completed: false,
+        archived: false
+      };
+
+      todos.splice(index, 0, newTodo);
+      saveTodos(todos);
+      render();
+
+      // Focus the new item
+      setTimeout(() => {
+        const el = document.querySelector(`[data-id="${newTodo.id}"] .text`);
+        if (el) el.focus();
+      }, 0);
+    }
+
+    function moveItemUp(id) {
+      const todos = loadTodos();
+      const active = todos.filter(t => !t.archived);
+      const activeIndex = active.findIndex(t => t.id === id);
+      if (activeIndex <= 0) return;
+
+      const actualIndex = todos.findIndex(t => t.id === id);
+      const prevActiveId = active[activeIndex - 1].id;
+      const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
+
+      const [item] = todos.splice(actualIndex, 1);
+      todos.splice(prevActualIndex, 0, item);
+      saveTodos(todos);
+      render();
+
+      // Refocus the moved item
+      setTimeout(() => {
+        const el = document.querySelector(`[data-id="${id}"] .text`);
+        if (el) el.focus();
+      }, 0);
+    }
+
+    function moveItemDown(id) {
+      const todos = loadTodos();
+      const active = todos.filter(t => !t.archived);
+      const activeIndex = active.findIndex(t => t.id === id);
+      if (activeIndex === -1 || activeIndex >= active.length - 1) return;
+
+      const actualIndex = todos.findIndex(t => t.id === id);
+      const nextActiveId = active[activeIndex + 1].id;
+      const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
+
+      const [item] = todos.splice(actualIndex, 1);
+      todos.splice(nextActualIndex, 0, item);
+      saveTodos(todos);
+      render();
+
+      // Refocus the moved item
+      setTimeout(() => {
+        const el = document.querySelector(`[data-id="${id}"] .text`);
+        if (el) el.focus();
+      }, 0);
+    }
+
+    function updateTodoText(id, newText) {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (todo && newText.trim()) {
+        todo.text = newText.trim();
+        saveTodos(todos);
+      } else if (todo && !newText.trim()) {
+        deleteTodo(id);
+      }
+    }
+
+    function toggleImportant(id) {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (todo) {
+        todo.important = !todo.important;
+        // If rescuing from archive, unarchive but keep original date
+        if (todo.archived && todo.important) {
+          todo.archived = false;
+          todo.archivedAt = null;
+        }
+        saveTodos(todos);
+        render();
+      }
+    }
+
+    function toggleComplete(id) {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (todo) {
+        todo.completed = !todo.completed;
+        saveTodos(todos);
+        render();
+      }
+    }
+
+    function deleteTodo(id) {
+      let todos = loadTodos();
+      todos = todos.filter(t => t.id !== id);
+      saveTodos(todos);
+      render();
+    }
+
+    function restoreTodo(id) {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (todo) {
+        todo.archived = false;
+        todo.archivedAt = null;
+        todo.createdAt = getVirtualNow();
+        saveTodos(todos);
+        render();
+      }
+    }
+
+    // New item input
+    const newItemInput = document.getElementById('newItemInput');
+    newItemInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const text = newItemInput.textContent;
+        if (text.trim()) {
+          addTodo(text);
+          newItemInput.textContent = '';
+        }
+      }
+    };
+
+    // Archive toggle
+    document.getElementById('archiveToggle').onclick = () => {
+      const archiveList = document.getElementById('archiveList');
+      const toggle = document.getElementById('archiveToggle');
+      archiveList.classList.toggle('expanded');
+      toggle.textContent = archiveList.classList.contains('expanded')
+        ? 'Faded away ▾'
+        : 'Faded away ▸';
+    };
+
+    // Test mode controls
+    function saveTimeOffset() {
+      localStorage.setItem('decay-todos-time-offset', timeOffsetDays.toString());
+      document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
+    }
+
+    document.getElementById('advanceDay').onclick = () => {
+      timeOffsetDays++;
+      saveTimeOffset();
+      render();
+    };
+
+    document.getElementById('resetTime').onclick = () => {
+      timeOffsetDays = 0;
+      saveTimeOffset();
+      render();
+    };
+
+    // Initialize time display
+    document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
+
+    // View toggle
+    function updateViewToggle() {
+      const customBtn = document.getElementById('customViewBtn');
+      const autoBtn = document.getElementById('autoViewBtn');
+      if (viewMode === 'custom') {
+        customBtn.style.textDecoration = 'underline';
+        autoBtn.style.textDecoration = 'none';
+      } else {
+        customBtn.style.textDecoration = 'none';
+        autoBtn.style.textDecoration = 'underline';
+      }
+    }
+
+    document.getElementById('customViewBtn').onclick = () => {
+      viewMode = 'custom';
+      localStorage.setItem('decay-todos-view-mode', viewMode);
+      updateViewToggle();
+      render();
+    };
+
+    document.getElementById('autoViewBtn').onclick = () => {
+      viewMode = 'auto';
+      localStorage.setItem('decay-todos-view-mode', viewMode);
+      updateViewToggle();
+      render();
+    };
+
+    // Global drag handlers
+    document.addEventListener('mousemove', (e) => {
+      if (!dragState) return;
+
+      // Move clone vertically only
+      dragState.clone.style.left = dragState.fixedX + 'px';
+      dragState.clone.style.top = (e.clientY - dragState.offsetY) + 'px';
+
+      // Find where to move placeholder
+      const todoList = document.getElementById('todoList');
+      const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+
+      let targetItem = null;
+      for (const item of items) {
+        if (item === dragState.placeholder) continue;
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          targetItem = item;
+          break;
+        }
+      }
+
+      // Move placeholder to new position
+      if (targetItem && targetItem !== dragState.placeholder.nextElementSibling) {
+        todoList.insertBefore(dragState.placeholder, targetItem);
+      } else if (!targetItem && dragState.placeholder.nextElementSibling) {
+        todoList.appendChild(dragState.placeholder);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragState) return;
+
+      // Remove clone
+      dragState.clone.remove();
+
+      // Get final order from DOM
+      const todoList = document.getElementById('todoList');
+      const newOrder = Array.from(todoList.querySelectorAll('.todo-item, .section-header')).map(el => el.dataset.id);
+
+      // Update stored order
+      const todos = loadTodos();
+      const archived = todos.filter(t => t.archived);
+      const reordered = newOrder.map(id => todos.find(t => t.id === id)).filter(Boolean);
+      saveTodos([...reordered, ...archived]);
+
+      // Clean up
+      dragState.placeholder.classList.remove('placeholder');
+      dragState = null;
+    });
+
+    updateViewToggle();
+    render();
+    setInterval(render, UPDATE_INTERVAL);
+  </script>
+</body>
+</html>
