@@ -514,15 +514,15 @@
           return;
         }
 
-        // Ctrl+Cmd+Up: move item up (check before plain arrow)
-        if (e.key === 'ArrowUp' && e.ctrlKey && e.metaKey) {
+        // Cmd+Shift+Up: move item up (check before plain arrow)
+        if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemUp(todo.id);
           return;
         }
 
-        // Ctrl+Cmd+Down: move item down (check before plain arrow)
-        if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
+        // Cmd+Shift+Down: move item down (check before plain arrow)
+        if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemDown(todo.id);
           return;
@@ -698,15 +698,15 @@
           return;
         }
 
-        // Ctrl+Cmd+Up: move item up (check before plain arrow)
-        if (e.key === 'ArrowUp' && e.ctrlKey && e.metaKey) {
+        // Cmd+Shift+Up: move item up (check before plain arrow)
+        if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemUp(section.id);
           return;
         }
 
-        // Ctrl+Cmd+Down: move item down (check before plain arrow)
-        if (e.key === 'ArrowDown' && e.ctrlKey && e.metaKey) {
+        // Cmd+Shift+Down: move item down (check before plain arrow)
+        if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
           e.preventDefault();
           moveItemDown(section.id);
           return;
@@ -1183,13 +1183,6 @@
       dragState.placeholder.classList.remove('placeholder');
       dragState = null;
     });
-
-    // Capture Ctrl+Cmd+Arrow at document level to prevent browser beep
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault();
-      }
-    }, true);
 
     updateViewToggle();
     render();
