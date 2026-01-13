@@ -370,6 +370,22 @@
       return Math.min(Math.floor(progress * 5) + 1, 5);
     }
 
+    function setCursorPosition(el, pos) {
+      const textNode = el.firstChild;
+      if (!textNode) {
+        el.focus();
+        return;
+      }
+      const maxPos = textNode.length || 0;
+      const targetPos = Math.min(pos, maxPos);
+      const range = document.createRange();
+      range.setStart(textNode, targetPos);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
     function shouldArchive(todo) {
       if (todo.type === 'section') return false;
       if (todo.important || todo.completed || todo.archived) return false;
@@ -481,7 +497,7 @@
 
       text.onkeydown = (e) => {
         const todoList = document.getElementById('todoList');
-        const items = Array.from(todoList.querySelectorAll('.todo-item'));
+        const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
         const currentIndex = items.indexOf(div);
 
         // Tab: indent todo
@@ -549,39 +565,25 @@
         // Up arrow: move to previous item
         if (e.key === 'ArrowUp' && currentIndex > 0) {
           e.preventDefault();
+          const cursorPos = window.getSelection().getRangeAt(0).startOffset;
           text.blur();
           const prevText = items[currentIndex - 1].querySelector('.text');
           if (prevText) {
             prevText.focus();
-            // Move cursor to end
-            const range = document.createRange();
-            range.selectNodeContents(prevText);
-            range.collapse(false);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            setCursorPosition(prevText, cursorPos);
           }
           return;
         }
 
         // Down arrow: move to next item
-        if (e.key === 'ArrowDown') {
+        if (e.key === 'ArrowDown' && currentIndex < items.length - 1) {
           e.preventDefault();
+          const cursorPos = window.getSelection().getRangeAt(0).startOffset;
           text.blur();
-          if (currentIndex < items.length - 1) {
-            const nextText = items[currentIndex + 1].querySelector('.text');
-            if (nextText) {
-              nextText.focus();
-              const range = document.createRange();
-              range.selectNodeContents(nextText);
-              range.collapse(false);
-              const sel = window.getSelection();
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
-          } else {
-            // Last item, go to new item input
-            document.getElementById('newItemInput').focus();
+          const nextText = items[currentIndex + 1].querySelector('.text');
+          if (nextText) {
+            nextText.focus();
+            setCursorPosition(nextText, cursorPos);
           }
         }
       };
@@ -686,27 +688,33 @@
 
         if (e.key === 'ArrowDown') {
           e.preventDefault();
+          const cursorPos = window.getSelection().getRangeAt(0).startOffset;
           text.blur();
           const todoList = document.getElementById('todoList');
           const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
           const currentIndex = items.indexOf(div);
           if (currentIndex < items.length - 1) {
             const nextText = items[currentIndex + 1].querySelector('.text');
-            if (nextText) nextText.focus();
-          } else {
-            document.getElementById('newItemInput').focus();
+            if (nextText) {
+              nextText.focus();
+              setCursorPosition(nextText, cursorPos);
+            }
           }
         }
 
         if (e.key === 'ArrowUp') {
           e.preventDefault();
+          const cursorPos = window.getSelection().getRangeAt(0).startOffset;
           text.blur();
           const todoList = document.getElementById('todoList');
           const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
           const currentIndex = items.indexOf(div);
           if (currentIndex > 0) {
             const prevText = items[currentIndex - 1].querySelector('.text');
-            if (prevText) prevText.focus();
+            if (prevText) {
+              prevText.focus();
+              setCursorPosition(prevText, cursorPos);
+            }
           }
         }
       };
@@ -760,6 +768,12 @@
           todoList.appendChild(createTodoElement(item));
         }
       });
+
+      // Only show new-item input if list is empty
+      const newItemEl = document.querySelector('.new-item');
+      if (newItemEl) {
+        newItemEl.style.display = displayOrder.length === 0 ? 'flex' : 'none';
+      }
 
       const archiveSection = document.getElementById('archiveSection');
       const archiveList = document.getElementById('archiveList');
