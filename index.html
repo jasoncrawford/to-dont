@@ -1256,9 +1256,8 @@
       if (activeBeforePlaceholder.length > 0) {
         const lastBeforeId = activeBeforePlaceholder[activeBeforePlaceholder.length - 1];
         const lastBeforeIndex = todos.findIndex(t => t.id === lastBeforeId);
-        // Insert after the last item before placeholder AND its group
-        const lastBeforeGroup = getItemGroup(todos, lastBeforeIndex);
-        insertAt = lastBeforeGroup[lastBeforeGroup.length - 1] + 1;
+        // Insert right after the item before placeholder (not after its group)
+        insertAt = lastBeforeIndex + 1;
       }
 
       // Insert group at new position
