@@ -1039,7 +1039,14 @@
 
     updateViewToggle();
     render();
-    setInterval(render, UPDATE_INTERVAL);
+    setInterval(() => {
+      // Don't re-render if user is actively editing
+      const activeEl = document.activeElement;
+      const isEditing = activeEl && activeEl.classList.contains('text');
+      if (!isEditing) {
+        render();
+      }
+    }, UPDATE_INTERVAL);
   </script>
 </body>
 </html>
