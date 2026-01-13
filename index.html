@@ -863,6 +863,39 @@
       render();
     }
 
+    // Get the group of items that belong under a section
+    // Level-1 section owns everything until next level-1 section
+    // Level-2 section owns everything until next section (any level)
+    // Regular items just own themselves
+    function getItemGroup(todos, startIndex) {
+      const item = todos[startIndex];
+      if (!item) return [];
+
+      // Regular items (not sections) just return themselves
+      if (item.type !== 'section') {
+        return [startIndex];
+      }
+
+      const indices = [startIndex];
+      const level = item.level || 2;
+
+      for (let i = startIndex + 1; i < todos.length; i++) {
+        const next = todos[i];
+        if (next.archived) continue;
+
+        // Stop at next section of same or higher level
+        if (next.type === 'section') {
+          const nextLevel = next.level || 2;
+          if (level === 1 && nextLevel === 1) break;
+          if (level === 2) break; // Level 2 stops at any section
+        }
+
+        indices.push(i);
+      }
+
+      return indices;
+    }
+
     function setSectionLevel(id, level) {
       const todos = loadTodos();
       const section = todos.find(t => t.id === id);
@@ -969,15 +1002,26 @@
       if (activeIndex <= 0) return;
 
       const actualIndex = todos.findIndex(t => t.id === id);
+      const groupIndices = getItemGroup(todos, actualIndex);
+
+      // Find where to insert (before the previous item's group)
       const prevActiveId = active[activeIndex - 1].id;
       const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
+      const prevGroupIndices = getItemGroup(todos, prevActualIndex);
+      const insertAt = prevGroupIndices[0];
 
-      const [item] = todos.splice(actualIndex, 1);
-      todos.splice(prevActualIndex, 0, item);
+      // Extract the group
+      const group = groupIndices.map(i => todos[i]);
+      // Remove from end to preserve indices
+      for (let i = groupIndices.length - 1; i >= 0; i--) {
+        todos.splice(groupIndices[i], 1);
+      }
+      // Insert at new position
+      todos.splice(insertAt, 0, ...group);
+
       saveTodos(todos);
       render();
 
-      // Refocus the moved item
       setTimeout(() => {
         const el = document.querySelector(`[data-id="${id}"] .text`);
         if (el) el.focus();
@@ -991,15 +1035,34 @@
       if (activeIndex === -1 || activeIndex >= active.length - 1) return;
 
       const actualIndex = todos.findIndex(t => t.id === id);
-      const nextActiveId = active[activeIndex + 1].id;
-      const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
+      const groupIndices = getItemGroup(todos, actualIndex);
+      const groupSize = groupIndices.length;
 
-      const [item] = todos.splice(actualIndex, 1);
-      todos.splice(nextActualIndex, 0, item);
+      // Find the next item that's not part of our group
+      let nextIndex = activeIndex + 1;
+      while (nextIndex < active.length && groupIndices.includes(todos.findIndex(t => t.id === active[nextIndex].id))) {
+        nextIndex++;
+      }
+      if (nextIndex >= active.length) return;
+
+      const nextActiveId = active[nextIndex].id;
+      const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
+      const nextGroupIndices = getItemGroup(todos, nextActualIndex);
+      const insertAt = nextGroupIndices[nextGroupIndices.length - 1] + 1;
+
+      // Extract the group
+      const group = groupIndices.map(i => todos[i]);
+      // Remove from end to preserve indices
+      for (let i = groupIndices.length - 1; i >= 0; i--) {
+        todos.splice(groupIndices[i], 1);
+      }
+      // Insert at new position (adjusted for removed items)
+      const adjustedInsert = insertAt - groupSize;
+      todos.splice(adjustedInsert, 0, ...group);
+
       saveTodos(todos);
       render();
 
-      // Refocus the moved item
       setTimeout(() => {
         const el = document.querySelector(`[data-id="${id}"] .text`);
         if (el) el.focus();
@@ -1169,19 +1232,46 @@
       // Remove clone
       dragState.clone.remove();
 
-      // Get final order from DOM
-      const todoList = document.getElementById('todoList');
-      const newOrder = Array.from(todoList.querySelectorAll('.todo-item, .section-header')).map(el => el.dataset.id);
-
-      // Update stored order
+      // Get the dragged item's group
       const todos = loadTodos();
+      const draggedIndex = todos.findIndex(t => t.id === dragState.id);
+      const groupIndices = getItemGroup(todos, draggedIndex);
+      const group = groupIndices.map(i => todos[i]);
+
+      // Get target position from placeholder location in DOM
+      const todoList = document.getElementById('todoList');
+      const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+      const placeholderIndex = items.indexOf(dragState.placeholder);
+
+      // Remove group from todos (from end to preserve indices)
+      for (let i = groupIndices.length - 1; i >= 0; i--) {
+        todos.splice(groupIndices[i], 1);
+      }
+
+      // Calculate insert position based on placeholder
+      const activeBeforePlaceholder = items.slice(0, placeholderIndex)
+        .filter(el => el !== dragState.placeholder)
+        .map(el => el.dataset.id);
+      let insertAt = 0;
+      if (activeBeforePlaceholder.length > 0) {
+        const lastBeforeId = activeBeforePlaceholder[activeBeforePlaceholder.length - 1];
+        const lastBeforeIndex = todos.findIndex(t => t.id === lastBeforeId);
+        // Insert after the last item before placeholder AND its group
+        const lastBeforeGroup = getItemGroup(todos, lastBeforeIndex);
+        insertAt = lastBeforeGroup[lastBeforeGroup.length - 1] + 1;
+      }
+
+      // Insert group at new position
+      todos.splice(insertAt, 0, ...group);
+
       const archived = todos.filter(t => t.archived);
-      const reordered = newOrder.map(id => todos.find(t => t.id === id)).filter(Boolean);
-      saveTodos([...reordered, ...archived]);
+      const active = todos.filter(t => !t.archived);
+      saveTodos([...active, ...archived]);
 
       // Clean up
       dragState.placeholder.classList.remove('placeholder');
       dragState = null;
+      render();
     });
 
     updateViewToggle();
