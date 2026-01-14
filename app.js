@@ -228,6 +228,30 @@ function createTodoElement(todo) {
       return;
     }
 
+    // Backspace at start: merge with previous item
+    if (e.key === 'Backspace') {
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+
+      // Only merge if no selection (collapsed) and cursor at position 0
+      if (!range.collapsed) return; // Let default behavior delete the selection
+
+      const cursorPos = range.startOffset;
+      const atStart = cursorPos === 0 && (range.startContainer === text.firstChild || range.startContainer === text);
+
+      if (atStart && currentIndex > 0) {
+        const prevItem = items[currentIndex - 1];
+        // Only merge with other todos, not sections
+        if (prevItem.classList.contains('todo-item')) {
+          e.preventDefault();
+          const prevId = prevItem.dataset.id;
+          text.blur();
+          mergeWithPrevious(todo.id, prevId);
+          return;
+        }
+      }
+    }
+
     // Enter: behavior depends on cursor position
     if (e.key === 'Enter') {
       const content = text.textContent;
@@ -824,6 +848,36 @@ function splitTodoAt(id, textBefore, textAfter) {
     if (el) {
       el.focus();
       setCursorPosition(el, 0);
+    }
+  }, 0);
+}
+
+function mergeWithPrevious(currentId, prevId) {
+  const todos = loadTodos();
+  const currentIndex = todos.findIndex(t => t.id === currentId);
+  const prevIndex = todos.findIndex(t => t.id === prevId);
+  if (currentIndex === -1 || prevIndex === -1) return;
+
+  const currentTodo = todos[currentIndex];
+  const prevTodo = todos[prevIndex];
+
+  // Remember where to place cursor (at end of previous text)
+  const cursorPos = prevTodo.text.length;
+
+  // Merge text: previous + current
+  prevTodo.text = prevTodo.text + currentTodo.text;
+
+  // Remove current todo
+  todos.splice(currentIndex, 1);
+  saveTodos(todos);
+  render();
+
+  // Focus the merged item at the join point
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${prevId}"] .text`);
+    if (el) {
+      el.focus();
+      setCursorPosition(el, cursorPos);
     }
   }, 0);
 }

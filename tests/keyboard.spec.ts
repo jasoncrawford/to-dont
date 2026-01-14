@@ -175,6 +175,76 @@ test.describe('Keyboard Navigation', () => {
     });
   });
 
+  test.describe('Backspace Key Behavior', () => {
+    test('should merge with previous item when backspace at start', async ({ page }) => {
+      await addTodo(page, 'Hello');
+      await addTodo(page, 'World');
+
+      // Focus second item and position cursor at start
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await secondText.click();
+      await page.evaluate(() => {
+        const el = document.querySelectorAll('.todo-item .text')[1] as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(el.firstChild || el, 0);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await secondText.press('Backspace');
+
+      // Should now be one item with merged text
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(1);
+      expect(stored[0].text).toBe('HelloWorld');
+    });
+
+    test('should not merge if cursor is not at start', async ({ page }) => {
+      await addTodo(page, 'Hello');
+      await addTodo(page, 'World');
+
+      // Focus second item and add text at end, then backspace (ensures cursor not at start)
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await secondText.click();
+      await secondText.press('End');
+      await page.keyboard.type('X');
+      await page.waitForTimeout(50);
+      await page.keyboard.press('Backspace');
+      await page.waitForTimeout(50);
+
+      // Should still be two items (no merge happened)
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(2);
+      expect(stored[0].text).toBe('Hello');
+      expect(stored[1].text).toBe('World');
+    });
+
+    test('should not merge first item with nothing', async ({ page }) => {
+      await addTodo(page, 'Only item');
+
+      const firstText = page.locator('.todo-item .text').first();
+      await firstText.click();
+      await page.evaluate(() => {
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(el.firstChild || el, 0);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await firstText.press('Backspace');
+
+      // Should still be one item, unchanged
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(1);
+      expect(stored[0].text).toBe('Only item');
+    });
+  });
+
   test.describe('Reordering with Keyboard', () => {
     test('should move item up with Cmd+Shift+ArrowUp', async ({ page }) => {
       await addTodo(page, 'First');
