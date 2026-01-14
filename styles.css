@@ -1,0 +1,286 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 40px 60px;
+  background: white;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 4px 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.todo-item .drag-handle {
+  position: absolute;
+  left: -24px;
+  width: 16px;
+  margin-top: 4px;
+  cursor: grab;
+  color: #ccc;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 12px;
+  user-select: none;
+}
+
+.todo-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.todo-item.drag-clone {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+  background: white;
+}
+
+.todo-item.drag-clone .drag-handle {
+  opacity: 1;
+}
+
+.todo-item.drag-clone .actions {
+  opacity: 0;
+}
+
+.todo-item.placeholder {
+  visibility: hidden;
+}
+
+.section-placeholder-container {
+  /* Empty space, no styling */
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 0 8px 0;
+  position: relative;
+}
+
+.section-header.level-1 .text {
+  font-weight: 700;
+  font-size: 16px;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  outline: none;
+  min-height: 1.4em;
+}
+
+.section-header.level-2 .text {
+  font-weight: 600;
+  font-size: 14px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  outline: none;
+  min-height: 1.4em;
+}
+
+.section-header .text:empty:before {
+  content: "Section name...";
+  color: #ccc;
+}
+
+.todo-item.indented {
+  padding-left: 24px;
+}
+
+.section-header .actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 10px;
+}
+
+.section-header:hover .actions {
+  opacity: 1;
+}
+
+.section-header .actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #999;
+  border-radius: 3px;
+}
+
+.section-header .actions button:hover {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.section-header .drag-handle {
+  position: absolute;
+  left: -24px;
+  width: 16px;
+  margin-top: 2px;
+  cursor: grab;
+  color: #ccc;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 12px;
+  user-select: none;
+}
+
+.section-header:hover .drag-handle {
+  opacity: 1;
+}
+
+.todo-item .checkbox {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #ccc;
+  border-radius: 3px;
+  margin-right: 10px;
+  margin-top: 3px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: all 0.15s;
+}
+
+.todo-item:hover .checkbox {
+  border-color: #999;
+}
+
+.todo-item.completed .checkbox {
+  background: #e0e0e0;
+  border-color: #ccc;
+  color: #999;
+}
+
+.todo-item.completed .text {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.todo-item .text {
+  outline: none;
+  min-height: 1.6em;
+}
+
+.todo-item .date {
+  font-size: 13px;
+  color: #bbb;
+  margin-left: 12px;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.todo-item .actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 10px;
+}
+
+.todo-item:hover .actions {
+  opacity: 1;
+}
+
+.todo-item .actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  color: #999;
+  border-radius: 3px;
+}
+
+.todo-item .actions button:hover {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.todo-item .actions .important-btn.active {
+  color: #e53935;
+}
+
+/* Important item escalation */
+.todo-item.important-level-1 .text { color: #c62828; }
+.todo-item.important-level-2 .text { color: #b71c1c; font-weight: 600; }
+.todo-item.important-level-3 .text { color: #b71c1c; font-weight: 700; }
+.todo-item.important-level-4 .text { color: #b71c1c; font-weight: 700; text-transform: uppercase; }
+.todo-item.important-level-5 .text { color: #d50000; font-weight: 800; text-transform: uppercase; }
+
+.new-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.new-item .checkbox {
+  width: 18px;
+  height: 18px;
+  border: 1.5px dashed #ddd;
+  border-radius: 3px;
+  margin-right: 10px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.new-item .text {
+  outline: none;
+  min-height: 1.6em;
+}
+
+.new-item .text:empty:before {
+  content: "New item...";
+  color: #ccc;
+}
+
+.new-item .text:focus:empty:before {
+  content: "";
+}
+
+/* Archive section */
+.archive-header {
+  margin-top: 50px;
+  padding-top: 20px;
+  font-size: 13px;
+  color: #999;
+  cursor: pointer;
+}
+
+.archive-header:hover {
+  color: #666;
+}
+
+.archive-list {
+  display: none;
+  margin-top: 10px;
+}
+
+.archive-list.expanded {
+  display: block;
+}
+
+.archive-list .todo-item {
+  opacity: 0.4;
+}
+
+.archive-list .todo-item .actions {
+  opacity: 0;
+}
+
+.archive-list .todo-item:hover .actions {
+  opacity: 1;
+}
