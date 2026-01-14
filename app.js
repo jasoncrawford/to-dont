@@ -257,8 +257,14 @@ function createTodoElement(todo) {
         e.preventDefault();
         text.blur();
         insertTodoAfter(todo.id);
+      } else {
+        // Middle: split into two todos
+        e.preventDefault();
+        const textBefore = content.substring(0, cursorPos);
+        const textAfter = content.substring(cursorPos);
+        text.blur();
+        splitTodoAt(todo.id, textBefore, textAfter);
       }
-      // Middle: let default behavior add newline
       return;
     }
 
@@ -785,6 +791,40 @@ function insertTodoBefore(beforeId) {
   setTimeout(() => {
     const el = document.querySelector(`[data-id="${newTodo.id}"] .text`);
     if (el) el.focus();
+  }, 0);
+}
+
+function splitTodoAt(id, textBefore, textAfter) {
+  const todos = loadTodos();
+  const index = todos.findIndex(t => t.id === id);
+  if (index === -1) return;
+
+  const originalTodo = todos[index];
+
+  // Update original todo with text before cursor
+  originalTodo.text = textBefore.trim();
+
+  // Create new todo with text after cursor
+  const newTodo = {
+    id: generateId(),
+    text: textAfter.trim(),
+    createdAt: getVirtualNow(),
+    important: false,
+    completed: false,
+    archived: false
+  };
+
+  todos.splice(index + 1, 0, newTodo);
+  saveTodos(todos);
+  render();
+
+  // Focus the new item at the start
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${newTodo.id}"] .text`);
+    if (el) {
+      el.focus();
+      setCursorPosition(el, 0);
+    }
   }, 0);
 }
 

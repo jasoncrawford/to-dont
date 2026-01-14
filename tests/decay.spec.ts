@@ -41,11 +41,11 @@ test.describe('Decay and Fade Behavior', () => {
       expect(opacity).toBeGreaterThan(0.3);
     });
 
-    test('should reach minimum opacity at 14 days', async ({ page }) => {
+    test('should reach minimum opacity before archiving', async ({ page }) => {
       await addTodo(page, 'Old task');
 
-      // Advance virtual time by 14 days
-      await setVirtualTime(page, 14);
+      // Advance virtual time by 13 days (items auto-archive at 14)
+      await setVirtualTime(page, 13);
 
       const todo = await getTodoByText(page, 'Old task');
       const opacity = await todo.evaluate((el) => {
@@ -74,31 +74,32 @@ test.describe('Decay and Fade Behavior', () => {
       expect(opacity).toBeCloseTo(1, 1);
     });
 
-    test('should apply importance level 1 styling after 3 days', async ({ page }) => {
+    test('should apply importance level 1 styling on day 0', async ({ page }) => {
       await addTodo(page, 'Important task');
       await toggleImportant(page, 'Important task');
 
-      await setVirtualTime(page, 4);
-
+      // Day 0: level = floor(0/14 * 5) + 1 = 1
       const todo = await getTodoByText(page, 'Important task');
       await expect(todo).toHaveClass(/important-level-1/);
     });
 
-    test('should apply importance level 2 styling after 5 days', async ({ page }) => {
+    test('should apply importance level 2 styling around day 4', async ({ page }) => {
       await addTodo(page, 'Important task');
       await toggleImportant(page, 'Important task');
 
-      await setVirtualTime(page, 6);
+      // Day 4: level = floor(4/14 * 5) + 1 = 2
+      await setVirtualTime(page, 4);
 
       const todo = await getTodoByText(page, 'Important task');
       await expect(todo).toHaveClass(/important-level-2/);
     });
 
-    test('should apply importance level 3 styling after 7 days', async ({ page }) => {
+    test('should apply importance level 3 styling around day 7', async ({ page }) => {
       await addTodo(page, 'Important task');
       await toggleImportant(page, 'Important task');
 
-      await setVirtualTime(page, 8);
+      // Day 7: level = floor(7/14 * 5) + 1 = 3
+      await setVirtualTime(page, 7);
 
       const todo = await getTodoByText(page, 'Important task');
       await expect(todo).toHaveClass(/important-level-3/);

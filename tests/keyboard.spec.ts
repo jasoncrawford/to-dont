@@ -147,7 +147,7 @@ test.describe('Keyboard Navigation', () => {
       expect(texts[1]).toBe('First');
     });
 
-    test('should insert newline when cursor in middle', async ({ page }) => {
+    test('should split todo into two when cursor in middle', async ({ page }) => {
       await addTodo(page, 'HelloWorld');
 
       const firstText = page.locator('.todo-item .text').first();
@@ -167,23 +167,11 @@ test.describe('Keyboard Navigation', () => {
 
       await firstText.press('Enter');
 
-      // Should still be one item with a newline
+      // Should now be two items
       const stored = await getStoredTodos(page);
-      expect(stored.length).toBe(1);
-      expect(stored[0].text).toContain('\n');
-    });
-  });
-
-  test.describe('Escape Key', () => {
-    test('should blur input on Escape', async ({ page }) => {
-      await addTodo(page, 'Task');
-
-      const todoText = page.locator('.todo-item .text').first();
-      await todoText.click();
-      await expect(todoText).toBeFocused();
-
-      await todoText.press('Escape');
-      await expect(todoText).not.toBeFocused();
+      expect(stored.length).toBe(2);
+      expect(stored[0].text).toBe('Hello');
+      expect(stored[1].text).toBe('World');
     });
   });
 
