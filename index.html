@@ -1080,20 +1080,40 @@
       if (activeIndex === -1 || activeIndex >= active.length - 1) return;
 
       const actualIndex = todos.findIndex(t => t.id === id);
+      const currentItem = todos[actualIndex];
       const groupIndices = getItemGroup(todos, actualIndex);
       const groupSize = groupIndices.length;
 
-      // Find the next item that's not part of our group
-      let nextIndex = activeIndex + 1;
-      while (nextIndex < active.length && groupIndices.includes(todos.findIndex(t => t.id === active[nextIndex].id))) {
-        nextIndex++;
-      }
-      if (nextIndex >= active.length) return;
+      // Find where to insert
+      let insertAt;
+      if (currentItem.type === 'section') {
+        // For sections, find the next section and insert after its group
+        let nextSectionIndex = -1;
+        for (let i = groupIndices[groupIndices.length - 1] + 1; i < todos.length; i++) {
+          if (todos[i].type === 'section' && !todos[i].archived) {
+            nextSectionIndex = i;
+            break;
+          }
+        }
+        if (nextSectionIndex === -1) {
+          // No next section, insert at the end
+          insertAt = todos.length;
+        } else {
+          const nextGroupIndices = getItemGroup(todos, nextSectionIndex);
+          insertAt = nextGroupIndices[nextGroupIndices.length - 1] + 1;
+        }
+      } else {
+        // For regular items, find the next item not in our group and insert after it
+        let nextIndex = activeIndex + 1;
+        while (nextIndex < active.length && groupIndices.includes(todos.findIndex(t => t.id === active[nextIndex].id))) {
+          nextIndex++;
+        }
+        if (nextIndex >= active.length) return;
 
-      const nextActiveId = active[nextIndex].id;
-      const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
-      // Insert right after the next item (not after its group)
-      const insertAt = nextActualIndex + 1;
+        const nextActiveId = active[nextIndex].id;
+        const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
+        insertAt = nextActualIndex + 1;
+      }
 
       // Extract the group
       const group = groupIndices.map(i => todos[i]);
