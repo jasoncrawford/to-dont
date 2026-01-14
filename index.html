@@ -1305,7 +1305,31 @@
         if (item === dragState.placeholder) continue;
 
         const rect = item.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
+        let midY;
+
+        // For section headers when dragging a section, use the full section group height
+        if (isDraggingSection && item.classList.contains('section-header')) {
+          // Calculate full section height (header + children)
+          const itemId = item.dataset.id;
+          const todos = loadTodos();
+          const sectionIndex = todos.findIndex(t => t.id === itemId);
+          if (sectionIndex !== -1) {
+            const groupIndices = getItemGroup(todos, sectionIndex);
+            let totalHeight = 0;
+            for (const idx of groupIndices) {
+              const groupItem = todoList.querySelector(`[data-id="${todos[idx].id}"]`);
+              if (groupItem && groupItem.style.display !== 'none') {
+                totalHeight += groupItem.getBoundingClientRect().height;
+              }
+            }
+            midY = rect.top + totalHeight / 2;
+          } else {
+            midY = rect.top + rect.height / 2;
+          }
+        } else {
+          midY = rect.top + rect.height / 2;
+        }
+
         if (e.clientY < midY) {
           // When dragging a section, only allow dropping before other sections
           if (isDraggingSection && !item.classList.contains('section-header')) {
