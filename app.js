@@ -5,7 +5,7 @@ const UPDATE_INTERVAL = 60000;
 // Test mode: virtual time offset in days (persisted)
 let timeOffsetDays = parseInt(localStorage.getItem('decay-todos-time-offset') || '0', 10);
 
-// View mode: 'custom' or 'auto'
+// View mode: 'custom', 'auto', or 'done'
 let viewMode = localStorage.getItem('decay-todos-view-mode') || 'custom';
 
 // Drag state
@@ -41,6 +41,23 @@ function formatDate(timestamp) {
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function formatDayHeader(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date(getVirtualNow());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today - itemDate) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function getDayKey(timestamp) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 function getFadeOpacity(timestamp) {
@@ -108,8 +125,8 @@ function createTodoElement(todo) {
   dragHandle.className = 'drag-handle';
   dragHandle.textContent = '⋮⋮';
 
-  // Hide drag handle in auto-sort view
-  if (viewMode === 'auto') {
+  // Hide drag handle in auto-sort view and done view
+  if (viewMode === 'auto' || viewMode === 'done') {
     dragHandle.style.display = 'none';
   }
 
@@ -524,47 +541,96 @@ function render() {
   let todos = loadTodos();
   todos = archiveOldItems(todos);
 
-  const active = todos.filter(t => !t.archived);
-  const archived = todos.filter(t => t.archived);
-
-  let displayOrder = active;
-  if (viewMode === 'auto') {
-    // Filter out sections in auto mode, sort only todos
-    displayOrder = [...active].filter(t => t.type !== 'section').sort((a, b) => {
-      if (a.important && !b.important) return -1;
-      if (!a.important && b.important) return 1;
-      if (a.important && b.important) return a.createdAt - b.createdAt;
-      return b.createdAt - a.createdAt;
-    });
-  }
-
   const todoList = document.getElementById('todoList');
   todoList.innerHTML = '';
-  displayOrder.forEach(item => {
-    if (item.type === 'section') {
-      todoList.appendChild(createSectionElement(item));
-    } else {
-      todoList.appendChild(createTodoElement(item));
-    }
-  });
+  todoList.classList.remove('done-view');
 
-  // Only show new-item input if list is empty
+  // Hide/show elements based on view mode
   const newItemEl = document.querySelector('.new-item');
-  if (newItemEl) {
-    newItemEl.style.display = displayOrder.length === 0 ? 'flex' : 'none';
-  }
-
   const archiveSection = document.getElementById('archiveSection');
   const archiveList = document.getElementById('archiveList');
+  const archiveCompletedContainer = document.getElementById('archiveCompletedContainer');
 
-  if (archived.length > 0) {
-    archiveSection.style.display = 'block';
-    archiveList.innerHTML = '';
-    archived.sort((a, b) => b.archivedAt - a.archivedAt);
-    archived.forEach(todo => archiveList.appendChild(createTodoElement(todo)));
-  } else {
+  if (viewMode === 'done') {
+    // Done view: show all completed items grouped by day
+    todoList.classList.add('done-view');
+
+    const completedItems = todos
+      .filter(t => t.completed && t.completedAt)
+      .sort((a, b) => b.completedAt - a.completedAt); // Reverse chronological
+
+    // Group by day
+    const dayGroups = new Map();
+    completedItems.forEach(item => {
+      const dayKey = getDayKey(item.completedAt);
+      if (!dayGroups.has(dayKey)) {
+        dayGroups.set(dayKey, { timestamp: item.completedAt, items: [] });
+      }
+      dayGroups.get(dayKey).items.push(item);
+    });
+
+    // Render with day headers
+    dayGroups.forEach((group, dayKey) => {
+      const header = document.createElement('div');
+      header.className = 'day-header';
+      header.textContent = formatDayHeader(group.timestamp);
+      todoList.appendChild(header);
+
+      group.items.forEach(item => {
+        todoList.appendChild(createTodoElement(item));
+      });
+    });
+
+    // Hide other UI elements in Done view
+    if (newItemEl) newItemEl.style.display = 'none';
     archiveSection.style.display = 'none';
-    archiveList.classList.remove('expanded');
+    if (archiveCompletedContainer) archiveCompletedContainer.style.display = 'none';
+  } else {
+    // Custom or Auto view
+    // Filter out completed+archived items (they only show in Done view)
+    const active = todos.filter(t => !t.archived && !(t.completed && t.archived));
+    const fadedAway = todos.filter(t => t.archived && !t.completed);
+
+    // Check if there are any completed items to archive
+    const hasCompletedItems = todos.some(t => t.completed && !t.archived);
+    if (archiveCompletedContainer) {
+      archiveCompletedContainer.style.display = hasCompletedItems ? 'block' : 'none';
+    }
+
+    let displayOrder = active;
+    if (viewMode === 'auto') {
+      // Filter out sections in auto mode, sort only todos
+      displayOrder = [...active].filter(t => t.type !== 'section').sort((a, b) => {
+        if (a.important && !b.important) return -1;
+        if (!a.important && b.important) return 1;
+        if (a.important && b.important) return a.createdAt - b.createdAt;
+        return b.createdAt - a.createdAt;
+      });
+    }
+
+    displayOrder.forEach(item => {
+      if (item.type === 'section') {
+        todoList.appendChild(createSectionElement(item));
+      } else {
+        todoList.appendChild(createTodoElement(item));
+      }
+    });
+
+    // Only show new-item input if list is empty
+    if (newItemEl) {
+      newItemEl.style.display = displayOrder.length === 0 ? 'flex' : 'none';
+    }
+
+    // Show faded away section (auto-archived due to age, not manually archived completed items)
+    if (fadedAway.length > 0) {
+      archiveSection.style.display = 'block';
+      archiveList.innerHTML = '';
+      fadedAway.sort((a, b) => b.archivedAt - a.archivedAt);
+      fadedAway.forEach(todo => archiveList.appendChild(createTodoElement(todo)));
+    } else {
+      archiveSection.style.display = 'none';
+      archiveList.classList.remove('expanded');
+    }
   }
 }
 
@@ -892,6 +958,22 @@ function restoreTodo(id) {
   }
 }
 
+function archiveCompleted() {
+  const todos = loadTodos();
+  let changed = false;
+  todos.forEach(todo => {
+    if (todo.completed && !todo.archived) {
+      todo.archived = true;
+      todo.archivedAt = getVirtualNow();
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveTodos(todos);
+    render();
+  }
+}
+
 // New item input
 const newItemInput = document.getElementById('newItemInput');
 newItemInput.onkeydown = (e) => {
@@ -940,13 +1022,11 @@ document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
 function updateViewToggle() {
   const customBtn = document.getElementById('customViewBtn');
   const autoBtn = document.getElementById('autoViewBtn');
-  if (viewMode === 'custom') {
-    customBtn.style.textDecoration = 'underline';
-    autoBtn.style.textDecoration = 'none';
-  } else {
-    customBtn.style.textDecoration = 'none';
-    autoBtn.style.textDecoration = 'underline';
-  }
+  const doneBtn = document.getElementById('doneViewBtn');
+
+  customBtn.style.textDecoration = viewMode === 'custom' ? 'underline' : 'none';
+  autoBtn.style.textDecoration = viewMode === 'auto' ? 'underline' : 'none';
+  doneBtn.style.textDecoration = viewMode === 'done' ? 'underline' : 'none';
 }
 
 document.getElementById('customViewBtn').onclick = () => {
@@ -961,6 +1041,18 @@ document.getElementById('autoViewBtn').onclick = () => {
   localStorage.setItem('decay-todos-view-mode', viewMode);
   updateViewToggle();
   render();
+};
+
+document.getElementById('doneViewBtn').onclick = () => {
+  viewMode = 'done';
+  localStorage.setItem('decay-todos-view-mode', viewMode);
+  updateViewToggle();
+  render();
+};
+
+// Archive completed button
+document.getElementById('archiveCompletedBtn').onclick = () => {
+  archiveCompleted();
 };
 
 // Global drag handlers

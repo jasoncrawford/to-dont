@@ -284,3 +284,33 @@ body {
 .archive-list .todo-item:hover .actions {
   opacity: 1;
 }
+
+/* Done view day headers */
+.day-header {
+  font-weight: 600;
+  font-size: 14px;
+  color: #666;
+  padding: 16px 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.day-header:first-child {
+  padding-top: 0;
+}
+
+/* Done view completed items - no fade effect, full opacity */
+.done-view .todo-item {
+  opacity: 1 !important;
+}
+
+.done-view .todo-item .checkbox {
+  background: #e0e0e0;
+  border-color: #ccc;
+  color: #999;
+}
+
+.done-view .todo-item .text {
+  text-decoration: line-through;
+  color: #999;
+}
