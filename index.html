@@ -1277,13 +1277,21 @@
       // Find where to move placeholder
       const todoList = document.getElementById('todoList');
       const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+      const isDraggingSection = !!dragState.placeholders;
 
       let targetItem = null;
       for (const item of items) {
+        // Skip items that are part of the dragged group
         if (item === dragState.placeholder) continue;
+        if (dragState.placeholders && dragState.placeholders.includes(item)) continue;
+
         const rect = item.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         if (e.clientY < midY) {
+          // When dragging a section, only allow dropping before other sections
+          if (isDraggingSection && !item.classList.contains('section-header')) {
+            continue;
+          }
           targetItem = item;
           break;
         }
@@ -1293,6 +1301,8 @@
       if (targetItem && targetItem !== dragState.placeholder.nextElementSibling) {
         todoList.insertBefore(dragState.placeholder, targetItem);
       } else if (!targetItem && dragState.placeholder.nextElementSibling) {
+        // Only move to end if it's not already at the end
+        // For sections, always allow moving to end
         todoList.appendChild(dragState.placeholder);
       }
     });
@@ -1308,6 +1318,7 @@
       const draggedIndex = todos.findIndex(t => t.id === dragState.id);
       const groupIndices = getItemGroup(todos, draggedIndex);
       const group = groupIndices.map(i => todos[i]);
+      const isDraggingSection = !!dragState.placeholders;
 
       // Get target position from placeholder location in DOM
       const todoList = document.getElementById('todoList');
@@ -1320,15 +1331,32 @@
       }
 
       // Calculate insert position based on placeholder
+      // Filter out all placeholders (the dragged group) from consideration
+      const draggedIds = group.map(t => t.id);
       const activeBeforePlaceholder = items.slice(0, placeholderIndex)
-        .filter(el => el !== dragState.placeholder)
+        .filter(el => !draggedIds.includes(el.dataset.id))
         .map(el => el.dataset.id);
+
       let insertAt = 0;
       if (activeBeforePlaceholder.length > 0) {
         const lastBeforeId = activeBeforePlaceholder[activeBeforePlaceholder.length - 1];
         const lastBeforeIndex = todos.findIndex(t => t.id === lastBeforeId);
-        // Insert right after the item before placeholder (not after its group)
-        insertAt = lastBeforeIndex + 1;
+
+        if (isDraggingSection) {
+          // For sections, insert after the previous section's entire group
+          const lastBeforeItem = todos[lastBeforeIndex];
+          if (lastBeforeItem.type === 'section') {
+            const prevGroupIndices = getItemGroup(todos, lastBeforeIndex);
+            insertAt = prevGroupIndices[prevGroupIndices.length - 1] + 1;
+          } else {
+            // Last item before is a todo - find its section and insert after that section's group
+            // Or if no section, insert after this item
+            insertAt = lastBeforeIndex + 1;
+          }
+        } else {
+          // For regular items, insert right after the item before placeholder
+          insertAt = lastBeforeIndex + 1;
+        }
       }
 
       // Insert group at new position
