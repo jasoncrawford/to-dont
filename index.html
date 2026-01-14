@@ -1026,13 +1026,34 @@
       if (activeIndex <= 0) return;
 
       const actualIndex = todos.findIndex(t => t.id === id);
+      const currentItem = todos[actualIndex];
       const groupIndices = getItemGroup(todos, actualIndex);
 
-      // Find where to insert (before the previous item's group)
-      const prevActiveId = active[activeIndex - 1].id;
-      const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
-      const prevGroupIndices = getItemGroup(todos, prevActualIndex);
-      const insertAt = prevGroupIndices[0];
+      // Find where to insert
+      let insertAt;
+      if (currentItem.type === 'section') {
+        // For sections, find the previous section and insert before its group
+        let prevSectionIndex = -1;
+        for (let i = actualIndex - 1; i >= 0; i--) {
+          if (todos[i].type === 'section' && !todos[i].archived) {
+            prevSectionIndex = i;
+            break;
+          }
+        }
+        if (prevSectionIndex === -1) {
+          // No previous section, insert at the start
+          insertAt = 0;
+        } else {
+          const prevGroupIndices = getItemGroup(todos, prevSectionIndex);
+          insertAt = prevGroupIndices[0];
+        }
+      } else {
+        // For regular items, insert before the previous item's group
+        const prevActiveId = active[activeIndex - 1].id;
+        const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
+        const prevGroupIndices = getItemGroup(todos, prevActualIndex);
+        insertAt = prevGroupIndices[0];
+      }
 
       // Extract the group
       const group = groupIndices.map(i => todos[i]);
@@ -1099,7 +1120,8 @@
       if (todo && newText.trim()) {
         todo.text = newText.trim();
         saveTodos(todos);
-      } else if (todo && !newText.trim()) {
+      } else if (todo && !newText.trim() && todo.type !== 'section') {
+        // Delete empty todos, but keep empty sections (they show placeholder text)
         deleteTodo(id);
       }
     }

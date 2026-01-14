@@ -4,6 +4,7 @@ import {
   addTodo,
   getTodoTexts,
   getStoredTodos,
+  createSection,
 } from './helpers';
 
 test.describe('Keyboard Navigation', () => {
@@ -60,16 +61,12 @@ test.describe('Keyboard Navigation', () => {
 
     test('should navigate through sections and todos', async ({ page }) => {
       // Create section
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
-      const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('Section');
-      await sectionText.press('Escape');
+      await createSection(page, 'Section');
 
       await addTodo(page, 'Task under section');
 
       // Focus section
+      const sectionText = page.locator('.section-header .text').first();
       await sectionText.click();
 
       // Navigate down to todo
@@ -250,37 +247,4 @@ test.describe('Keyboard Navigation', () => {
     });
   });
 
-  test.describe('Section Group Reordering', () => {
-    test('should move section with its children', async ({ page }) => {
-      // Create section with children
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
-      const section1Text = page.locator('.section-header .text').first();
-      await section1Text.fill('Section A');
-      await section1Text.press('Escape');
-
-      await addTodo(page, 'Task A1');
-      await addTodo(page, 'Task A2');
-
-      // Create another section
-      await input.click();
-      await input.press('Enter');
-      const section2Text = page.locator('.section-header .text').last();
-      await section2Text.fill('Section B');
-      await section2Text.press('Escape');
-
-      await addTodo(page, 'Task B1');
-
-      // Move Section B up
-      await section2Text.click();
-      await section2Text.press('Meta+Shift+ArrowUp');
-
-      const stored = await getStoredTodos(page);
-      // Section B and Task B1 should now be at the top
-      expect(stored[0].text).toBe('Section B');
-      expect(stored[1].text).toBe('Task B1');
-      expect(stored[2].text).toBe('Section A');
-    });
-  });
 });

@@ -6,6 +6,7 @@ import {
   getSectionTexts,
   getTodoByText,
   getStoredTodos,
+  createSection,
 } from './helpers';
 
 test.describe('Reordering', () => {
@@ -66,7 +67,8 @@ test.describe('Reordering', () => {
       await addTodo(page, 'First');
       await addTodo(page, 'Second');
 
-      const firstTodo = await getTodoByText(page, 'First');
+      // Get the original todo element (in #todoList, not the clone)
+      const firstTodo = page.locator('#todoList .todo-item:has(.text:text("First"))');
       const dragHandle = firstTodo.locator('.drag-handle');
 
       const handleBox = await dragHandle.boundingBox();
@@ -85,24 +87,13 @@ test.describe('Reordering', () => {
 
   test.describe('Drag and Drop - Sections', () => {
     test('should drag section with its children', async ({ page }) => {
-      // Create section with todos
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
-      const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('Section A');
-      await sectionText.press('Escape');
-
+      // Create section A with todos
+      await createSection(page, 'Section A');
       await addTodo(page, 'Task A1');
       await addTodo(page, 'Task A2');
 
-      // Create another section below
-      await input.click();
-      await input.press('Enter');
-      const section2Text = page.locator('.section-header .text').last();
-      await section2Text.fill('Section B');
-      await section2Text.press('Escape');
-
+      // Create section B with todos
+      await createSection(page, 'Section B');
       await addTodo(page, 'Task B1');
 
       // Drag Section A to after Task B1
@@ -120,6 +111,9 @@ test.describe('Reordering', () => {
       await page.mouse.move(taskB1Box.x + taskB1Box.width / 2, taskB1Box.y + taskB1Box.height + 10, { steps: 10 });
       await page.mouse.up();
 
+      // Wait for reorder
+      await page.waitForTimeout(100);
+
       const stored = await getStoredTodos(page);
       // Section B and Task B1 should now be first
       expect(stored[0].text).toBe('Section B');
@@ -136,7 +130,7 @@ test.describe('Reordering', () => {
       await addTodo(page, 'Task');
 
       // Switch to auto sort
-      const autoSortBtn = page.locator('#sortAutoBtn');
+      const autoSortBtn = page.locator('#autoViewBtn');
       await autoSortBtn.click();
 
       const dragHandle = page.locator('.todo-item .drag-handle').first();
@@ -146,9 +140,9 @@ test.describe('Reordering', () => {
     test('should show drag handles in manual view', async ({ page }) => {
       await addTodo(page, 'Task');
 
-      // Make sure we're in manual view
-      const manualBtn = page.locator('#sortManualBtn');
-      await manualBtn.click();
+      // Make sure we're in custom view
+      const customBtn = page.locator('#customViewBtn');
+      await customBtn.click();
 
       const todo = await getTodoByText(page, 'Task');
       await todo.hover();
@@ -168,7 +162,7 @@ test.describe('Reordering', () => {
       await importantTodo.locator('.important-btn').click();
 
       // Switch to auto sort
-      const autoSortBtn = page.locator('#sortAutoBtn');
+      const autoSortBtn = page.locator('#autoViewBtn');
       await autoSortBtn.click();
 
       // Important item should be first in the displayed list

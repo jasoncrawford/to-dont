@@ -4,9 +4,8 @@ import {
   addTodo,
   getTodoTexts,
   getSectionTexts,
-  getTodoByText,
-  getSectionByText,
   getStoredTodos,
+  createSection,
 } from './helpers';
 
 test.describe('Sections and Hierarchy', () => {
@@ -15,22 +14,37 @@ test.describe('Sections and Hierarchy', () => {
   });
 
   test.describe('Creating Sections', () => {
-    test('should create section when pressing Enter on empty new item', async ({ page }) => {
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
+    test('should convert empty todo to section on Enter', async ({ page }) => {
+      // Add a todo first
+      await addTodo(page, 'Will become section');
 
-      const sections = await getSectionTexts(page);
-      expect(sections.length).toBe(1);
+      // Click on the todo text and clear it
+      const todoText = page.locator('.todo-item .text').first();
+      await todoText.click();
+
+      // Clear the text using keyboard
+      await todoText.press('Meta+a');
+      await todoText.press('Backspace');
+
+      // Wait a bit for the text to be cleared
+      await page.waitForTimeout(50);
+
+      // Press Enter to convert to section
+      await todoText.press('Enter');
+
+      // Should now be a section
+      const sections = page.locator('.section-header');
+      await expect(sections).toHaveCount(1);
+
+      const todos = page.locator('.todo-item');
+      await expect(todos).toHaveCount(0);
 
       const stored = await getStoredTodos(page);
       expect(stored[0].type).toBe('section');
     });
 
     test('should create section at level 2 by default', async ({ page }) => {
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
+      await createSection(page);
 
       const section = page.locator('.section-header').first();
       await expect(section).toHaveClass(/level-2/);
@@ -39,15 +53,8 @@ test.describe('Sections and Hierarchy', () => {
       expect(stored[0].level).toBe(2);
     });
 
-    test('should allow typing section title after creation', async ({ page }) => {
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
-
-      // Section should be focused for editing
-      const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('My Section');
-      await sectionText.press('Escape');
+    test('should allow setting section title', async ({ page }) => {
+      await createSection(page, 'My Section');
 
       const stored = await getStoredTodos(page);
       expect(stored[0].text).toBe('My Section');
@@ -56,13 +63,11 @@ test.describe('Sections and Hierarchy', () => {
 
   test.describe('Section Levels', () => {
     test('should change section to level 1 with Shift+Tab', async ({ page }) => {
-      // Create a section
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
+      await createSection(page, 'Top Level');
 
+      // Focus the section text
       const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('Top Level');
+      await sectionText.click();
       await sectionText.press('Shift+Tab');
 
       const section = page.locator('.section-header').first();
@@ -73,17 +78,20 @@ test.describe('Sections and Hierarchy', () => {
     });
 
     test('should change section to level 2 with Tab', async ({ page }) => {
-      // Create a section at level 1
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
+      await createSection(page, 'Section');
 
+      // Focus the section text and change to level 1 first
       const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('Section');
+      await sectionText.click();
       await sectionText.press('Shift+Tab'); // Make it level 1
-      await sectionText.press('Tab'); // Back to level 2
 
-      const section = page.locator('.section-header').first();
+      let section = page.locator('.section-header').first();
+      await expect(section).toHaveClass(/level-1/);
+
+      // Now change back to level 2
+      await sectionText.press('Tab');
+
+      section = page.locator('.section-header').first();
       await expect(section).toHaveClass(/level-2/);
     });
   });
@@ -118,25 +126,15 @@ test.describe('Sections and Hierarchy', () => {
 
   test.describe('Section with Todos', () => {
     test('should group todos under sections', async ({ page }) => {
-      // Create a section
-      const input = page.locator('#newItemInput');
-      await input.click();
-      await input.press('Enter');
-
-      const sectionText = page.locator('.section-header .text').first();
-      await sectionText.fill('Work');
-      await sectionText.press('Escape');
+      // Create first section
+      await createSection(page, 'Work');
 
       // Add todos after the section
       await addTodo(page, 'Task 1');
       await addTodo(page, 'Task 2');
 
       // Create another section
-      await input.click();
-      await input.press('Enter');
-      const section2Text = page.locator('.section-header .text').last();
-      await section2Text.fill('Personal');
-      await section2Text.press('Escape');
+      await createSection(page, 'Personal');
 
       await addTodo(page, 'Task 3');
 
@@ -152,24 +150,87 @@ test.describe('Sections and Hierarchy', () => {
     });
   });
 
-  test.describe('Converting Items', () => {
-    test('should convert empty todo to section on Enter', async ({ page }) => {
-      await addTodo(page, 'Regular task');
+  test.describe('Section Group Reordering', () => {
+    test('should move section with children using keyboard', async ({ page }) => {
+      // Create section A with children
+      await createSection(page, 'Section A');
+      await addTodo(page, 'Task A1');
+      await addTodo(page, 'Task A2');
 
-      const todoText = page.locator('.todo-item .text').first();
-      await todoText.click();
-      await todoText.fill(''); // Clear the text
-      await todoText.press('Enter');
+      // Create section B with children
+      await createSection(page, 'Section B');
+      await addTodo(page, 'Task B1');
 
-      // Should now be a section
-      const sections = page.locator('.section-header');
-      await expect(sections).toHaveCount(1);
+      // Verify initial order
+      let stored = await getStoredTodos(page);
+      expect(stored[0].text).toBe('Section A');
+      expect(stored[1].text).toBe('Task A1');
+      expect(stored[2].text).toBe('Task A2');
+      expect(stored[3].text).toBe('Section B');
+      expect(stored[4].text).toBe('Task B1');
 
-      const todos = page.locator('.todo-item');
-      await expect(todos).toHaveCount(0);
+      // Move Section B up (should move with its child)
+      const sectionBText = page.locator('.section-header .text').last();
+      await sectionBText.click();
 
+      // Use explicit key sequence for Meta+Shift+ArrowUp
+      await page.keyboard.down('Meta');
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.up('Shift');
+      await page.keyboard.up('Meta');
+
+      // Wait for reorder
+      await page.waitForTimeout(100);
+
+      // Section B and Task B1 should now be first
+      stored = await getStoredTodos(page);
+      expect(stored[0].text).toBe('Section B');
+      expect(stored[1].text).toBe('Task B1');
+      expect(stored[2].text).toBe('Section A');
+      expect(stored[3].text).toBe('Task A1');
+      expect(stored[4].text).toBe('Task A2');
+    });
+
+    test('should move section with children using drag-drop', async ({ page }) => {
+      // Create section A with children
+      await createSection(page, 'Section A');
+      await addTodo(page, 'Task A1');
+      await addTodo(page, 'Task A2');
+
+      // Create section B with children
+      await createSection(page, 'Section B');
+      await addTodo(page, 'Task B1');
+
+      // Get section A drag handle
+      const sectionA = page.locator('.section-header').first();
+      const dragHandle = sectionA.locator('.drag-handle');
+      const handleBox = await dragHandle.boundingBox();
+
+      // Get Task B1 position (drag section A below it)
+      const taskB1 = page.locator('.todo-item').last();
+      const taskB1Box = await taskB1.boundingBox();
+
+      if (!handleBox || !taskB1Box) {
+        throw new Error('Could not get element positions');
+      }
+
+      // Drag Section A to after Task B1
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(taskB1Box.x + taskB1Box.width / 2, taskB1Box.y + taskB1Box.height + 10, { steps: 10 });
+      await page.mouse.up();
+
+      // Wait for reorder
+      await page.waitForTimeout(100);
+
+      // Section B and Task B1 should now be first
       const stored = await getStoredTodos(page);
-      expect(stored[0].type).toBe('section');
+      expect(stored[0].text).toBe('Section B');
+      expect(stored[1].text).toBe('Task B1');
+      expect(stored[2].text).toBe('Section A');
+      expect(stored[3].text).toBe('Task A1');
+      expect(stored[4].text).toBe('Task A2');
     });
   });
 });

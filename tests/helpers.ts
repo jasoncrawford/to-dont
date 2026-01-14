@@ -15,10 +15,12 @@ export async function setupPage(page: Page) {
 }
 
 export async function addTodo(page: Page, text: string) {
-  // Check if there are existing todos
+  // Check if there are existing items (todos or sections)
   const todoCount = await page.locator('.todo-item').count();
+  const sectionCount = await page.locator('.section-header').count();
+  const totalCount = todoCount + sectionCount;
 
-  if (todoCount === 0) {
+  if (totalCount === 0) {
     // Use the new-item input when list is empty
     const input = page.locator('.new-item .text');
     await input.click();
@@ -26,16 +28,23 @@ export async function addTodo(page: Page, text: string) {
     await input.press('Enter');
   } else {
     // Add after last item by pressing Enter at the end
-    const lastTodo = page.locator('.todo-item').last();
-    const lastText = lastTodo.locator('.text');
+    // Get the last item (could be todo or section)
+    const lastItem = page.locator('.todo-item, .section-header').last();
+    const lastText = lastItem.locator('.text');
     await lastText.click();
     await lastText.press('End');
     await lastText.press('Enter');
-    // Now fill the new empty item
-    const newItem = page.locator('.todo-item').last();
-    const newText = newItem.locator('.text');
-    await newText.pressSequentially(text);
-    await newText.press('Escape');
+
+    // Wait for the new todo to be created and focused
+    await page.waitForTimeout(100);
+
+    // Find the focused element (should be the new empty todo)
+    const focusedText = page.locator('.todo-item .text:focus');
+    await focusedText.pressSequentially(text);
+
+    // Click elsewhere to blur and save the text
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.waitForTimeout(50);
   }
   // Wait for the new item to appear
   await page.waitForSelector(`.todo-item .text:text-is("${text}")`);
@@ -104,14 +113,35 @@ export async function enableTestMode(page: Page) {
   await page.locator('#resetTime').click();
 }
 
-export async function createSection(page: Page, title: string) {
-  // Click on new item input, then press Enter to create a section
-  const input = page.locator('#newItemInput');
-  await input.click();
-  await input.press('Enter');
+export async function createSection(page: Page, title: string = '') {
+  // First add a placeholder todo
+  await addTodo(page, 'x');
 
-  // Now type the section title
-  const lastSection = page.locator('.section-header').last();
-  await lastSection.locator('.text').fill(title);
-  await lastSection.locator('.text').press('Escape');
+  // Get the todo we just added (it's the last one)
+  const todoText = page.locator('.todo-item .text').last();
+  await todoText.click();
+
+  // Select all and delete to clear the text
+  await todoText.press('Meta+a');
+  await todoText.press('Backspace');
+
+  // Wait a bit for the text to be cleared
+  await page.waitForTimeout(50);
+
+  // Press Enter to convert to section
+  await todoText.press('Enter');
+
+  // Wait for section to appear
+  await page.waitForSelector('.section-header');
+
+  // If title provided, fill it in
+  if (title) {
+    const sectionText = page.locator('.section-header .text').last();
+    await sectionText.click();
+    await sectionText.pressSequentially(title);
+
+    // Blur to save
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.waitForTimeout(100);
+  }
 }
