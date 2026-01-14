@@ -64,6 +64,13 @@
       visibility: hidden;
     }
 
+    .section-placeholder-container {
+      background: #f5f5f5;
+      border: 2px dashed #ddd;
+      border-radius: 4px;
+      margin: 4px 0;
+    }
+
     .section-header {
       display: flex;
       align-items: center;
@@ -653,7 +660,26 @@
         const groupIndices = getItemGroup(todos, sectionIndex);
         const groupIds = groupIndices.map(i => todos[i].id);
 
-        // Create a container for all cloned items
+        // Get all elements in the group
+        const groupElements = [];
+        groupIds.forEach(id => {
+          const el = document.querySelector(`[data-id="${id}"]`);
+          if (el) groupElements.push(el);
+        });
+
+        // Calculate total height of the group
+        const totalHeight = groupElements.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0);
+
+        // Create a placeholder container that maintains the full height
+        const placeholderContainer = document.createElement('div');
+        placeholderContainer.className = 'section-placeholder-container';
+        placeholderContainer.style.height = totalHeight + 'px';
+
+        // Insert placeholder container before the first element
+        const todoList = document.getElementById('todoList');
+        todoList.insertBefore(placeholderContainer, groupElements[0]);
+
+        // Create the drag clone container
         const cloneContainer = document.createElement('div');
         cloneContainer.className = 'drag-clone-container';
         cloneContainer.style.position = 'fixed';
@@ -664,28 +690,24 @@
         cloneContainer.style.background = 'white';
         cloneContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
 
-        // Clone all items in the group
-        const placeholders = [];
-        groupIds.forEach(id => {
-          const el = document.querySelector(`[data-id="${id}"]`);
-          if (el) {
-            const clone = el.cloneNode(true);
-            clone.style.opacity = '0.95';
-            cloneContainer.appendChild(clone);
-            el.classList.add('placeholder');
-            placeholders.push(el);
-          }
+        // Move all group elements into the clone container (they become the visual drag)
+        groupElements.forEach(el => {
+          const clone = el.cloneNode(true);
+          clone.style.opacity = '0.95';
+          cloneContainer.appendChild(clone);
+          el.style.display = 'none'; // Hide originals
         });
 
         document.body.appendChild(cloneContainer);
 
         dragState = {
           id: section.id,
-          placeholder: div,
-          placeholders: placeholders,
+          placeholder: placeholderContainer,
+          originalElements: groupElements,
           clone: cloneContainer,
           fixedX: rect.left,
-          offsetY: e.clientY - rect.top
+          offsetY: e.clientY - rect.top,
+          isSection: true
         };
       };
 
@@ -1276,14 +1298,16 @@
 
       // Find where to move placeholder
       const todoList = document.getElementById('todoList');
-      const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
-      const isDraggingSection = !!dragState.placeholders;
+      const isDraggingSection = !!dragState.isSection;
+
+      // Get visible items (excluding hidden originals and placeholder container)
+      const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'))
+        .filter(item => item.style.display !== 'none');
 
       let targetItem = null;
       for (const item of items) {
-        // Skip items that are part of the dragged group
+        // Skip the placeholder itself
         if (item === dragState.placeholder) continue;
-        if (dragState.placeholders && dragState.placeholders.includes(item)) continue;
 
         const rect = item.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
@@ -1302,7 +1326,6 @@
         todoList.insertBefore(dragState.placeholder, targetItem);
       } else if (!targetItem && dragState.placeholder.nextElementSibling) {
         // Only move to end if it's not already at the end
-        // For sections, always allow moving to end
         todoList.appendChild(dragState.placeholder);
       }
     });
@@ -1318,39 +1341,44 @@
       const draggedIndex = todos.findIndex(t => t.id === dragState.id);
       const groupIndices = getItemGroup(todos, draggedIndex);
       const group = groupIndices.map(i => todos[i]);
-      const isDraggingSection = !!dragState.placeholders;
+      const isDraggingSection = !!dragState.isSection;
 
       // Get target position from placeholder location in DOM
       const todoList = document.getElementById('todoList');
-      const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
-      const placeholderIndex = items.indexOf(dragState.placeholder);
+
+      // For sections, find position relative to other section headers
+      // For items, find position relative to all visible items
+      const visibleItems = Array.from(todoList.querySelectorAll('.todo-item, .section-header'))
+        .filter(item => item.style.display !== 'none');
+
+      // Find where placeholder is in the DOM
+      const allChildren = Array.from(todoList.children);
+      const placeholderDomIndex = allChildren.indexOf(dragState.placeholder);
 
       // Remove group from todos (from end to preserve indices)
       for (let i = groupIndices.length - 1; i >= 0; i--) {
         todos.splice(groupIndices[i], 1);
       }
 
-      // Calculate insert position based on placeholder
-      // Filter out all placeholders (the dragged group) from consideration
+      // Calculate insert position based on visible items before placeholder
       const draggedIds = group.map(t => t.id);
-      const activeBeforePlaceholder = items.slice(0, placeholderIndex)
-        .filter(el => !draggedIds.includes(el.dataset.id))
+      const itemsBeforePlaceholder = allChildren.slice(0, placeholderDomIndex)
+        .filter(el => el.dataset && el.dataset.id && !draggedIds.includes(el.dataset.id))
         .map(el => el.dataset.id);
 
       let insertAt = 0;
-      if (activeBeforePlaceholder.length > 0) {
-        const lastBeforeId = activeBeforePlaceholder[activeBeforePlaceholder.length - 1];
+      if (itemsBeforePlaceholder.length > 0) {
+        const lastBeforeId = itemsBeforePlaceholder[itemsBeforePlaceholder.length - 1];
         const lastBeforeIndex = todos.findIndex(t => t.id === lastBeforeId);
 
         if (isDraggingSection) {
           // For sections, insert after the previous section's entire group
           const lastBeforeItem = todos[lastBeforeIndex];
-          if (lastBeforeItem.type === 'section') {
+          if (lastBeforeItem && lastBeforeItem.type === 'section') {
             const prevGroupIndices = getItemGroup(todos, lastBeforeIndex);
             insertAt = prevGroupIndices[prevGroupIndices.length - 1] + 1;
-          } else {
-            // Last item before is a todo - find its section and insert after that section's group
-            // Or if no section, insert after this item
+          } else if (lastBeforeItem) {
+            // Last item before is a todo - insert after it
             insertAt = lastBeforeIndex + 1;
           }
         } else {
@@ -1367,8 +1395,10 @@
       saveTodos([...active, ...archived]);
 
       // Clean up
-      if (dragState.placeholders) {
-        dragState.placeholders.forEach(el => el.classList.remove('placeholder'));
+      if (dragState.isSection) {
+        // Remove placeholder container and restore original elements
+        dragState.placeholder.remove();
+        dragState.originalElements.forEach(el => el.style.display = '');
       } else {
         dragState.placeholder.classList.remove('placeholder');
       }
