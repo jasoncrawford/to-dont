@@ -162,11 +162,12 @@ test.describe('Done View', () => {
       await expect(archiveBtn).toBeVisible();
     });
 
-    test('should hide Archive Completed button when no completed items', async ({ page }) => {
+    test('should disable Archive Completed button when no completed items', async ({ page }) => {
       await addTodo(page, 'Incomplete task');
 
-      const archiveContainer = page.locator('#archiveCompletedContainer');
-      await expect(archiveContainer).not.toBeVisible();
+      const archiveBtn = page.locator('#archiveCompletedBtn');
+      await expect(archiveBtn).toBeVisible();
+      await expect(archiveBtn).toBeDisabled();
     });
 
     test('should archive all completed items when clicked', async ({ page }) => {
@@ -195,14 +196,15 @@ test.describe('Done View', () => {
       expect(todoTexts).toContain('Incomplete task');
     });
 
-    test('should hide Archive Completed button after archiving', async ({ page }) => {
+    test('should disable Archive Completed button after archiving', async ({ page }) => {
       await addTodo(page, 'Task');
       await completeTodo(page, 'Task');
 
       await page.locator('#archiveCompletedBtn').click();
 
-      const archiveContainer = page.locator('#archiveCompletedContainer');
-      await expect(archiveContainer).not.toBeVisible();
+      const archiveBtn = page.locator('#archiveCompletedBtn');
+      await expect(archiveBtn).toBeVisible();
+      await expect(archiveBtn).toBeDisabled();
     });
 
     test('should not show Archive Completed button in Done view', async ({ page }) => {

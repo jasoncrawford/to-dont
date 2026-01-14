@@ -591,10 +591,16 @@ function render() {
     const active = todos.filter(t => !t.archived && !(t.completed && t.archived));
     const fadedAway = todos.filter(t => t.archived && !t.completed);
 
-    // Check if there are any completed items to archive
+    // Enable/disable archive button based on whether there are completed items
     const hasCompletedItems = todos.some(t => t.completed && !t.archived);
     if (archiveCompletedContainer) {
-      archiveCompletedContainer.style.display = hasCompletedItems ? 'block' : 'none';
+      archiveCompletedContainer.style.display = 'block';
+      const archiveBtn = document.getElementById('archiveCompletedBtn');
+      if (archiveBtn) {
+        archiveBtn.disabled = !hasCompletedItems;
+        archiveBtn.style.opacity = hasCompletedItems ? '1' : '0.4';
+        archiveBtn.style.cursor = hasCompletedItems ? 'pointer' : 'default';
+      }
     }
 
     let displayOrder = active;
