@@ -562,6 +562,19 @@ function createSectionElement(section) {
     }
   };
 
+  // Click to focus text at end
+  div.onclick = (e) => {
+    if (e.target === text || e.target.closest('.actions')) return;
+    text.focus();
+    // Move cursor to end
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
   div.appendChild(dragHandle);
   div.appendChild(text);
   div.appendChild(actions);
