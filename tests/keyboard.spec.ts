@@ -303,6 +303,42 @@ test.describe('Keyboard Navigation', () => {
       const texts = await getTodoTexts(page);
       expect(texts).toEqual(['First', 'Second']);
     });
+
+    test('should preserve unsaved text when moving up', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+
+      // Focus second item and type new text without blurring
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await secondText.click();
+      await secondText.press('End');
+      await page.keyboard.type(' modified');
+
+      // Move up immediately (before blur saves)
+      await page.keyboard.press('Meta+Shift+ArrowUp');
+
+      // Text should be preserved
+      const texts = await getTodoTexts(page);
+      expect(texts).toEqual(['Second modified', 'First']);
+    });
+
+    test('should preserve unsaved text when moving down', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+
+      // Focus first item and type new text without blurring
+      const firstText = page.locator('.todo-item .text').first();
+      await firstText.click();
+      await firstText.press('End');
+      await page.keyboard.type(' modified');
+
+      // Move down immediately (before blur saves)
+      await page.keyboard.press('Meta+Shift+ArrowDown');
+
+      // Text should be preserved
+      const texts = await getTodoTexts(page);
+      expect(texts).toEqual(['Second', 'First modified']);
+    });
   });
 
 });
