@@ -217,6 +217,7 @@ function createTodoElement(todo) {
     // Cmd+Shift+Up: move item up (check before plain arrow)
     if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
+      updateTodoText(todo.id, text.textContent); // Save text before moving
       moveItemUp(todo.id);
       return;
     }
@@ -224,6 +225,7 @@ function createTodoElement(todo) {
     // Cmd+Shift+Down: move item down (check before plain arrow)
     if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
+      updateTodoText(todo.id, text.textContent); // Save text before moving
       moveItemDown(todo.id);
       return;
     }
@@ -469,6 +471,7 @@ function createSectionElement(section) {
     // Cmd+Shift+Up: move item up (check before plain arrow)
     if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
+      updateTodoText(section.id, text.textContent); // Save text before moving
       moveItemUp(section.id);
       return;
     }
@@ -476,6 +479,7 @@ function createSectionElement(section) {
     // Cmd+Shift+Down: move item down (check before plain arrow)
     if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
+      updateTodoText(section.id, text.textContent); // Save text before moving
       moveItemDown(section.id);
       return;
     }
