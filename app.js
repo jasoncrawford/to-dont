@@ -184,10 +184,23 @@ function createTodoElement(todo) {
   deleteBtn.onclick = (e) => { e.stopPropagation(); deleteTodo(todo.id); };
   actions.appendChild(deleteBtn);
 
-  // Click to toggle complete (but not if clicking text to edit)
-  div.onclick = (e) => {
-    if (e.target === text) return;
+  // Click checkbox to toggle complete
+  checkbox.onclick = (e) => {
+    e.stopPropagation();
     toggleComplete(todo.id);
+  };
+
+  // Click elsewhere to focus text at end
+  div.onclick = (e) => {
+    if (e.target === text || e.target.closest('.actions')) return;
+    text.focus();
+    // Move cursor to end
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
   };
 
   // Save on blur
