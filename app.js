@@ -1054,19 +1054,56 @@ function toggleImportant(id) {
   }
 }
 
+// Match arrow patterns: ->, -->, --->, or Unicode arrows like →, ➔, ⟶, etc.
+const ARROW_PATTERN = /-+>|[→➔➜➝➞⟶⇒⇨]/;
+
+function splitOnArrow(text) {
+  const match = text.match(ARROW_PATTERN);
+  if (!match) return null;
+
+  const arrowIndex = match.index;
+  const arrowLength = match[0].length;
+  const before = text.substring(0, arrowIndex).trim();
+  const after = text.substring(arrowIndex + arrowLength).trim();
+
+  if (!before || !after) return null;
+  return { before, after };
+}
+
 function toggleComplete(id) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
-  if (todo) {
-    todo.completed = !todo.completed;
-    if (todo.completed) {
-      todo.completedAt = getVirtualNow();
-    } else {
-      delete todo.completedAt;
+  if (!todo) return;
+
+  const wasCompleted = todo.completed;
+  todo.completed = !todo.completed;
+
+  if (todo.completed) {
+    todo.completedAt = getVirtualNow();
+
+    // Check for sequence item (contains arrow)
+    const split = splitOnArrow(todo.text);
+    if (split) {
+      // Update current item to just the first part
+      todo.text = split.before;
+
+      // Create new item with the rest
+      const todoIndex = todos.indexOf(todo);
+      const newTodo = {
+        id: generateId(),
+        text: split.after,
+        completed: false,
+        createdAt: getVirtualNow(),
+        indented: todo.indented
+      };
+      todos.splice(todoIndex + 1, 0, newTodo);
     }
-    saveTodos(todos);
-    render();
+  } else {
+    delete todo.completedAt;
   }
+
+  saveTodos(todos);
+  render();
 }
 
 function deleteTodo(id) {
