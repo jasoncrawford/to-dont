@@ -5,8 +5,13 @@ const UPDATE_INTERVAL = 60000;
 // Test mode: virtual time offset in days (persisted)
 let timeOffsetDays = parseInt(localStorage.getItem('decay-todos-time-offset') || '0', 10);
 
-// View mode: 'custom', 'auto', or 'done'
-let viewMode = localStorage.getItem('decay-todos-view-mode') || 'custom';
+// View mode: 'active' or 'done'
+let viewMode = localStorage.getItem('decay-todos-view-mode') || 'active';
+// Migration: convert old 'custom' or 'auto' to 'active'
+if (viewMode === 'custom' || viewMode === 'auto') {
+  viewMode = 'active';
+  localStorage.setItem('decay-todos-view-mode', viewMode);
+}
 
 // Drag state
 let dragState = null;
@@ -125,13 +130,13 @@ function createTodoElement(todo) {
   dragHandle.className = 'drag-handle';
   dragHandle.textContent = '⋮⋮';
 
-  // Hide drag handle in auto-sort view and done view
-  if (viewMode === 'auto' || viewMode === 'done') {
+  // Hide drag handle in done view
+  if (viewMode === 'done') {
     dragHandle.style.display = 'none';
   }
 
   dragHandle.onmousedown = (e) => {
-    if (todo.archived || viewMode === 'auto') return;
+    if (todo.archived) return;
     e.preventDefault();
     const rect = div.getBoundingClientRect();
 
@@ -383,12 +388,11 @@ function createSectionElement(section) {
   dragHandle.className = 'drag-handle';
   dragHandle.textContent = '⋮⋮';
 
-  if (viewMode === 'auto') {
+  if (viewMode === 'done') {
     dragHandle.style.display = 'none';
   }
 
   dragHandle.onmousedown = (e) => {
-    if (viewMode === 'auto') return;
     e.preventDefault();
     const rect = div.getBoundingClientRect();
 
@@ -663,18 +667,7 @@ function render() {
       }
     }
 
-    let displayOrder = active;
-    if (viewMode === 'auto') {
-      // Filter out sections in auto mode, sort only todos
-      displayOrder = [...active].filter(t => t.type !== 'section').sort((a, b) => {
-        if (a.important && !b.important) return -1;
-        if (!a.important && b.important) return 1;
-        if (a.important && b.important) return a.createdAt - b.createdAt;
-        return b.createdAt - a.createdAt;
-      });
-    }
-
-    displayOrder.forEach(item => {
+    active.forEach(item => {
       if (item.type === 'section') {
         todoList.appendChild(createSectionElement(item));
       } else {
@@ -684,7 +677,7 @@ function render() {
 
     // Only show new-item input if list is empty
     if (newItemEl) {
-      newItemEl.style.display = displayOrder.length === 0 ? 'flex' : 'none';
+      newItemEl.style.display = active.length === 0 ? 'flex' : 'none';
     }
 
     // Show faded away section (auto-archived due to age, not manually archived completed items)
@@ -1187,24 +1180,15 @@ document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
 
 // View toggle
 function updateViewToggle() {
-  const customBtn = document.getElementById('customViewBtn');
-  const autoBtn = document.getElementById('autoViewBtn');
+  const activeBtn = document.getElementById('activeViewBtn');
   const doneBtn = document.getElementById('doneViewBtn');
 
-  customBtn.style.textDecoration = viewMode === 'custom' ? 'underline' : 'none';
-  autoBtn.style.textDecoration = viewMode === 'auto' ? 'underline' : 'none';
-  doneBtn.style.textDecoration = viewMode === 'done' ? 'underline' : 'none';
+  activeBtn.classList.toggle('active', viewMode === 'active');
+  doneBtn.classList.toggle('active', viewMode === 'done');
 }
 
-document.getElementById('customViewBtn').onclick = () => {
-  viewMode = 'custom';
-  localStorage.setItem('decay-todos-view-mode', viewMode);
-  updateViewToggle();
-  render();
-};
-
-document.getElementById('autoViewBtn').onclick = () => {
-  viewMode = 'auto';
+document.getElementById('activeViewBtn').onclick = () => {
+  viewMode = 'active';
   localStorage.setItem('decay-todos-view-mode', viewMode);
   updateViewToggle();
   render();

@@ -7,6 +7,7 @@ import {
   getTodoByText,
   getStoredTodos,
   createSection,
+  completeTodo,
 } from './helpers';
 
 test.describe('Reordering', () => {
@@ -125,24 +126,9 @@ test.describe('Reordering', () => {
     });
   });
 
-  test.describe('Auto-Sort View', () => {
-    test('should hide drag handles in auto-sort view', async ({ page }) => {
+  test.describe('Drag Handle Visibility', () => {
+    test('should show drag handles in Active view', async ({ page }) => {
       await addTodo(page, 'Task');
-
-      // Switch to auto sort
-      const autoSortBtn = page.locator('#autoViewBtn');
-      await autoSortBtn.click();
-
-      const dragHandle = page.locator('.todo-item .drag-handle').first();
-      await expect(dragHandle).not.toBeVisible();
-    });
-
-    test('should show drag handles in manual view', async ({ page }) => {
-      await addTodo(page, 'Task');
-
-      // Make sure we're in custom view
-      const customBtn = page.locator('#customViewBtn');
-      await customBtn.click();
 
       const todo = await getTodoByText(page, 'Task');
       await todo.hover();
@@ -151,23 +137,15 @@ test.describe('Reordering', () => {
       await expect(dragHandle).toBeVisible();
     });
 
-    test('should sort by importance in auto-sort view', async ({ page }) => {
-      await addTodo(page, 'Regular 1');
-      await addTodo(page, 'Important task');
-      await addTodo(page, 'Regular 2');
+    test('should hide drag handles in Done view', async ({ page }) => {
+      await addTodo(page, 'Task');
+      await completeTodo(page, 'Task');
 
-      // Mark middle item as important
-      const importantTodo = await getTodoByText(page, 'Important task');
-      await importantTodo.hover();
-      await importantTodo.locator('.important-btn').click();
+      // Switch to Done view
+      await page.locator('#doneViewBtn').click();
 
-      // Switch to auto sort
-      const autoSortBtn = page.locator('#autoViewBtn');
-      await autoSortBtn.click();
-
-      // Important item should be first in the displayed list
-      const texts = await getTodoTexts(page);
-      expect(texts[0]).toBe('Important task');
+      const dragHandle = page.locator('.todo-item .drag-handle').first();
+      await expect(dragHandle).not.toBeVisible();
     });
   });
 

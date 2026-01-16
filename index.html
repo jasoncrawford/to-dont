@@ -7,12 +7,9 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="viewToggle" style="margin-bottom: 20px; font-size: 13px; color: #999;">
-    <span id="customViewBtn" style="cursor: pointer; text-decoration: underline;">Custom order</span>
-    <span style="margin: 0 8px;">|</span>
-    <span id="autoViewBtn" style="cursor: pointer;">Auto sort</span>
-    <span style="margin: 0 8px;">|</span>
-    <span id="doneViewBtn" style="cursor: pointer;">Done</span>
+  <div id="viewToggle" class="view-tabs">
+    <button id="activeViewBtn" class="view-tab active">Active</button>
+    <button id="doneViewBtn" class="view-tab">Done</button>
   </div>
   <div id="archiveCompletedContainer" style="margin-bottom: 20px; display: none;">
     <button id="archiveCompletedBtn" style="padding: 6px 12px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px; color: #666;">Archive completed</button>

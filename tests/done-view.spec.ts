@@ -24,8 +24,8 @@ test.describe('Done View', () => {
       const doneBtn = page.locator('#doneViewBtn');
       await doneBtn.click();
 
-      // Done button should be underlined
-      await expect(doneBtn).toHaveCSS('text-decoration', /underline/);
+      // Done button should be active
+      await expect(doneBtn).toHaveClass(/active/);
     });
 
     test('should persist Done view mode in localStorage', async ({ page }) => {
@@ -234,12 +234,13 @@ test.describe('Done View', () => {
       expect(todoTexts).toContain('Task');
     });
 
-    test('should not show archived completed items in Auto Sort view', async ({ page }) => {
+    test('should not show archived completed items in Active view', async ({ page }) => {
       await addTodo(page, 'Task');
       await completeTodo(page, 'Task');
       await page.locator('#archiveCompletedBtn').click();
 
-      await page.locator('#autoViewBtn').click();
+      // Should already be in Active view, but click to confirm
+      await page.locator('#activeViewBtn').click();
 
       const todoTexts = await getTodoTexts(page);
       expect(todoTexts).not.toContain('Task');
