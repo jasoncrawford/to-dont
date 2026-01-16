@@ -339,6 +339,44 @@ function createTodoElement(todo) {
       return;
     }
 
+    // Right arrow at end: move to next item at beginning
+    if (e.key === 'ArrowRight' && currentIndex < items.length - 1) {
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+      const atEnd = range.collapsed &&
+        ((range.startContainer === text.lastChild && range.startOffset === text.lastChild.length) ||
+         (range.startContainer === text && range.startOffset === text.childNodes.length) ||
+         (!text.firstChild && range.startOffset === 0));
+      if (atEnd) {
+        e.preventDefault();
+        text.blur();
+        const nextText = items[currentIndex + 1].querySelector('.text');
+        if (nextText) {
+          nextText.focus();
+          setCursorPosition(nextText, 0);
+        }
+        return;
+      }
+    }
+
+    // Left arrow at start: move to previous item at end
+    if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+      const atStart = range.collapsed && range.startOffset === 0 &&
+        (range.startContainer === text.firstChild || range.startContainer === text || !text.firstChild);
+      if (atStart) {
+        e.preventDefault();
+        text.blur();
+        const prevText = items[currentIndex - 1].querySelector('.text');
+        if (prevText) {
+          prevText.focus();
+          setCursorPosition(prevText, prevText.textContent.length);
+        }
+        return;
+      }
+    }
+
     // Up arrow: move to previous item, or start of line if at first
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -536,6 +574,44 @@ function createSectionElement(section) {
         setCursorPosition(lastText, lastText.textContent.length);
       }
       return;
+    }
+
+    // Right arrow at end: move to next item at beginning
+    if (e.key === 'ArrowRight' && currentIndex < items.length - 1) {
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+      const atEnd = range.collapsed &&
+        ((range.startContainer === text.lastChild && range.startOffset === text.lastChild.length) ||
+         (range.startContainer === text && range.startOffset === text.childNodes.length) ||
+         (!text.firstChild && range.startOffset === 0));
+      if (atEnd) {
+        e.preventDefault();
+        text.blur();
+        const nextText = items[currentIndex + 1].querySelector('.text');
+        if (nextText) {
+          nextText.focus();
+          setCursorPosition(nextText, 0);
+        }
+        return;
+      }
+    }
+
+    // Left arrow at start: move to previous item at end
+    if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+      const atStart = range.collapsed && range.startOffset === 0 &&
+        (range.startContainer === text.firstChild || range.startContainer === text || !text.firstChild);
+      if (atStart) {
+        e.preventDefault();
+        text.blur();
+        const prevText = items[currentIndex - 1].querySelector('.text');
+        if (prevText) {
+          prevText.focus();
+          setCursorPosition(prevText, prevText.textContent.length);
+        }
+        return;
+      }
     }
 
     if (e.key === 'ArrowDown') {

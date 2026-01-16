@@ -77,6 +77,154 @@ test.describe('Keyboard Navigation', () => {
     });
   });
 
+  test.describe('Left/Right Arrow Navigation', () => {
+    test('should move to next item at start when right arrow at end', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+
+      const firstText = page.locator('.todo-item .text').first();
+      await firstText.click();
+      await firstText.press('End');
+
+      await firstText.press('ArrowRight');
+
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await expect(secondText).toBeFocused();
+
+      // Cursor should be at start of second item
+      const cursorPos = await page.evaluate(() => {
+        const sel = window.getSelection();
+        return sel?.getRangeAt(0).startOffset;
+      });
+      expect(cursorPos).toBe(0);
+    });
+
+    test('should move to previous item at end when left arrow at start', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await secondText.click();
+      await secondText.press('Home');
+
+      await secondText.press('ArrowLeft');
+
+      const firstText = page.locator('.todo-item .text').first();
+      await expect(firstText).toBeFocused();
+
+      // Cursor should be at end of first item
+      const cursorPos = await page.evaluate(() => {
+        const sel = window.getSelection();
+        const range = sel?.getRangeAt(0);
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        return range?.startOffset === el.textContent?.length;
+      });
+      expect(cursorPos).toBe(true);
+    });
+
+    test('should not move when right arrow at end of last item', async ({ page }) => {
+      await addTodo(page, 'Only');
+
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+      await text.press('End');
+
+      await text.press('ArrowRight');
+
+      // Should still be focused on same item
+      await expect(text).toBeFocused();
+    });
+
+    test('should not move when left arrow at start of first item', async ({ page }) => {
+      await addTodo(page, 'Only');
+
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+      await text.press('Home');
+
+      await text.press('ArrowLeft');
+
+      // Should still be focused on same item
+      await expect(text).toBeFocused();
+    });
+
+    test('should navigate between section and todo with right arrow', async ({ page }) => {
+      await createSection(page, 'Section');
+      await addTodo(page, 'Task');
+
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+      await sectionText.press('End');
+
+      await sectionText.press('ArrowRight');
+
+      const todoText = page.locator('.todo-item .text').first();
+      await expect(todoText).toBeFocused();
+    });
+
+    test('should navigate between todo and section with left arrow', async ({ page }) => {
+      await createSection(page, 'Section');
+      await addTodo(page, 'Task');
+
+      const todoText = page.locator('.todo-item .text').first();
+      await todoText.click();
+      await todoText.press('Home');
+
+      await todoText.press('ArrowLeft');
+
+      const sectionText = page.locator('.section-header .text').first();
+      await expect(sectionText).toBeFocused();
+    });
+
+    test('should not move when cursor is in middle of text (right arrow)', async ({ page }) => {
+      await addTodo(page, 'Hello');
+      await addTodo(page, 'World');
+
+      const firstText = page.locator('.todo-item .text').first();
+      await firstText.click();
+
+      // Position cursor in middle
+      await page.evaluate(() => {
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(el.firstChild!, 2);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await firstText.press('ArrowRight');
+
+      // Should still be on first item (cursor moved within text)
+      await expect(firstText).toBeFocused();
+    });
+
+    test('should not move when cursor is in middle of text (left arrow)', async ({ page }) => {
+      await addTodo(page, 'Hello');
+      await addTodo(page, 'World');
+
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await secondText.click();
+
+      // Position cursor in middle
+      await page.evaluate(() => {
+        const el = document.querySelectorAll('.todo-item .text')[1] as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(el.firstChild!, 2);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await secondText.press('ArrowLeft');
+
+      // Should still be on second item (cursor moved within text)
+      await expect(secondText).toBeFocused();
+    });
+  });
+
   test.describe('Cmd+Arrow Navigation', () => {
     test('should jump to first item with Cmd+ArrowUp', async ({ page }) => {
       await addTodo(page, 'First');
