@@ -341,6 +341,5 @@ body {
 }
 
 .done-view .todo-item .text {
-  text-decoration: line-through;
-  color: #999;
+  color: #666;
 }

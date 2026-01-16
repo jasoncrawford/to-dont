@@ -139,7 +139,8 @@ function createTodoElement(todo) {
   div.className = 'todo-item';
   div.dataset.id = todo.id;
 
-  if (todo.completed) div.classList.add('completed');
+  // Don't show strikethrough in Done view
+  if (todo.completed && viewMode !== 'done') div.classList.add('completed');
   if (todo.indented) div.classList.add('indented');
 
   if (!todo.completed && !todo.archived) {
@@ -200,12 +201,15 @@ function createTodoElement(todo) {
   const actions = document.createElement('div');
   actions.className = 'actions';
 
-  const importantBtn = document.createElement('button');
-  importantBtn.className = `important-btn ${todo.important ? 'active' : ''}`;
-  importantBtn.textContent = '!';
-  importantBtn.title = todo.archived ? 'Rescue item' : (todo.important ? 'Remove urgency' : 'Mark urgent');
-  importantBtn.onclick = (e) => { e.stopPropagation(); toggleImportant(todo.id); };
-  actions.appendChild(importantBtn);
+  // Hide important button in Done view
+  if (viewMode !== 'done') {
+    const importantBtn = document.createElement('button');
+    importantBtn.className = `important-btn ${todo.important ? 'active' : ''}`;
+    importantBtn.textContent = '!';
+    importantBtn.title = todo.archived ? 'Rescue item' : (todo.important ? 'Remove urgency' : 'Mark urgent');
+    importantBtn.onclick = (e) => { e.stopPropagation(); toggleImportant(todo.id); };
+    actions.appendChild(importantBtn);
+  }
 
   const deleteBtn = document.createElement('button');
   deleteBtn.textContent = '×';
@@ -213,11 +217,15 @@ function createTodoElement(todo) {
   deleteBtn.onclick = (e) => { e.stopPropagation(); deleteTodo(todo.id); };
   actions.appendChild(deleteBtn);
 
-  // Click checkbox to toggle complete
-  checkbox.onclick = (e) => {
-    e.stopPropagation();
-    toggleComplete(todo.id);
-  };
+  // Click checkbox to toggle complete (disabled in Done view)
+  if (viewMode !== 'done') {
+    checkbox.onclick = (e) => {
+      e.stopPropagation();
+      toggleComplete(todo.id);
+    };
+  } else {
+    checkbox.style.cursor = 'default';
+  }
 
   // Click elsewhere to focus text at end
   div.onclick = (e) => {
