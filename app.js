@@ -242,6 +242,13 @@ function createTodoElement(todo) {
     debouncedSave(todo.id, text.textContent);
   };
 
+  // Paste as plain text only
+  text.onpaste = (e) => {
+    e.preventDefault();
+    const plainText = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, plainText);
+  };
+
   text.onkeydown = (e) => {
     const todoList = document.getElementById('todoList');
     const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
@@ -540,6 +547,13 @@ function createSectionElement(section) {
   // Save while typing (debounced)
   text.oninput = () => {
     debouncedSave(section.id, text.textContent);
+  };
+
+  // Paste as plain text only
+  text.onpaste = (e) => {
+    e.preventDefault();
+    const plainText = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, plainText);
   };
 
   text.onkeydown = (e) => {
