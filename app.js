@@ -237,9 +237,49 @@ function createTodoElement(todo) {
     updateTodoText(todo.id, text.textContent);
   };
 
-  // Save while typing (debounced)
+  // Track ! count to detect typing/deleting !
+  let prevExclamationCount = (todo.text.match(/!/g) || []).length;
+
+  // Save while typing (debounced) and toggle important on !/delete
   text.oninput = () => {
     debouncedSave(todo.id, text.textContent);
+
+    // Check if ! count changed
+    const currentCount = (text.textContent.match(/!/g) || []).length;
+    if (currentCount !== prevExclamationCount) {
+      const todos = loadTodos();
+      const currentTodo = todos.find(t => t.id === todo.id);
+      if (currentTodo) {
+        let changed = false;
+        // Typing a ! turns on important
+        if (currentCount > prevExclamationCount && !currentTodo.important) {
+          currentTodo.important = true;
+          changed = true;
+        }
+        // Deleting last ! turns off important
+        if (currentCount === 0 && prevExclamationCount > 0 && currentTodo.important) {
+          currentTodo.important = false;
+          changed = true;
+        }
+        if (changed) {
+          saveTodos(todos);
+          // Update visual styling
+          const btn = div.querySelector('.important-btn');
+          if (currentTodo.important) {
+            div.classList.add(`important-level-${getImportanceLevel(currentTodo.createdAt)}`);
+            div.style.opacity = '';
+            if (btn) btn.classList.add('active');
+          } else {
+            for (let i = 1; i <= 5; i++) {
+              div.classList.remove(`important-level-${i}`);
+            }
+            div.style.opacity = Math.max(0.2, getFadeOpacity(currentTodo.createdAt));
+            if (btn) btn.classList.remove('active');
+          }
+        }
+      }
+      prevExclamationCount = currentCount;
+    }
   };
 
   // Paste as plain text only
