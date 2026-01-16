@@ -2,8 +2,11 @@ const FADE_DURATION_DAYS = 14;
 const IMPORTANT_ESCALATION_DAYS = 14;
 const UPDATE_INTERVAL = 60000;
 
+// Check for test mode via URL parameter
+const isTestMode = new URLSearchParams(window.location.search).get('test-mode') === '1';
+
 // Test mode: virtual time offset in days (persisted)
-let timeOffsetDays = parseInt(localStorage.getItem('decay-todos-time-offset') || '0', 10);
+let timeOffsetDays = isTestMode ? parseInt(localStorage.getItem('decay-todos-time-offset') || '0', 10) : 0;
 
 // View mode: 'active' or 'done'
 let viewMode = localStorage.getItem('decay-todos-view-mode') || 'active';
@@ -1175,8 +1178,11 @@ document.getElementById('resetTime').onclick = () => {
   render();
 };
 
-// Initialize time display
-document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
+// Initialize test mode UI
+if (isTestMode) {
+  document.getElementById('testMode').style.display = 'block';
+  document.getElementById('timeDisplay').textContent = `Day ${timeOffsetDays}`;
+}
 
 // View toggle
 function updateViewToggle() {
