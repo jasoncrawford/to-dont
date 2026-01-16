@@ -279,7 +279,7 @@ test.describe('Keyboard Navigation', () => {
       expect(texts[1]).toBe('');
     });
 
-    test('should insert todo above when cursor at start', async ({ page }) => {
+    test('should insert todo above when cursor at start, keeping focus on current', async ({ page }) => {
       await addTodo(page, 'First');
 
       const firstText = page.locator('.todo-item .text').first();
@@ -293,6 +293,10 @@ test.describe('Keyboard Navigation', () => {
       expect(texts.length).toBe(2);
       expect(texts[0]).toBe('');
       expect(texts[1]).toBe('First');
+
+      // Focus should remain on the original item (now second)
+      const secondText = page.locator('.todo-item .text').nth(1);
+      await expect(secondText).toBeFocused();
     });
 
     test('should split todo into two when cursor in middle', async ({ page }) => {

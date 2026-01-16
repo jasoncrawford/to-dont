@@ -913,10 +913,13 @@ function insertTodoBefore(beforeId) {
   saveTodos(todos);
   render();
 
-  // Focus the new item
+  // Keep focus on the original item (at start)
   setTimeout(() => {
-    const el = document.querySelector(`[data-id="${newTodo.id}"] .text`);
-    if (el) el.focus();
+    const el = document.querySelector(`[data-id="${beforeId}"] .text`);
+    if (el) {
+      el.focus();
+      setCursorPosition(el, 0);
+    }
   }, 0);
 }
 
