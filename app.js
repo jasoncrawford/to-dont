@@ -1102,12 +1102,9 @@ function moveItemDown(id) {
 function updateTodoText(id, newText) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
-  if (todo && newText.trim()) {
+  if (todo) {
     todo.text = newText.trim();
     saveTodos(todos);
-  } else if (todo && !newText.trim() && todo.type !== 'section') {
-    // Delete empty todos, but keep empty sections (they show placeholder text)
-    deleteTodo(id);
   }
 }
 
