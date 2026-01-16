@@ -19,6 +19,27 @@ if (viewMode === 'custom' || viewMode === 'auto') {
 // Drag state
 let dragState = null;
 
+// Debounced save timers per item
+const saveTimers = new Map();
+const SAVE_DEBOUNCE_MS = 300;
+
+function debouncedSave(id, text) {
+  // Clear existing timer for this item
+  if (saveTimers.has(id)) {
+    clearTimeout(saveTimers.get(id));
+  }
+  // Set new timer
+  saveTimers.set(id, setTimeout(() => {
+    saveTimers.delete(id);
+    const todos = loadTodos();
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+      todo.text = text.trim();
+      saveTodos(todos);
+    }
+  }, SAVE_DEBOUNCE_MS));
+}
+
 function loadTodos() {
   const data = localStorage.getItem('decay-todos');
   return data ? JSON.parse(data) : [];
@@ -211,9 +232,14 @@ function createTodoElement(todo) {
     sel.addRange(range);
   };
 
-  // Save on blur
+  // Save on blur (immediate)
   text.onblur = () => {
     updateTodoText(todo.id, text.textContent);
+  };
+
+  // Save while typing (debounced)
+  text.oninput = () => {
+    debouncedSave(todo.id, text.textContent);
   };
 
   text.onkeydown = (e) => {
@@ -509,6 +535,11 @@ function createSectionElement(section) {
 
   text.onblur = () => {
     updateTodoText(section.id, text.textContent);
+  };
+
+  // Save while typing (debounced)
+  text.oninput = () => {
+    debouncedSave(section.id, text.textContent);
   };
 
   text.onkeydown = (e) => {
