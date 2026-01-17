@@ -151,6 +151,44 @@ test.describe('Done View', () => {
       const dragHandle = page.locator('.todo-item .drag-handle').first();
       await expect(dragHandle).not.toBeVisible();
     });
+
+    test('should not show strikethrough in Done view', async ({ page }) => {
+      await addTodo(page, 'Completed task');
+      await completeTodo(page, 'Completed task');
+
+      await page.locator('#doneViewBtn').click();
+
+      const textEl = page.locator('.todo-item .text').first();
+      const textDecoration = await textEl.evaluate(el =>
+        window.getComputedStyle(el).textDecoration
+      );
+      expect(textDecoration).not.toContain('line-through');
+    });
+
+    test('should disable checkbox clicks in Done view', async ({ page }) => {
+      await addTodo(page, 'Task');
+      await completeTodo(page, 'Task');
+
+      await page.locator('#doneViewBtn').click();
+
+      // Click the checkbox
+      const checkbox = page.locator('.todo-item .checkbox').first();
+      await checkbox.click();
+
+      // Item should still be completed
+      const stored = await getStoredTodos(page);
+      expect(stored[0].completed).toBe(true);
+    });
+
+    test('should hide important button in Done view', async ({ page }) => {
+      await addTodo(page, 'Task');
+      await completeTodo(page, 'Task');
+
+      await page.locator('#doneViewBtn').click();
+
+      const importantBtn = page.locator('.todo-item .important-btn');
+      await expect(importantBtn).toHaveCount(0);
+    });
   });
 
   test.describe('Archive Completed Button', () => {

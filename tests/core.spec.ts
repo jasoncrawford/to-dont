@@ -229,6 +229,125 @@ test.describe('Core Todo Functionality', () => {
       const stored = await getStoredTodos(page);
       expect(stored[0].text).toBe('Updated text');
     });
+
+    test('should keep empty items when blurred', async ({ page }) => {
+      await addTodo(page, 'Will be emptied');
+
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+
+      // Clear text
+      await textEl.press('Meta+a');
+      await textEl.press('Backspace');
+
+      // Blur
+      await page.locator('body').click({ position: { x: 10, y: 10 } });
+      await page.waitForTimeout(100);
+
+      // Item should still exist
+      const todoCount = await page.locator('.todo-item').count();
+      expect(todoCount).toBe(1);
+
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(1);
+      expect(stored[0].text).toBe('');
+    });
+
+    test('should paste as plain text', async ({ page }) => {
+      await addTodo(page, 'Test');
+
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+      await textEl.press('End');
+
+      // Simulate paste with HTML content
+      await page.evaluate(() => {
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        const pasteEvent = new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData!.setData('text/html', '<b>bold</b> text');
+        pasteEvent.clipboardData!.setData('text/plain', 'bold text');
+        el.dispatchEvent(pasteEvent);
+      });
+
+      await page.waitForTimeout(100);
+
+      // Should have plain text, not HTML
+      const html = await textEl.innerHTML();
+      expect(html).not.toContain('<b>');
+      expect(html).toContain('bold text');
+    });
+  });
+
+  test.describe('Importance Shortcut', () => {
+    test('should turn on important when typing !', async ({ page }) => {
+      await addTodo(page, 'Task');
+
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+      await textEl.press('End');
+      await textEl.pressSequentially('!');
+
+      await page.waitForTimeout(100);
+
+      const stored = await getStoredTodos(page);
+      expect(stored[0].important).toBe(true);
+    });
+
+    test('should turn off important when deleting last !', async ({ page }) => {
+      await addTodo(page, 'Task!');
+
+      // Make it important first
+      const todo = page.locator('.todo-item').first();
+      await todo.hover();
+      await todo.locator('.important-btn').click();
+
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+      await textEl.press('End');
+      await textEl.press('Backspace'); // Delete the !
+
+      await page.waitForTimeout(100);
+
+      const stored = await getStoredTodos(page);
+      expect(stored[0].important).toBe(false);
+    });
+
+    test('should not change importance when editing text with existing !', async ({ page }) => {
+      await addTodo(page, 'Task');
+
+      // Type ! to make it important
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+      await textEl.press('End');
+      await textEl.pressSequentially('!');
+      await page.waitForTimeout(100);
+
+      let stored = await getStoredTodos(page);
+      expect(stored[0].important).toBe(true);
+
+      // Click the button to turn OFF importance
+      const todo = page.locator('.todo-item').first();
+      await todo.hover();
+      await todo.locator('.important-btn').click();
+
+      stored = await getStoredTodos(page);
+      expect(stored[0].important).toBe(false);
+
+      // Now edit the text (add something, not a !)
+      await textEl.click();
+      await textEl.press('Home');
+      await textEl.pressSequentially('My ');
+
+      await page.waitForTimeout(100);
+
+      // Important should still be false (editing didn't re-trigger)
+      stored = await getStoredTodos(page);
+      expect(stored[0].important).toBe(false);
+    });
   });
 
   test.describe('Persistence', () => {
