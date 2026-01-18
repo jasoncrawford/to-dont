@@ -11,21 +11,22 @@
 
 ```
 decay-todo/
-├── index.html      # Main HTML structure
-├── styles.css      # All styling
-├── app.js          # All application logic
-├── tests/          # Playwright test files
-│   ├── helpers.ts  # Shared test utilities
-│   ├── core.spec.ts
-│   ├── decay.spec.ts
-│   ├── done-view.spec.ts
-│   ├── keyboard.spec.ts
-│   ├── click-behavior.spec.ts
-│   ├── reorder.spec.ts
-│   ├── sections.spec.ts
-│   └── sequence.spec.ts
-├── PRODUCT_SPEC.md # Product specification
-└── PRACTICES.md    # This file
+├── index.html        # Main HTML structure
+├── styles.css        # All styling
+├── app.js            # All application logic
+├── tests/            # Playwright test files (120 tests)
+│   ├── helpers.ts    # Shared test utilities
+│   ├── core.spec.ts  # CRUD, completion, deletion, importance shortcut
+│   ├── decay.spec.ts # Fading, opacity, importance escalation
+│   ├── done-view.spec.ts    # Done view display, grouping, restrictions
+│   ├── keyboard.spec.ts     # Navigation, editing, reordering
+│   ├── click-behavior.spec.ts # Click handling
+│   ├── reorder.spec.ts      # Drag and drop
+│   ├── sections.spec.ts     # Section creation and grouping
+│   └── sequence.spec.ts     # Arrow splitting
+├── PRODUCT_SPEC.md   # Product specification
+├── PRACTICES.md      # This file
+└── CLAUDE.md         # Context for AI assistant sessions
 ```
 
 ## Version Control
