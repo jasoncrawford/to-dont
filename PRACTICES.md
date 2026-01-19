@@ -10,7 +10,7 @@
 ## Project Structure
 
 ```
-decay-todo/
+to-dont/
 ├── index.html        # Main HTML structure
 ├── styles.css        # All styling
 ├── app.js            # All application logic

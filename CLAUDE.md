@@ -4,7 +4,7 @@ This file contains context for AI assistant sessions working on this project.
 
 ## Project Summary
 
-Decay Todo is a minimalist todo app where items fade away over 14 days. The core idea is that undone tasks either get done or become irrelevant - the app handles this naturally through visual decay and auto-archiving.
+To-Don't is a minimalist todo app where items fade away over 14 days. The core idea is that undone tasks either get done or become irrelevant - the app handles this naturally through visual decay and auto-archiving.
 
 ## Key Design Principles
 

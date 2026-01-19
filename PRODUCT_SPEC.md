@@ -1,8 +1,8 @@
-# Decay Todo - Product Specification
+# To-Don't - Product Specification
 
 ## Overview
 
-Decay Todo is a minimalist todo application where items naturally fade away over time. The core philosophy is that most tasks either get done or become irrelevant - items that linger without action gradually disappear, reducing mental clutter without requiring manual cleanup.
+To-Don't is a minimalist todo application where items naturally fade away over time. The core philosophy is that most tasks either get done or become irrelevant - items that linger without action gradually disappear, reducing mental clutter without requiring manual cleanup.
 
 ## Core Concepts
 
