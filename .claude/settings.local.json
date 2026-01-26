@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/jason/projects/claude/to-dont log --oneline)",
+      "Bash(npm test:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(vercel whoami:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(node tests/sync-integration.mjs:*)",
+      "Bash(./test-sync.sh)",
+      "Bash(curl:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(__NEW_LINE_37ecfab639e80627__ echo -n \", /api/sync: \")",
+      "Bash(__NEW_LINE_37ecfab639e80627__ echo -n \", /api/migrate: \")",
+      "Bash(__NEW_LINE_37ecfab639e80627__ echo \"\")",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(ls:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
