@@ -20,7 +20,7 @@ async function handleGet(_req: VercelRequest, res: VercelResponse) {
   const { data, error } = await supabase
     .from('items')
     .select('*')
-    .order('sort_order', { ascending: true });
+    .order('position', { ascending: true });
 
   if (error) {
     console.error('Error fetching items:', error);
@@ -37,6 +37,8 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing required field: id' });
   }
 
+  const now = new Date().toISOString();
+
   const { data, error } = await supabase
     .from('items')
     .upsert({
@@ -46,9 +48,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       text: item.text || '',
       important: item.important || false,
       completed_at: item.completed_at || null,
-      created_at: item.created_at || new Date().toISOString(),
-      sort_order: item.sort_order || 0,
+      created_at: item.created_at || now,
       level: item.level || null,
+      position: item.position || 'n',
+      text_updated_at: item.text_updated_at || now,
+      important_updated_at: item.important_updated_at || now,
+      completed_updated_at: item.completed_updated_at || now,
+      position_updated_at: item.position_updated_at || now,
     }, { onConflict: 'id' })
     .select()
     .single();

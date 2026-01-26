@@ -43,6 +43,9 @@ async function clearDatabase() {
 }
 
 test.describe('E2E Sync Diagnostic', () => {
+  // Run sync tests serially - they share a database and can't run in parallel
+  test.describe.configure({ mode: 'serial' });
+
   let browser: Browser;
   let page: Page;
 
@@ -79,6 +82,21 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
+
+    // Wait for sync to fully initialize (including fetchAndMergeTodos)
+    const syncEnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          page.off('console', handler);
+          resolve();
+        }
+      };
+      page.on('console', handler);
+    });
+
+    // Also handle case where sync might fail or not be configured
+    const timeout = new Promise<void>(resolve => setTimeout(resolve, 5000));
+    await Promise.race([syncEnabledPromise, timeout]);
   });
 
   test.afterEach(async () => {
@@ -302,7 +320,14 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Delete synced to database');
   });
 
-  test.skip('reordering items syncs to database', async () => {
+  test('reordering items syncs to database', async () => {
+    // Log console messages for debugging
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
     // Create first item using new-item input
     await page.waitForSelector('.new-item', { state: 'visible' });
     const input = page.locator('.new-item .text');
@@ -329,8 +354,8 @@ test.describe('E2E Sync Diagnostic', () => {
     let dbItems = await apiGet('/api/items');
     const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
-    console.log('Before - sort_order:', item1Before?.sort_order, item2Before?.sort_order);
-    expect(item1Before.sort_order).toBeLessThan(item2Before.sort_order);
+    console.log('Before reorder - positions:', item1Before?.position, item2Before?.position);
+    expect(item1Before.position < item2Before.position).toBe(true);
 
     // Reorder: move item2 up using keyboard
     await page.locator(`.todo-item .text:text-is("${item2Text}")`).click();
@@ -339,19 +364,285 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Verify UI order changed
     const texts = await page.locator('.todo-item .text').allTextContents();
-    console.log('UI order after:', texts);
+    console.log('UI order after reorder:', texts);
     expect(texts[0]).toBe(item2Text);
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
+    // Wait for sync (debounce is 2s, add buffer)
+    await page.waitForTimeout(4000);
 
     // Check database order: item2 should now be before item1
     dbItems = await apiGet('/api/items');
     const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
-    console.log('After - sort_order:', item1After?.sort_order, item2After?.sort_order);
-    expect(item2After.sort_order).toBeLessThan(item1After.sort_order);
+    console.log('After reorder - positions:', item1After?.position, item2After?.position);
+    expect(item2After.position < item1After.position).toBe(true);
     console.log('✓ Reorder synced to database');
+  });
+
+  test('reorder after page refresh syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+    // This tests reordering items that were loaded from server (not created fresh)
+    // Log console messages for debugging
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create items
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const item1Text = `RefreshFirst ${Date.now()}`;
+    await input.pressSequentially(item1Text);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
+
+    const item2Text = `RefreshSecond ${Date.now()}`;
+    await page.locator('.todo-item .text').last().click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+    await page.keyboard.type(item2Text);
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    // Verify items in database
+    let dbItems = await apiGet('/api/items');
+    const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
+    const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
+    console.log('Initial positions:', item1Before?.position, item2Before?.position);
+    expect(item1Before).toBeTruthy();
+    expect(item2Before).toBeTruthy();
+
+    // REFRESH THE PAGE to simulate loading from server
+    console.log('Refreshing page...');
+    await page.reload();
+
+    // Wait for sync to initialize after refresh
+    const syncEnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          page.off('console', handler);
+          resolve();
+        }
+      };
+      page.on('console', handler);
+    });
+    await Promise.race([
+      syncEnabledPromise,
+      page.waitForTimeout(10000)
+    ]);
+
+    // Wait for items to render
+    await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
+    await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
+
+    // Verify UI order
+    let texts = await page.locator('.todo-item .text').allTextContents();
+    console.log('After refresh UI order:', texts);
+
+    // NOW reorder: move item2 up
+    await page.locator(`.todo-item .text:text-is("${item2Text}")`).click();
+    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.waitForTimeout(100);
+
+    // Verify UI order changed
+    texts = await page.locator('.todo-item .text').allTextContents();
+    console.log('After reorder UI order:', texts);
+    expect(texts[0]).toBe(item2Text);
+
+    // Wait for sync (debounce is 2s, add buffer)
+    await page.waitForTimeout(4000);
+
+    // Check database order: item2 should now be before item1
+    dbItems = await apiGet('/api/items');
+    const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
+    const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
+    console.log('After reorder - positions:', item1After?.position, item2After?.position);
+    expect(item2After.position < item1After.position).toBe(true);
+    console.log('✓ Reorder after refresh synced to database');
+  });
+
+  test('drag-and-drop reorder syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    // Log console messages for debugging
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create items
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const item1Text = `DragFirst ${Date.now()}`;
+    await input.pressSequentially(item1Text);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
+
+    const item2Text = `DragSecond ${Date.now()}`;
+    await page.locator('.todo-item .text').last().click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+    await page.keyboard.type(item2Text);
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    // Verify items in database
+    let dbItems = await apiGet('/api/items');
+    const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
+    const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
+    console.log('Before drag - positions:', item1Before?.position, item2Before?.position);
+
+    // Drag item2 above item1
+    const item2Handle = page.locator(`.todo-item:has(.text:text-is("${item2Text}")) .drag-handle`);
+    const item1 = page.locator(`.todo-item:has(.text:text-is("${item1Text}"))`);
+    const item1Box = await item1.boundingBox();
+
+    await item2Handle.hover();
+    await page.mouse.down();
+    await page.mouse.move(item1Box!.x + item1Box!.width / 2, item1Box!.y);
+    await page.mouse.up();
+
+    // Verify UI order changed
+    await page.waitForTimeout(500);
+    const texts = await page.locator('.todo-item .text').allTextContents();
+    console.log('After drag UI order:', texts);
+    expect(texts[0]).toBe(item2Text);
+
+    // Wait for sync (debounce is 2s, add buffer)
+    await page.waitForTimeout(4000);
+
+    // Check database order
+    dbItems = await apiGet('/api/items');
+    const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
+    const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
+    console.log('After drag - positions:', item1After?.position, item2After?.position);
+    expect(item2After.position < item1After.position).toBe(true);
+    console.log('✓ Drag-and-drop reorder synced to database');
+  });
+
+  test('reorder in one browser syncs to another browser', async () => {
+    // This test reproduces the bug:
+    // 1. Browser1 adds items 1, 2, 3
+    // 2. Browser2 loads and sees 1, 2, 3
+    // 3. Browser2 reorders item 3 above item 2
+    // 4. Browser1 should see 1, 3, 2 via realtime (no reload)
+
+    // Create two browser contexts
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    const browser1 = await context1.newPage();
+    const browser2 = await context2.newPage();
+
+    // Set up console logging
+    browser1.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log(`[Browser1] ${msg.text()}`);
+      }
+    });
+    browser2.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log(`[Browser2] ${msg.text()}`);
+      }
+    });
+
+    // Load app in browser1 and wait for full sync initialization
+    await browser1.goto(APP_URL);
+
+    // Create a promise that resolves when we see the "✓ Enabled" message
+    const browser1EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser1.off('console', handler);
+          resolve();
+        }
+      };
+      browser1.on('console', handler);
+    });
+
+    // Wait for the actual "Enabled" message which means fetchAndMergeTodos completed
+    await browser1EnabledPromise;
+    console.log('Browser1 sync enabled');
+
+    // Add Item 1
+    await browser1.waitForSelector('.new-item', { state: 'visible' });
+    await browser1.locator('.new-item .text').click();
+    await browser1.keyboard.type('Item 1');
+    await browser1.keyboard.press('Enter');
+    await browser1.waitForSelector('.todo-item .text:text-is("Item 1")');
+
+    // Add Item 2
+    await browser1.locator('.todo-item .text:text-is("Item 1")').click();
+    await browser1.keyboard.press('End');
+    await browser1.keyboard.press('Enter');
+    await browser1.waitForTimeout(100);
+    await browser1.keyboard.type('Item 2');
+
+    // Add Item 3
+    await browser1.keyboard.press('Enter');
+    await browser1.waitForTimeout(100);
+    await browser1.keyboard.type('Item 3');
+    await browser1.locator('body').click({ position: { x: 10, y: 10 } });
+    await browser1.waitForSelector('.todo-item .text:text-is("Item 3")');
+    console.log('Browser1 added all 3 items');
+
+    // Wait for sync
+    await browser1.waitForTimeout(3000);
+
+    // Browser2 loads and should see all items
+    await browser2.goto(APP_URL);
+
+    // Wait for full sync initialization in browser2
+    const browser2EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser2.off('console', handler);
+          resolve();
+        }
+      };
+      browser2.on('console', handler);
+    });
+    await browser2EnabledPromise;
+    await browser2.waitForSelector('.todo-item .text:text-is("Item 3")', { timeout: 5000 });
+
+    let browser2Texts = await browser2.locator('.todo-item .text').allTextContents();
+    console.log('Browser2 initial:', browser2Texts);
+    expect(browser2Texts).toEqual(['Item 1', 'Item 2', 'Item 3']);
+
+    // Browser2 reorders: move Item 3 above Item 2
+    await browser2.locator('.todo-item .text:text-is("Item 3")').click();
+    await browser2.keyboard.press('Meta+Shift+ArrowUp');
+    await browser2.waitForTimeout(100);
+
+    browser2Texts = await browser2.locator('.todo-item .text').allTextContents();
+    console.log('Browser2 after reorder:', browser2Texts);
+    expect(browser2Texts).toEqual(['Item 1', 'Item 3', 'Item 2']);
+
+    // Wait for Browser2's sync to complete (2s debounce + processing time)
+    await browser2.waitForTimeout(4000);
+
+    // Browser1 should see the new order via realtime update (NO RELOAD)
+    const browser1Texts = await browser1.locator('.todo-item .text').allTextContents();
+    console.log('Browser1 after realtime sync (no reload):', browser1Texts);
+
+    // This assertion should FAIL before the fix is applied
+    expect(browser1Texts).toEqual(['Item 1', 'Item 3', 'Item 2']);
+    console.log('✓ Reorder synced between browsers via realtime!');
+
+    // Cleanup
+    await context1.close();
+    await context2.close();
   });
 });
 

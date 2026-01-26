@@ -1,5 +1,6 @@
 // Sync layer for To-Don't
 // Wraps localStorage operations to also sync with server via Supabase
+// Uses CRDT-inspired per-field timestamps and fractional indexing
 
 (function() {
   'use strict';
@@ -41,6 +42,101 @@
   // Pending remote updates (queued while user is editing)
   let pendingRemoteUpdates = [];
 
+  // ============================================
+  // Fractional Indexing for CRDT-friendly ordering
+  // ============================================
+
+  const BASE_CHARS = 'abcdefghijklmnopqrstuvwxyz';
+  const MID_CHAR = 'n';
+
+  function generatePositionBetween(before, after) {
+    if (!before && !after) return MID_CHAR;
+    if (!before) return decrementPosition(after);
+    if (!after) return incrementPosition(before);
+    return midpointPosition(before, after);
+  }
+
+  function decrementPosition(pos) {
+    const lastChar = pos[pos.length - 1];
+    const charIndex = BASE_CHARS.indexOf(lastChar);
+    if (charIndex > 1) {
+      const midIndex = Math.floor(charIndex / 2);
+      return pos.slice(0, -1) + BASE_CHARS[midIndex];
+    } else if (charIndex === 1) {
+      return pos.slice(0, -1) + 'a' + MID_CHAR;
+    }
+    return '0' + MID_CHAR;
+  }
+
+  function incrementPosition(pos) {
+    const lastChar = pos[pos.length - 1];
+    const charIndex = BASE_CHARS.indexOf(lastChar);
+    if (charIndex < BASE_CHARS.length - 2) {
+      const midIndex = charIndex + Math.ceil((BASE_CHARS.length - 1 - charIndex) / 2);
+      return pos.slice(0, -1) + BASE_CHARS[midIndex];
+    } else if (charIndex === BASE_CHARS.length - 2) {
+      return pos.slice(0, -1) + 'z';
+    }
+    return pos + MID_CHAR;
+  }
+
+  function midpointPosition(before, after) {
+    const maxLen = Math.max(before.length, after.length);
+    const beforePadded = before.padEnd(maxLen, 'a');
+    const afterPadded = after.padEnd(maxLen, 'a');
+
+    let diffIndex = 0;
+    while (diffIndex < maxLen && beforePadded[diffIndex] === afterPadded[diffIndex]) {
+      diffIndex++;
+    }
+
+    if (diffIndex === maxLen) return before + MID_CHAR;
+
+    const beforeChar = beforePadded[diffIndex];
+    const afterChar = afterPadded[diffIndex];
+    const beforeIdx = BASE_CHARS.indexOf(beforeChar);
+    const afterIdx = BASE_CHARS.indexOf(afterChar);
+
+    if (beforeIdx === -1 || afterIdx === -1) {
+      if (beforeChar < 'a') return 'a' + MID_CHAR;
+      return before + MID_CHAR;
+    }
+
+    if (afterIdx - beforeIdx > 1) {
+      const midIdx = beforeIdx + Math.floor((afterIdx - beforeIdx) / 2);
+      return before.slice(0, diffIndex) + BASE_CHARS[midIdx];
+    }
+
+    const prefix = before.slice(0, diffIndex + 1);
+    if (after.length > diffIndex + 1) {
+      const restFirstChar = after[diffIndex + 1];
+      const restIdx = BASE_CHARS.indexOf(restFirstChar);
+      if (restIdx > 1) {
+        const midRestIdx = Math.floor(restIdx / 2);
+        return prefix + BASE_CHARS[midRestIdx];
+      }
+    }
+    return prefix + MID_CHAR;
+  }
+
+  function generateInitialPositions(count) {
+    if (count === 0) return [];
+    if (count === 1) return [MID_CHAR];
+    const positions = [];
+    const startIdx = 2; // 'c'
+    const endIdx = 23; // 'x'
+    const step = (endIdx - startIdx) / (count - 1);
+    for (let i = 0; i < count; i++) {
+      const charIdx = Math.round(startIdx + step * i);
+      positions.push(BASE_CHARS[charIdx]);
+    }
+    return positions;
+  }
+
+  // ============================================
+  // UUID and ID Management
+  // ============================================
+
   // Generate UUID for new items
   function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -57,6 +153,32 @@
       localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
     }
     return idMapping[localId];
+  }
+
+  // Find local ID from UUID (reverse lookup)
+  function getLocalIdFromUUID(uuid) {
+    for (const [localId, mappedUuid] of Object.entries(idMapping)) {
+      if (mappedUuid === uuid) {
+        return localId;
+      }
+    }
+    return null;
+  }
+
+  // Find item in todos by UUID (checks both direct ID and ID mapping)
+  function findItemByUUID(todos, uuid) {
+    // First try direct match (item already has UUID as ID)
+    let index = todos.findIndex(t => t.id === uuid);
+    if (index >= 0) return { index, item: todos[index] };
+
+    // Try reverse lookup (item has local ID, we have UUID)
+    const localId = getLocalIdFromUUID(uuid);
+    if (localId) {
+      index = todos.findIndex(t => t.id === localId);
+      if (index >= 0) return { index, item: todos[index] };
+    }
+
+    return { index: -1, item: null };
   }
 
   // Check if sync is properly configured
@@ -80,7 +202,8 @@
   }
 
   // Convert localStorage item to database format
-  function toDbFormat(item, sortOrder) {
+  function toDbFormat(item, position) {
+    const now = new Date().toISOString();
     return {
       id: getOrCreateUUID(item.id),
       parent_id: null,
@@ -89,8 +212,13 @@
       important: item.important || false,
       completed_at: item.completedAt ? new Date(item.completedAt).toISOString() : null,
       created_at: new Date(item.createdAt).toISOString(),
-      sort_order: sortOrder,
       level: item.level || null,
+      // CRDT fields
+      position: position || item.position || MID_CHAR,
+      text_updated_at: item.textUpdatedAt ? new Date(item.textUpdatedAt).toISOString() : now,
+      important_updated_at: item.importantUpdatedAt ? new Date(item.importantUpdatedAt).toISOString() : now,
+      completed_updated_at: item.completedUpdatedAt ? new Date(item.completedUpdatedAt).toISOString() : now,
+      position_updated_at: item.positionUpdatedAt ? new Date(item.positionUpdatedAt).toISOString() : now,
     };
   }
 
@@ -107,6 +235,12 @@
       type: dbItem.type === 'section' ? 'section' : undefined,
       level: dbItem.level || undefined,
       indented: !!dbItem.parent_id,
+      // CRDT fields
+      position: dbItem.position || MID_CHAR,
+      textUpdatedAt: dbItem.text_updated_at ? new Date(dbItem.text_updated_at).getTime() : Date.now(),
+      importantUpdatedAt: dbItem.important_updated_at ? new Date(dbItem.important_updated_at).getTime() : Date.now(),
+      completedUpdatedAt: dbItem.completed_updated_at ? new Date(dbItem.completed_updated_at).getTime() : Date.now(),
+      positionUpdatedAt: dbItem.position_updated_at ? new Date(dbItem.position_updated_at).getTime() : Date.now(),
     };
   }
 
@@ -123,7 +257,7 @@
   }
 
   // Create a hash of an item for comparison (includes position for reorder detection)
-  function itemHashWithPosition(item, position) {
+  function itemHashWithPosition(item) {
     return JSON.stringify({
       id: item.id,
       text: item.text,
@@ -131,7 +265,7 @@
       completed: item.completed,
       completedAt: item.completedAt,
       type: item.type,
-      position: position,
+      position: item.position,
     });
   }
 
@@ -141,8 +275,8 @@
       itemHashes: new Map(),
       itemIds: new Set(),
     };
-    todos.forEach((item, index) => {
-      snapshot.itemHashes.set(item.id, itemHashWithPosition(item, index));
+    todos.forEach((item) => {
+      snapshot.itemHashes.set(item.id, itemHashWithPosition(item));
       snapshot.itemIds.add(item.id);
     });
     return snapshot;
@@ -165,8 +299,8 @@
 
     // Find modified/added items (hash changed or new)
     const modifiedItems = [];
-    currentTodos.forEach((item, index) => {
-      const currentHash = itemHashWithPosition(item, index);
+    currentTodos.forEach((item) => {
+      const currentHash = itemHashWithPosition(item);
       const lastHash = lastSnapshot.itemHashes.get(item.id);
       if (currentHash !== lastHash) {
         modifiedItems.push(item);
@@ -224,11 +358,17 @@
 
     // Handle modifications/additions via bulk sync
     if (modifiedItems.length > 0) {
+      // Determine which items are new vs updated
+      const existingIds = new Set(lastSyncedState?.map(t => t.id) || []);
+
       const dbItems = modifiedItems.map((item) => {
-        const dbItem = toDbFormat(item, todos.indexOf(item));
-        // Track this ID so we ignore the realtime echo
-        recentlySyncedIds.add(dbItem.id);
-        setTimeout(() => recentlySyncedIds.delete(dbItem.id), RECENTLY_SYNCED_TTL_MS);
+        const dbItem = toDbFormat(item, item.position);
+        // Track this ID with event type so we ignore only our own echo
+        // New items will get INSERT echo, existing items will get UPDATE echo
+        const isNew = !existingIds.has(item.id);
+        const eventKey = `${isNew ? 'INSERT' : 'UPDATE'}:${dbItem.id}`;
+        recentlySyncedIds.add(eventKey);
+        setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
         return dbItem;
       });
 
@@ -239,16 +379,20 @@
     }
 
     // Handle deletions
-    for (const id of deletedIds) {
+    for (const localId of deletedIds) {
+      // Get UUID from mapping (or use the ID if it's already a UUID)
+      const uuid = idMapping[localId] || localId;
+
       // Track this ID so we ignore the realtime echo
-      recentlySyncedIds.add(id);
-      setTimeout(() => recentlySyncedIds.delete(id), RECENTLY_SYNCED_TTL_MS);
+      const eventKey = `DELETE:${uuid}`;
+      recentlySyncedIds.add(eventKey);
+      setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
 
       try {
-        await apiRequest(`/api/items/${id}`, { method: 'DELETE' });
+        await apiRequest(`/api/items/${uuid}`, { method: 'DELETE' });
       } catch (err) {
         // Item might already be deleted - that's OK
-        console.log('[Sync] Delete may have already happened:', id.substring(0, 8));
+        console.log('[Sync] Delete may have already happened:', uuid.substring(0, 8));
       }
     }
 
@@ -296,9 +440,10 @@
   // Handle realtime changes from other devices
   function handleRealtimeChange(payload) {
     const itemId = payload.new?.id || payload.old?.id;
+    const eventKey = `${payload.eventType}:${itemId}`;
 
-    // Ignore our own changes
-    if (itemId && recentlySyncedIds.has(itemId)) {
+    // Ignore our own changes (match by event type + ID to allow different operations)
+    if (itemId && recentlySyncedIds.has(eventKey)) {
       return; // Silent ignore - no log spam
     }
 
@@ -313,6 +458,38 @@
     applyRemoteChange(payload);
   }
 
+  // Per-field merge: take the newer value for each field
+  function mergeLocalWithRemote(local, remote) {
+    const merged = { ...local };
+
+    // Text field
+    if ((remote.textUpdatedAt || 0) > (local.textUpdatedAt || 0)) {
+      merged.text = remote.text;
+      merged.textUpdatedAt = remote.textUpdatedAt;
+    }
+
+    // Important field
+    if ((remote.importantUpdatedAt || 0) > (local.importantUpdatedAt || 0)) {
+      merged.important = remote.important;
+      merged.importantUpdatedAt = remote.importantUpdatedAt;
+    }
+
+    // Completed field
+    if ((remote.completedUpdatedAt || 0) > (local.completedUpdatedAt || 0)) {
+      merged.completed = remote.completed;
+      merged.completedAt = remote.completedAt;
+      merged.completedUpdatedAt = remote.completedUpdatedAt;
+    }
+
+    // Position field
+    if ((remote.positionUpdatedAt || 0) > (local.positionUpdatedAt || 0)) {
+      merged.position = remote.position;
+      merged.positionUpdatedAt = remote.positionUpdatedAt;
+    }
+
+    return merged;
+  }
+
   // Apply a single remote change
   function applyRemoteChange(payload) {
     const stored = localStorage.getItem('decay-todos');
@@ -321,28 +498,45 @@
 
     if (payload.eventType === 'INSERT') {
       const newItem = toLocalFormat(payload.new);
-      const exists = todos.some(t => t.id === newItem.id);
-      if (!exists) {
-        todos.push(newItem);
+      // Check if item exists by UUID or by local ID mapping
+      const { index: existingIndex } = findItemByUUID(todos, newItem.id);
+      if (existingIndex < 0) {
+        // Insert in correct position based on fractional index
+        let insertIndex = todos.length;
+        for (let i = 0; i < todos.length; i++) {
+          if ((todos[i].position || MID_CHAR) > (newItem.position || MID_CHAR)) {
+            insertIndex = i;
+            break;
+          }
+        }
+        todos.splice(insertIndex, 0, newItem);
         idMapping[newItem.id] = newItem.id;
         localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
         changed = true;
         console.log('[Sync] + Added:', newItem.text.substring(0, 30));
       }
     } else if (payload.eventType === 'UPDATE') {
-      const updatedItem = toLocalFormat(payload.new);
-      const index = todos.findIndex(t => t.id === updatedItem.id);
-      if (index >= 0) {
-        // Only update if actually different
-        if (itemHash(todos[index]) !== itemHash(updatedItem)) {
-          todos[index] = updatedItem;
+      const remoteItem = toLocalFormat(payload.new);
+      // Find item by UUID (checks both direct ID and ID mapping)
+      const { index, item: localItem } = findItemByUUID(todos, remoteItem.id);
+      if (index >= 0 && localItem) {
+        // Per-field merge
+        const merged = mergeLocalWithRemote(localItem, remoteItem);
+        // Preserve the local ID (don't overwrite with UUID)
+        merged.id = localItem.id;
+        if (itemHash(localItem) !== itemHash(merged) ||
+            localItem.position !== merged.position) {
+          todos[index] = merged;
+          // Re-sort by position if position changed
+          todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
           changed = true;
-          console.log('[Sync] ~ Updated:', updatedItem.text.substring(0, 30));
+          console.log('[Sync] ~ Updated:', merged.text.substring(0, 30));
         }
       }
     } else if (payload.eventType === 'DELETE') {
       const deletedId = payload.old?.id;
-      const index = todos.findIndex(t => t.id === deletedId);
+      // Find item by UUID (checks both direct ID and ID mapping)
+      const { index } = findItemByUUID(todos, deletedId);
       if (index >= 0) {
         todos.splice(index, 1);
         changed = true;
@@ -383,7 +577,10 @@
         return;
       }
 
+      // Convert to local format and sort by position
       const localItems = serverItems.map(toLocalFormat);
+      localItems.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+
       localStorage.setItem('decay-todos', JSON.stringify(localItems));
 
       // Update ID mapping
@@ -468,17 +665,28 @@
           const existingItems = JSON.parse(existingData);
           if (existingItems.length > 0) {
             console.log('[Sync] Initial sync:', existingItems.length, 'local items');
-            // Mark all as recently synced to ignore echoes
+            // Assign initial positions if not present
+            const positions = generateInitialPositions(existingItems.length);
+            existingItems.forEach((item, index) => {
+              if (!item.position) {
+                item.position = positions[index];
+                item.positionUpdatedAt = Date.now();
+              }
+            });
+            // Mark all as recently synced to ignore INSERT echoes
             existingItems.forEach(item => {
               const uuid = getOrCreateUUID(item.id);
-              recentlySyncedIds.add(uuid);
-              setTimeout(() => recentlySyncedIds.delete(uuid), RECENTLY_SYNCED_TTL_MS);
+              const eventKey = `INSERT:${uuid}`;
+              recentlySyncedIds.add(eventKey);
+              setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
             });
-            const dbItems = existingItems.map((item, index) => toDbFormat(item, index));
+            const dbItems = existingItems.map((item) => toDbFormat(item, item.position));
             await apiRequest('/api/sync', {
               method: 'POST',
               body: JSON.stringify({ items: dbItems }),
             });
+            // Save updated items with positions
+            localStorage.setItem('decay-todos', JSON.stringify(existingItems));
             lastSyncedState = JSON.parse(JSON.stringify(existingItems));
           }
         }
@@ -572,6 +780,9 @@
     isConfigured: isSyncConfigured,
     refresh: fetchAndMergeTodos,
     getConfig: () => ({ ...getConfig() }),
+    // CRDT helpers for app.js
+    generatePositionBetween: generatePositionBetween,
+    generateInitialPositions: generateInitialPositions,
   };
 
   if (document.readyState === 'loading') {

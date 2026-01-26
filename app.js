@@ -35,6 +35,7 @@ function debouncedSave(id, text) {
     const todo = todos.find(t => t.id === id);
     if (todo) {
       todo.text = text.trim();
+      todo.textUpdatedAt = getVirtualNow(); // CRDT: track text update time
       saveTodos(todos);
     }
   }, SAVE_DEBOUNCE_MS));
@@ -55,6 +56,72 @@ function generateId() {
 
 function getVirtualNow() {
   return Date.now() + (timeOffsetDays * 24 * 60 * 60 * 1000);
+}
+
+// CRDT helpers - use sync layer functions if available, otherwise inline
+function generatePositionBetween(before, after) {
+  if (window.ToDoSync && window.ToDoSync.generatePositionBetween) {
+    return window.ToDoSync.generatePositionBetween(before, after);
+  }
+  // Fallback inline implementation
+  const MID_CHAR = 'n';
+  const BASE_CHARS = 'abcdefghijklmnopqrstuvwxyz';
+  if (!before && !after) return MID_CHAR;
+  if (!before) {
+    const lastChar = after[after.length - 1];
+    const idx = BASE_CHARS.indexOf(lastChar);
+    if (idx > 1) return after.slice(0, -1) + BASE_CHARS[Math.floor(idx / 2)];
+    return '0' + MID_CHAR;
+  }
+  if (!after) {
+    const lastChar = before[before.length - 1];
+    const idx = BASE_CHARS.indexOf(lastChar);
+    if (idx < BASE_CHARS.length - 2) {
+      const midIdx = idx + Math.ceil((BASE_CHARS.length - 1 - idx) / 2);
+      return before.slice(0, -1) + BASE_CHARS[midIdx];
+    }
+    return before + MID_CHAR;
+  }
+  // Midpoint - simplified
+  if (before < after) {
+    const beforeIdx = BASE_CHARS.indexOf(before[0]);
+    const afterIdx = BASE_CHARS.indexOf(after[0]);
+    if (afterIdx - beforeIdx > 1) {
+      return BASE_CHARS[beforeIdx + Math.floor((afterIdx - beforeIdx) / 2)];
+    }
+  }
+  return before + MID_CHAR;
+}
+
+function getItemPosition(todos, index) {
+  if (index < 0 || index >= todos.length) return null;
+  return todos[index].position || 'n';
+}
+
+function createNewItem(text = '', insertIndex = -1, todos = null) {
+  const now = getVirtualNow();
+  let position = 'n';
+
+  if (todos && insertIndex >= 0) {
+    const before = insertIndex > 0 ? getItemPosition(todos, insertIndex - 1) : null;
+    const after = insertIndex < todos.length ? getItemPosition(todos, insertIndex) : null;
+    position = generatePositionBetween(before, after);
+  }
+
+  return {
+    id: generateId(),
+    text: text.trim(),
+    createdAt: now,
+    important: false,
+    completed: false,
+    archived: false,
+    // CRDT fields
+    position: position,
+    textUpdatedAt: now,
+    importantUpdatedAt: now,
+    completedUpdatedAt: now,
+    positionUpdatedAt: now,
+  };
 }
 
 function getDaysSince(timestamp) {
@@ -262,11 +329,13 @@ function createTodoElement(todo) {
         // Typing a ! turns on important
         if (currentCount > prevExclamationCount && !currentTodo.important) {
           currentTodo.important = true;
+          currentTodo.importantUpdatedAt = getVirtualNow();
           changed = true;
         }
         // Deleting last ! turns off important
         if (currentCount === 0 && prevExclamationCount > 0 && currentTodo.important) {
           currentTodo.important = false;
+          currentTodo.importantUpdatedAt = getVirtualNow();
           changed = true;
         }
         if (changed) {
@@ -767,6 +836,13 @@ function reorderTodo(draggedId, targetId) {
 
   const [dragged] = todos.splice(draggedIndex, 1);
   const newTargetIndex = todos.findIndex(t => t.id === targetId);
+
+  // Generate new position between neighbors
+  const before = newTargetIndex > 0 ? getItemPosition(todos, newTargetIndex - 1) : null;
+  const after = getItemPosition(todos, newTargetIndex);
+  dragged.position = generatePositionBetween(before, after);
+  dragged.positionUpdatedAt = getVirtualNow();
+
   todos.splice(newTargetIndex, 0, dragged);
 
   saveTodos(todos);
@@ -869,14 +945,8 @@ function addTodo(text) {
   if (!text.trim()) return;
   const todos = loadTodos();
   // Add to end (where the input is)
-  todos.push({
-    id: generateId(),
-    text: text.trim(),
-    createdAt: getVirtualNow(),
-    important: false,
-    completed: false,
-    archived: false
-  });
+  const newTodo = createNewItem(text, todos.length, todos);
+  todos.push(newTodo);
   saveTodos(todos);
   render();
 }
@@ -968,15 +1038,7 @@ function insertTodoAfter(afterId) {
   const index = todos.findIndex(t => t.id === afterId);
   if (index === -1) return;
 
-  const newTodo = {
-    id: generateId(),
-    text: '',
-    createdAt: getVirtualNow(),
-    important: false,
-    completed: false,
-    archived: false
-  };
-
+  const newTodo = createNewItem('', index + 1, todos);
   todos.splice(index + 1, 0, newTodo);
   saveTodos(todos);
   render();
@@ -993,15 +1055,7 @@ function insertTodoBefore(beforeId) {
   const index = todos.findIndex(t => t.id === beforeId);
   if (index === -1) return;
 
-  const newTodo = {
-    id: generateId(),
-    text: '',
-    createdAt: getVirtualNow(),
-    important: false,
-    completed: false,
-    archived: false
-  };
-
+  const newTodo = createNewItem('', index, todos);
   todos.splice(index, 0, newTodo);
   saveTodos(todos);
   render();
@@ -1025,17 +1079,10 @@ function splitTodoAt(id, textBefore, textAfter) {
 
   // Update original todo with text before cursor
   originalTodo.text = textBefore.trim();
+  originalTodo.textUpdatedAt = getVirtualNow();
 
   // Create new todo with text after cursor
-  const newTodo = {
-    id: generateId(),
-    text: textAfter.trim(),
-    createdAt: getVirtualNow(),
-    important: false,
-    completed: false,
-    archived: false
-  };
-
+  const newTodo = createNewItem(textAfter, index + 1, todos);
   todos.splice(index + 1, 0, newTodo);
   saveTodos(todos);
   render();
@@ -1122,6 +1169,20 @@ function moveItemUp(id) {
   for (let i = groupIndices.length - 1; i >= 0; i--) {
     todos.splice(groupIndices[i], 1);
   }
+
+  // Generate new positions for the group
+  const now = getVirtualNow();
+  const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
+  const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
+  // Each item in group gets a position between before and after
+  let lastPos = before;
+  group.forEach((item, i) => {
+    const nextPos = i === group.length - 1 ? after : null;
+    item.position = generatePositionBetween(lastPos, nextPos || after);
+    item.positionUpdatedAt = now;
+    lastPos = item.position;
+  });
+
   // Insert at new position
   todos.splice(insertAt, 0, ...group);
 
@@ -1184,6 +1245,20 @@ function moveItemDown(id) {
   }
   // Insert at new position (adjusted for removed items)
   const adjustedInsert = insertAt - groupSize;
+
+  // Generate new positions for the group
+  const now = getVirtualNow();
+  const before = adjustedInsert > 0 ? getItemPosition(todos, adjustedInsert - 1) : null;
+  const after = adjustedInsert < todos.length ? getItemPosition(todos, adjustedInsert) : null;
+  // Each item in group gets a position between before and after
+  let lastPos = before;
+  group.forEach((item, i) => {
+    const nextPos = i === group.length - 1 ? after : null;
+    item.position = generatePositionBetween(lastPos, nextPos || after);
+    item.positionUpdatedAt = now;
+    lastPos = item.position;
+  });
+
   todos.splice(adjustedInsert, 0, ...group);
 
   saveTodos(todos);
@@ -1209,6 +1284,7 @@ function toggleImportant(id) {
   const todo = todos.find(t => t.id === id);
   if (todo) {
     todo.important = !todo.important;
+    todo.importantUpdatedAt = getVirtualNow(); // CRDT: track important update time
     // If rescuing from archive, unarchive but keep original date
     if (todo.archived && todo.important) {
       todo.archived = false;
@@ -1240,27 +1316,25 @@ function toggleComplete(id) {
   const todo = todos.find(t => t.id === id);
   if (!todo) return;
 
+  const now = getVirtualNow();
   const wasCompleted = todo.completed;
   todo.completed = !todo.completed;
+  todo.completedUpdatedAt = now; // CRDT: track completed update time
 
   if (todo.completed) {
-    todo.completedAt = getVirtualNow();
+    todo.completedAt = now;
 
     // Check for sequence item (contains arrow)
     const split = splitOnArrow(todo.text);
     if (split) {
       // Update current item to just the first part
       todo.text = split.before;
+      todo.textUpdatedAt = now;
 
       // Create new item with the rest
       const todoIndex = todos.indexOf(todo);
-      const newTodo = {
-        id: generateId(),
-        text: split.after,
-        completed: false,
-        createdAt: getVirtualNow(),
-        indented: todo.indented
-      };
+      const newTodo = createNewItem(split.after, todoIndex + 1, todos);
+      newTodo.indented = todo.indented;
       todos.splice(todoIndex + 1, 0, newTodo);
     }
   } else {
@@ -1503,6 +1577,18 @@ document.addEventListener('mouseup', () => {
       insertAt = lastBeforeIndex + 1;
     }
   }
+
+  // Generate new positions for the group (CRDT-friendly ordering)
+  const now = getVirtualNow();
+  const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
+  const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
+  let lastPos = before;
+  group.forEach((item, i) => {
+    const nextPos = i === group.length - 1 ? after : null;
+    item.position = generatePositionBetween(lastPos, nextPos || after);
+    item.positionUpdatedAt = now;
+    lastPos = item.position;
+  });
 
   // Insert group at new position
   todos.splice(insertAt, 0, ...group);

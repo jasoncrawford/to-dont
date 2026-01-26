@@ -39,6 +39,11 @@ export interface DbItem {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
-  sort_order: number;
   level: number | null;
+  // CRDT fields
+  position: string;
+  text_updated_at: string;
+  important_updated_at: string;
+  completed_updated_at: string;
+  position_updated_at: string;
 }
