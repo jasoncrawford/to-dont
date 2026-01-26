@@ -111,6 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             created_at: clientItem.created_at || now,
             updated_at: now,
             level: clientItem.level || null,
+            indented: clientItem.indented || false,
             position: clientItem.position || 'n',
             text_updated_at: clientItem.text_updated_at || now,
             important_updated_at: clientItem.important_updated_at || now,
