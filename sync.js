@@ -253,6 +253,7 @@
       completed: item.completed,
       completedAt: item.completedAt,
       type: item.type,
+      level: item.level,
     });
   }
 
@@ -266,6 +267,7 @@
       completedAt: item.completedAt,
       type: item.type,
       position: item.position,
+      level: item.level,
     });
   }
 
@@ -485,6 +487,17 @@
     if ((remote.positionUpdatedAt || 0) > (local.positionUpdatedAt || 0)) {
       merged.position = remote.position;
       merged.positionUpdatedAt = remote.positionUpdatedAt;
+    }
+
+    // Level field (no separate timestamp, just take remote if different)
+    // Level only changes via explicit user action (Tab/Shift+Tab)
+    if (remote.level !== undefined && remote.level !== local.level) {
+      merged.level = remote.level;
+    }
+
+    // Type field (section vs todo)
+    if (remote.type !== undefined && remote.type !== local.type) {
+      merged.type = remote.type;
     }
 
     return merged;

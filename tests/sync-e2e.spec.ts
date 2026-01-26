@@ -644,6 +644,512 @@ test.describe('E2E Sync Diagnostic', () => {
     await context1.close();
     await context2.close();
   });
+
+  // ============================================
+  // Section Sync Tests
+  // ============================================
+
+  test('creating a section syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create a todo first
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('Will become section');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item .text:text-is("Will become section")');
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    // Clear the text and press Enter to convert to section
+    const todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+
+    // Should now be a section
+    await expect(page.locator('.section-header')).toHaveCount(1);
+    await expect(page.locator('.todo-item')).toHaveCount(0);
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Check database
+    const dbItems = await apiGet('/api/items');
+    console.log('Database items:', JSON.stringify(dbItems, null, 2));
+    expect(dbItems.length).toBe(1);
+    expect(dbItems[0].type).toBe('section');
+    expect(dbItems[0].level).toBe(2); // Default level
+    console.log('✓ Section synced to database');
+  });
+
+  test('promoting section to level 1 syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create a section
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item');
+
+    const todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+    await expect(page.locator('.section-header')).toHaveCount(1);
+
+    // Give it a name
+    const sectionText = page.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('My Section');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    // Verify it's level 2 in database
+    let dbItems = await apiGet('/api/items');
+    expect(dbItems[0].level).toBe(2);
+    console.log('Before promote - level:', dbItems[0].level);
+
+    // Promote to level 1
+    await sectionText.click();
+    await sectionText.press('Shift+Tab');
+    await expect(page.locator('.section-header')).toHaveClass(/level-1/);
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Check database
+    dbItems = await apiGet('/api/items');
+    console.log('After promote - level:', dbItems[0].level);
+    expect(dbItems[0].level).toBe(1);
+    console.log('✓ Section promotion synced to database');
+  });
+
+  test('demoting section to level 2 syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create a section and promote it to level 1
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item');
+
+    const todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+
+    const sectionText = page.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('Level 1 Section');
+    await sectionText.press('Shift+Tab'); // Promote to level 1
+    await expect(page.locator('.section-header')).toHaveClass(/level-1/);
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    let dbItems = await apiGet('/api/items');
+    expect(dbItems[0].level).toBe(1);
+    console.log('Before demote - level:', dbItems[0].level);
+
+    // Demote to level 2
+    await sectionText.click();
+    await sectionText.press('Tab');
+    await expect(page.locator('.section-header')).toHaveClass(/level-2/);
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    dbItems = await apiGet('/api/items');
+    console.log('After demote - level:', dbItems[0].level);
+    expect(dbItems[0].level).toBe(2);
+    console.log('✓ Section demotion synced to database');
+  });
+
+  test('reordering section with children syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create: Section A with item, then Section B with item
+    // Structure: [Section A] [Item A1] [Section B] [Item B1]
+
+    // Create Section A
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    let input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item');
+    let todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+    let sectionText = page.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section A');
+    await page.keyboard.press('Enter');
+
+    // Add item under Section A
+    await page.waitForTimeout(100);
+    await page.keyboard.type('Item A1');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+
+    // Create Section B (by clearing the new empty item and pressing Enter)
+    await page.keyboard.press('Enter'); // Creates empty item, which becomes section
+    await page.waitForSelector('.section-header:nth-child(3)'); // Second section
+    sectionText = page.locator('.section-header .text').last();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section B');
+    await page.keyboard.press('Enter');
+
+    // Add item under Section B
+    await page.waitForTimeout(100);
+    await page.keyboard.type('Item B1');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Get initial positions
+    let dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('Initial order:', dbItems.map((i: { text: string }) => i.text));
+
+    const sectionAPos = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
+    const sectionBPos = dbItems.find((i: { text: string }) => i.text === 'Section B')?.position;
+    console.log('Before reorder - Section A pos:', sectionAPos, 'Section B pos:', sectionBPos);
+    expect(sectionAPos < sectionBPos).toBe(true);
+
+    // Move Section B up (should move with Item B1)
+    sectionText = page.locator('.section-header .text:text-is("Section B")');
+    await sectionText.click();
+    await page.keyboard.press('Meta+Shift+ArrowUp');
+
+    // Verify UI order changed
+    await page.waitForTimeout(500);
+    const allTexts = await page.locator('.section-header .text, .todo-item .text').allTextContents();
+    console.log('UI order after reorder:', allTexts);
+    expect(allTexts[0]).toBe('Section B');
+
+    // Wait for sync
+    await page.waitForTimeout(4000);
+
+    // Check database order
+    dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('After reorder:', dbItems.map((i: { text: string }) => i.text));
+
+    const sectionAPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
+    const sectionBPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section B')?.position;
+    console.log('After reorder - Section A pos:', sectionAPosAfter, 'Section B pos:', sectionBPosAfter);
+    expect(sectionBPosAfter < sectionAPosAfter).toBe(true);
+    console.log('✓ Section reorder with children synced to database');
+  });
+
+  test('level 1 section reorder moves entire group', async ({ }, testInfo) => {
+    testInfo.setTimeout(90000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create two L1 sections by reusing the pattern from other tests
+    // First: Section A (level 1)
+    await page.waitForSelector('.new-item', { state: 'visible' });
+
+    // Section A
+    let input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item');
+    let todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+    let sectionText = page.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section A');
+    await sectionText.press('Shift+Tab'); // Promote to L1
+    await expect(page.locator('.section-header.level-1')).toHaveCount(1);
+
+    // Add item by pressing Enter at end of section, then typing
+    await sectionText.press('End');
+    await sectionText.press('Enter');
+    await page.waitForTimeout(100);
+    await page.keyboard.type('Item under A');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+
+    // Create Section B by clearing the new empty todo
+    await page.keyboard.press('Enter'); // Creates empty item which becomes section
+    await page.waitForTimeout(200);
+    sectionText = page.locator('.section-header .text').last();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section B');
+    await sectionText.press('Shift+Tab'); // Promote to L1
+    await expect(page.locator('.section-header.level-1')).toHaveCount(2);
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Check what we have
+    const allItems = await page.locator('.section-header .text, .todo-item .text').allTextContents();
+    console.log('UI before reorder:', allItems);
+
+    let dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('DB before:', dbItems.map((i: { text: string, type: string, level: number }) =>
+      i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
+
+    // Move Section B up
+    const sectionB = page.locator('.section-header .text:text-is("Section B")');
+    await sectionB.click();
+    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.waitForTimeout(500);
+
+    const afterTexts = await page.locator('.section-header .text, .todo-item .text').allTextContents();
+    console.log('UI after reorder:', afterTexts);
+
+    // Section B should be first
+    expect(afterTexts[0]).toBe('Section B');
+
+    // Wait for sync
+    await page.waitForTimeout(4000);
+
+    dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('DB after:', dbItems.map((i: { text: string, type: string, level: number }) =>
+      i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
+
+    const sectionBPos = dbItems.find((i: { text: string }) => i.text === 'Section B')?.position;
+    const sectionAPos = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
+    console.log('Section B pos:', sectionBPos, 'Section A pos:', sectionAPos);
+    expect(sectionBPos < sectionAPos).toBe(true);
+    console.log('✓ Level 1 section reorder moves entire group');
+  });
+
+  test('section changes sync between browsers', async ({ }, testInfo) => {
+    testInfo.setTimeout(90000);
+
+    // Create two browser contexts
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    const browser1 = await context1.newPage();
+    const browser2 = await context2.newPage();
+
+    browser1.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser1]', msg.text());
+      }
+    });
+    browser2.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser2]', msg.text());
+      }
+    });
+
+    // Load and init browser1
+    await browser1.goto(APP_URL);
+    await browser1.evaluate(() => localStorage.clear());
+    await browser1.reload();
+
+    const browser1EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser1.off('console', handler);
+          resolve();
+        }
+      };
+      browser1.on('console', handler);
+    });
+    await Promise.race([browser1EnabledPromise, browser1.waitForTimeout(10000)]);
+    console.log('Browser1 sync enabled');
+
+    // Create a section in browser1
+    await browser1.waitForSelector('.new-item', { state: 'visible' });
+    const input = browser1.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await browser1.waitForSelector('.todo-item');
+    const todoText = browser1.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await browser1.waitForTimeout(50);
+    await todoText.press('Enter');
+    const sectionText = browser1.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('Shared Section');
+    await browser1.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for sync
+    await browser1.waitForTimeout(3000);
+
+    // Load browser2
+    await browser2.goto(APP_URL);
+    await browser2.evaluate(() => localStorage.clear());
+    await browser2.reload();
+
+    const browser2EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser2.off('console', handler);
+          resolve();
+        }
+      };
+      browser2.on('console', handler);
+    });
+    await Promise.race([browser2EnabledPromise, browser2.waitForTimeout(10000)]);
+
+    // Browser2 should see the section
+    await browser2.waitForSelector('.section-header .text:text-is("Shared Section")', { timeout: 5000 });
+    console.log('Browser2 sees the section');
+
+    // Promote section to level 1 in browser2
+    const section2Text = browser2.locator('.section-header .text:text-is("Shared Section")');
+    await section2Text.click();
+    await section2Text.press('Shift+Tab');
+    await expect(browser2.locator('.section-header')).toHaveClass(/level-1/);
+    console.log('Browser2 promoted section to level 1');
+
+    // Wait for sync and realtime
+    await browser2.waitForTimeout(4000);
+
+    // Browser1 should see level 1 via realtime
+    await expect(browser1.locator('.section-header')).toHaveClass(/level-1/, { timeout: 5000 });
+    console.log('✓ Section level change synced between browsers');
+
+    await context1.close();
+    await context2.close();
+  });
+
+  test('drag section header syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create two sections with items
+    await page.waitForSelector('.new-item', { state: 'visible' });
+
+    // Section A
+    let input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp');
+    await input.press('Enter');
+    await page.waitForSelector('.todo-item');
+    let todoText = page.locator('.todo-item .text').first();
+    await todoText.click();
+    await todoText.press('Meta+a');
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
+    let sectionText = page.locator('.section-header .text').first();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section A');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+    await page.keyboard.type('Item under A');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+
+    // Section B (empty item becomes section)
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+    sectionText = page.locator('.section-header .text').last();
+    await sectionText.click();
+    await sectionText.pressSequentially('Section B');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    let dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('Before drag:', dbItems.map((i: { text: string }) => i.text));
+
+    const sectionAPos = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
+    const sectionBPos = dbItems.find((i: { text: string }) => i.text === 'Section B')?.position;
+    expect(sectionAPos < sectionBPos).toBe(true);
+
+    // Drag Section B above Section A
+    const sectionBHandle = page.locator('.section-header:has(.text:text-is("Section B")) .drag-handle');
+    const sectionA = page.locator('.section-header:has(.text:text-is("Section A"))');
+    const sectionABox = await sectionA.boundingBox();
+
+    await sectionBHandle.hover();
+    await page.mouse.down();
+    await page.mouse.move(sectionABox!.x + sectionABox!.width / 2, sectionABox!.y);
+    await page.mouse.up();
+
+    await page.waitForTimeout(500);
+    const uiOrder = await page.locator('.section-header .text, .todo-item .text').allTextContents();
+    console.log('UI after drag:', uiOrder);
+    expect(uiOrder[0]).toBe('Section B');
+
+    // Wait for sync
+    await page.waitForTimeout(4000);
+
+    dbItems = await apiGet('/api/items');
+    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    console.log('After drag:', dbItems.map((i: { text: string }) => i.text));
+
+    const sectionAPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
+    const sectionBPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section B')?.position;
+    expect(sectionBPosAfter < sectionAPosAfter).toBe(true);
+    console.log('✓ Drag section header synced to database');
+  });
 });
 
 // Type declarations
