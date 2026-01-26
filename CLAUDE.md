@@ -16,86 +16,60 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 
 ## Architecture
 
+### Frontend
 - **Single-page vanilla JS app** - No framework, no build step
-- **All logic in app.js** (~1200 lines) - Renders DOM directly, event handlers inline
-- **localStorage persistence** - Immediate saves, debounced while typing
-- **Playwright tests** - 120 end-to-end browser tests
+- **Core logic in app.js** - Renders DOM directly, event handlers inline
+- **Sync layer in sync.js** - Optional cloud sync, loaded separately
+- Uses `contenteditable` divs for text editing with Selection/Range API
 
-## Important Implementation Details
+### Data & Sync
+- **localStorage** for immediate persistence
+- **Supabase** for optional cross-device sync
+- **CRDT-inspired sync** with per-field Last-Write-Wins timestamps
+- **Fractional indexing** for conflict-free ordering
+- Realtime updates via Supabase subscriptions
 
-### Text Editing
-- Uses `contenteditable` divs, not input/textarea
-- Cursor position management via Selection/Range API
-- Debounced save (300ms) on input, plus save on blur
+### API (Vercel serverless)
+- `api/sync/` - Main sync endpoint with LWW merge
+- `api/items/` - CRUD operations
+- `lib/` - Shared utilities (auth, Supabase client, fractional indexing)
 
-### Importance Shortcut
-The `!` character toggles importance, but with specific semantics:
-- Typing `!` turns ON importance (if not already on)
-- Deleting the LAST `!` turns OFF importance (if currently on)
-- Editing text that contains `!` does NOT re-trigger importance
+### Testing
+- **Playwright** for end-to-end browser tests
+- Tests cover both offline behavior and live sync scenarios
 
-This is tracked by counting `!` characters and comparing to previous count.
+## Key Concepts
 
-### View Modes
-- `viewMode` variable: 'active' or 'done'
-- Done view has restrictions: no editing completion state, no reordering, no importance button
-- Done view groups by completion date, not creation date
+### Items
+- **Todos**: Regular items with checkbox, text, optional importance
+- **Sections**: Headers that group items (level 1 or 2)
+- Both use the same data structure, differentiated by `type` field
 
-### Sections
-- Sections are items with `type: 'section'`
-- Created by pressing Enter on empty item
-- Move with their children (all items until next section)
+### CRDT Fields
+Each item tracks per-field timestamps for conflict resolution:
+- `textUpdatedAt`, `importantUpdatedAt`, `completedUpdatedAt`, `positionUpdatedAt`
+- Sync merges by taking the newer value for each field independently
 
-### Test Mode
-- Enabled via `?test-mode=1` URL parameter
-- Shows +1 day / reset buttons for virtual time
-- Allows testing 14-day decay without waiting
-
-## Common Patterns
-
-```javascript
-// Load, modify, save pattern
-const todos = loadTodos();
-const todo = todos.find(t => t.id === id);
-todo.someProperty = newValue;
-saveTodos(todos);
-render();
-
-// View-specific behavior
-if (viewMode === 'done') {
-  // Different behavior for Done view
-}
-
-// Virtual time
-const now = getVirtualNow();  // Respects test mode offset
-```
+### Views
+- **Active**: Working items, user-defined order, drag-and-drop enabled
+- **Done**: Completed items grouped by date, read-only
 
 ## Running the App
 
 ```bash
-# Just open in browser
+# Just open in browser (works offline)
 open index.html
 
-# Run tests (requires Node 18+)
+# Run tests
 npm test
+
+# Run API locally (for sync development)
+vercel dev
 ```
-
-## Recent Session Work (January 2026)
-
-Features implemented:
-- Left/right arrow navigation between items
-- Empty items persist (no auto-delete)
-- Enter at start inserts above but keeps focus on current item
-- Debounced auto-save while typing
-- Paste as plain text
-- Typing `!` toggles important flag
-- Done view simplification (no strikethrough, disabled checkboxes, no ! button)
-
-All features have test coverage. 120 tests total, all passing.
 
 ## Files to Read First
 
 1. `PRODUCT_SPEC.md` - Full product specification
 2. `PRACTICES.md` - Development workflow and patterns
-3. `app.js` - All application logic
-4. `tests/helpers.ts` - Test utilities and patterns
+3. `app.js` - Frontend application logic
+4. `sync.js` - Sync layer implementation

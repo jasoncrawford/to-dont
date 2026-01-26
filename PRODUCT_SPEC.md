@@ -29,6 +29,11 @@ To-Don't is a minimalist todo application where items naturally fade away over t
 - Two levels: Level 1 (prominent) and Level 2 (subtle, indented)
 - Sections and their children move together when reordered
 
+### Indentation
+- Todos can be indented with Tab for visual grouping
+- Indented items appear nested under the item above them
+- Unindent with Shift+Tab
+
 ### Sequences
 - Items containing arrows (`->`, `-->`, `→`, etc.) represent sequential tasks
 - When completed, the item splits: text before arrow is marked done, text after becomes a new item
@@ -94,21 +99,24 @@ Note: Sections move with all their children when reordered.
 ### Importance Shortcut
 - Typing `!` in item text turns on the important flag
 - Deleting the last `!` from item text turns off the important flag
-- This is additive to the ! button, not a sync (editing text with existing ! doesn't change importance)
-
-## Click Behavior
-
-- Clicking checkbox toggles completion
-- Clicking anywhere else on item focuses text with cursor at end
-- Same behavior for section headers (click focuses text)
+- This is additive to the ! button (editing text with existing `!` doesn't re-trigger)
 
 ## Data Persistence
 
-- All data stored in localStorage
+### Local Storage
+- Primary storage in localStorage for offline-first experience
 - Key: `decay-todos` (array of todo objects)
 - Key: `decay-todos-view-mode` (string: 'active' or 'done')
 - Text auto-saves 300ms after typing stops (debounced)
 - Also saves on blur as fallback
+
+### Cross-Device Sync (Optional)
+- Syncs to Supabase when configured
+- CRDT-inspired conflict resolution with per-field timestamps
+- Each field (text, important, completed, position) has its own timestamp
+- Conflicts resolved by Last-Write-Wins on a per-field basis
+- Fractional indexing for ordering (allows insertions without reindexing)
+- Realtime updates pushed to other connected devices
 
 ## Test Mode
 

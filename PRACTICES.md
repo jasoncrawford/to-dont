@@ -3,50 +3,33 @@
 ## Technology Stack
 
 - **Frontend**: Vanilla HTML, CSS, JavaScript (no framework)
-- **Storage**: Browser localStorage
+- **Storage**: Browser localStorage + optional Supabase sync
+- **Backend**: Vercel serverless functions (TypeScript)
+- **Database**: Supabase (PostgreSQL)
 - **Testing**: Playwright (end-to-end browser tests)
-- **Version Control**: Git
 
 ## Project Structure
 
 ```
 to-dont/
-├── index.html        # Main HTML structure
-├── styles.css        # All styling
-├── app.js            # All application logic
-├── tests/            # Playwright test files (120 tests)
-│   ├── helpers.ts    # Shared test utilities
-│   ├── core.spec.ts  # CRUD, completion, deletion, importance shortcut
-│   ├── decay.spec.ts # Fading, opacity, importance escalation
-│   ├── done-view.spec.ts    # Done view display, grouping, restrictions
-│   ├── keyboard.spec.ts     # Navigation, editing, reordering
-│   ├── click-behavior.spec.ts # Click handling
-│   ├── reorder.spec.ts      # Drag and drop
-│   ├── sections.spec.ts     # Section creation and grouping
-│   └── sequence.spec.ts     # Arrow splitting
-├── PRODUCT_SPEC.md   # Product specification
-├── PRACTICES.md      # This file
-└── CLAUDE.md         # Context for AI assistant sessions
-```
-
-## Version Control
-
-### Commit Practices
-- Commit after each completed feature or bug fix
-- Write clear commit messages explaining the "why"
-- First line is a brief summary
-- Body explains the change in more detail when needed
-
-### Commit Message Format
-```
-Brief summary of change (imperative mood)
-
-More detailed explanation if needed. Explains what changed
-and why, not just what the code does.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+├── index.html          # Main HTML structure
+├── styles.css          # All styling
+├── app.js              # Frontend application logic
+├── sync.js             # Sync layer (Supabase integration)
+├── api/                # Vercel serverless functions
+│   ├── sync/           # Main sync endpoint (LWW merge)
+│   └── items/          # CRUD operations
+├── lib/                # Shared backend utilities
+│   ├── auth.ts         # Bearer token auth
+│   ├── supabase.ts     # Database client + types
+│   └── fractional-index.ts  # Ordering algorithm
+├── tests/              # Playwright tests
+│   └── helpers.ts      # Shared test utilities
+├── migrations/         # Database migrations
+├── schema.sql          # Database schema
+├── PRODUCT_SPEC.md     # Product specification
+├── PRACTICES.md        # This file
+└── CLAUDE.md           # Context for AI sessions
 ```
 
 ## Testing
@@ -59,115 +42,80 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 
 ### Running Tests
 ```bash
-# Requires Node.js 18+
 npm test
-
-# Or with nvm
-source ~/.nvm/nvm.sh && nvm use 18 && npm test
 ```
 
-### Test Organization
-- `core.spec.ts` - Basic CRUD operations, completion, deletion
-- `decay.spec.ts` - Fading, opacity, importance escalation
-- `done-view.spec.ts` - Done view display, grouping, archive button
-- `keyboard.spec.ts` - All keyboard navigation and editing
-- `click-behavior.spec.ts` - Click handling for todos and sections
-- `reorder.spec.ts` - Drag and drop, keyboard reordering
-- `sections.spec.ts` - Section creation, levels, grouping
-- `sequence.spec.ts` - Arrow splitting behavior
-
-### Test Helpers
-Common utilities in `helpers.ts`:
-- `setupPage(page)` - Navigate and clear localStorage
-- `addTodo(page, text)` - Add a new todo item
-- `createSection(page, title)` - Create a section header
-- `completeTodo(page, text)` - Check off a todo
-- `getTodoTexts(page)` - Get all todo text contents
-- `setVirtualTime(page, days)` - Advance virtual time for testing
+### Test Categories
+- **Core**: CRUD, completion, deletion, importance
+- **Decay**: Fading, opacity, importance escalation
+- **Done view**: Display, grouping, restrictions
+- **Keyboard**: Navigation, editing, reordering
+- **Sections**: Creation, levels, grouping
+- **Sync**: Local integration, E2E cross-browser sync
 
 ### Test Mode
-Tests run with `?test-mode=1` URL parameter which:
-- Shows time control buttons
-- Enables virtual time manipulation
-- Allows testing decay/archive without waiting 14 days
-
-## Code Style
-
-### JavaScript
-- No build step or transpilation
-- Modern ES6+ syntax (const/let, arrow functions, template literals)
-- Single `app.js` file for simplicity
-- Functions organized by feature area
-- Event handlers defined inline in element creation
-
-### CSS
-- Single `styles.css` file
-- BEM-ish class naming
-- CSS custom properties for colors would be nice (not yet implemented)
-- Mobile-responsive considerations (not yet fully implemented)
-
-### HTML
-- Semantic structure
-- Minimal markup - most elements created dynamically in JS
-- `contenteditable` divs for inline editing
+Tests run with `?test-mode=1` which enables virtual time manipulation for testing decay without waiting 14 days.
 
 ## Development Workflow
 
 1. **Understand the change** - Read relevant code first
-2. **Make the change** - Edit code, keeping changes focused
-3. **Test manually** - Open `index.html` in browser, verify behavior
-4. **Run automated tests** - `npm test`, fix any failures
+2. **Make the change** - Keep changes focused
+3. **Test manually** - Open `index.html` in browser
+4. **Run automated tests** - `npm test`
 5. **Commit** - Clear message explaining what and why
 
-## Common Patterns
+### Running Locally with Sync
+```bash
+# Start the API server
+vercel dev
 
-### Saving Data
-```javascript
-// Load
-const todos = loadTodos();  // Returns array from localStorage
-
-// Modify
-todos.push(newTodo);
-// or
-const todo = todos.find(t => t.id === id);
-todo.text = newText;
-
-// Save
-saveTodos(todos);  // Writes to localStorage
-
-// Re-render
-render();  // Rebuilds DOM from current state
+# Then open index.html in browser
+# Sync will auto-enable if configured
 ```
 
-### Debounced Save
-Text changes use debounced saving (300ms) to avoid excessive writes:
+## Sync Architecture
+
+### Conflict Resolution
+Uses CRDT-inspired Last-Write-Wins (LWW) with per-field timestamps:
+- Each field (`text`, `important`, `completed`, `position`) has its own `*_updated_at` timestamp
+- When syncing, each field is resolved independently by taking the newer value
+- This allows concurrent edits to different fields without conflict
+
+### Ordering
+Uses fractional indexing for position:
+- Positions are strings like "a", "n", "z" that sort lexicographically
+- Inserting between "a" and "b" creates "an" (midpoint)
+- Allows unlimited insertions without reindexing existing items
+
+### Sync Flow
+1. Client detects changes via hash comparison
+2. Client sends modified items to `/api/sync`
+3. Server merges with existing data using per-field LWW
+4. Server returns merged state + all items updated since last sync
+5. Client applies server changes via realtime subscription or poll
+
+## Code Patterns
+
+### Saving Data (Frontend)
 ```javascript
-text.oninput = () => {
-  debouncedSave(todo.id, text.textContent);
-};
+const todos = loadTodos();
+const todo = todos.find(t => t.id === id);
+todo.text = newText;
+todo.textUpdatedAt = getVirtualNow();  // CRDT timestamp
+saveTodos(todos);
+render();
 ```
 
 ### View-Specific Behavior
-Check `viewMode` to conditionally render or behave:
 ```javascript
 if (viewMode === 'done') {
   // Done view specific behavior
 }
 ```
 
-### Virtual Time (Test Mode)
-```javascript
-// Get current time (real or virtual)
-const now = getVirtualNow();
-
-// Calculate days since creation
-const days = getDaysSince(todo.createdAt);
-```
-
 ## Known Limitations
 
-- No mobile optimization yet
-- No keyboard shortcuts help/documentation in UI
+- No mobile optimization
+- No keyboard shortcuts help in UI
 - No undo/redo
-- No cloud sync
-- Single-user only (localStorage)
+- Single-user (no collaboration features)
