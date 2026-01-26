@@ -40,6 +40,7 @@ export interface DbItem {
   created_at: string;
   updated_at: string;
   level: number | null;
+  indented: boolean;
   // CRDT fields
   position: string;
   text_updated_at: string;

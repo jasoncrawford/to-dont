@@ -32,6 +32,7 @@ function mergeItems(client: DbItem, server: DbItem): DbItem {
     created_at: server.created_at, // Keep server's created_at
     updated_at: new Date().toISOString(), // Server sets this
     level: client.level,
+    indented: client.indented, // Take client's indentation state
 
     // Per-field LWW merge
     text: clientTextTime >= serverTextTime ? client.text : server.text,

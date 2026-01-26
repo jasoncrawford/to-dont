@@ -213,6 +213,7 @@
       completed_at: item.completedAt ? new Date(item.completedAt).toISOString() : null,
       created_at: new Date(item.createdAt).toISOString(),
       level: item.level || null,
+      indented: item.indented || false,
       // CRDT fields
       position: position || item.position || MID_CHAR,
       text_updated_at: item.textUpdatedAt ? new Date(item.textUpdatedAt).toISOString() : now,
@@ -234,7 +235,7 @@
       archived: false,
       type: dbItem.type === 'section' ? 'section' : undefined,
       level: dbItem.level || undefined,
-      indented: !!dbItem.parent_id,
+      indented: dbItem.indented || !!dbItem.parent_id, // Support both new column and legacy parent_id
       // CRDT fields
       position: dbItem.position || MID_CHAR,
       textUpdatedAt: dbItem.text_updated_at ? new Date(dbItem.text_updated_at).getTime() : Date.now(),
@@ -254,6 +255,7 @@
       completedAt: item.completedAt,
       type: item.type,
       level: item.level,
+      indented: item.indented,
     });
   }
 
@@ -268,6 +270,7 @@
       type: item.type,
       position: item.position,
       level: item.level,
+      indented: item.indented,
     });
   }
 
@@ -498,6 +501,11 @@
     // Type field (section vs todo)
     if (remote.type !== undefined && remote.type !== local.type) {
       merged.type = remote.type;
+    }
+
+    // Indented field (no separate timestamp, just take remote if different)
+    if (remote.indented !== undefined && remote.indented !== local.indented) {
+      merged.indented = remote.indented;
     }
 
     return merged;

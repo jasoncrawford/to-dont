@@ -11,6 +11,7 @@ CREATE TABLE items (
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   level                INTEGER CHECK (level IS NULL OR level IN (1, 2)),
+  indented             BOOLEAN NOT NULL DEFAULT false,  -- Visual indentation state
   -- CRDT fields
   position             TEXT NOT NULL DEFAULT 'n',  -- Fractional index for ordering
   text_updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

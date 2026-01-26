@@ -1150,6 +1150,197 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(sectionBPosAfter < sectionAPosAfter).toBe(true);
     console.log('✓ Drag section header synced to database');
   });
+
+  // ============================================
+  // Indentation Sync Tests
+  // ============================================
+
+  test('indenting a todo syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create a todo
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const todoText = `Indent Test ${Date.now()}`;
+    await input.pressSequentially(todoText);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
+
+    // Wait for initial sync
+    await page.waitForTimeout(3000);
+
+    // Check database - should NOT be indented
+    let dbItems = await apiGet('/api/items');
+    let item = dbItems.find((i: { text: string }) => i.text === todoText);
+    console.log('Before indent - indented:', item?.indented);
+    expect(item.indented).toBe(false);
+
+    // Indent the todo with Tab
+    const todo = page.locator(`.todo-item .text:text-is("${todoText}")`);
+    await todo.click();
+    await todo.press('Tab');
+
+    // Verify UI shows indented
+    await expect(page.locator('.todo-item.indented')).toHaveCount(1);
+    console.log('UI shows indented');
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Check database - should have indented = true
+    dbItems = await apiGet('/api/items');
+    item = dbItems.find((i: { text: string }) => i.text === todoText);
+    console.log('After indent - indented:', item?.indented);
+    expect(item.indented).toBe(true);
+    console.log('✓ Indent synced to database');
+  });
+
+  test('unindenting a todo syncs to database', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Create a todo and indent it
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const todoText = `Unindent Test ${Date.now()}`;
+    await input.pressSequentially(todoText);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
+
+    // Wait for initial creation sync
+    await page.waitForTimeout(3000);
+
+    // Indent
+    const todo = page.locator(`.todo-item .text:text-is("${todoText}")`);
+    await todo.click();
+    await todo.press('Tab');
+    await expect(page.locator('.todo-item.indented')).toHaveCount(1);
+
+    // Wait for indent sync
+    await page.waitForTimeout(3000);
+
+    let dbItems = await apiGet('/api/items');
+    let item = dbItems.find((i: { text: string }) => i.text === todoText);
+    console.log('After indent - indented:', item?.indented);
+    expect(item.indented).toBe(true);
+
+    // Unindent with Shift+Tab
+    await todo.click();
+    await todo.press('Shift+Tab');
+    await expect(page.locator('.todo-item.indented')).toHaveCount(0);
+    console.log('UI shows unindented');
+
+    // Wait for sync
+    await page.waitForTimeout(3000);
+
+    // Check database
+    dbItems = await apiGet('/api/items');
+    item = dbItems.find((i: { text: string }) => i.text === todoText);
+    console.log('After unindent - indented:', item?.indented);
+    expect(item.indented).toBe(false);
+    console.log('✓ Unindent synced to database');
+  });
+
+  test('indentation syncs between browsers', async ({ }, testInfo) => {
+    testInfo.setTimeout(90000);
+
+    // Create two browser contexts
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    const browser1 = await context1.newPage();
+    const browser2 = await context2.newPage();
+
+    browser1.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser1]', msg.text());
+      }
+    });
+    browser2.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser2]', msg.text());
+      }
+    });
+
+    // Load and init browser1
+    await browser1.goto(APP_URL);
+    await browser1.evaluate(() => localStorage.clear());
+    await browser1.reload();
+
+    const browser1EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser1.off('console', handler);
+          resolve();
+        }
+      };
+      browser1.on('console', handler);
+    });
+    await Promise.race([browser1EnabledPromise, browser1.waitForTimeout(10000)]);
+    console.log('Browser1 sync enabled');
+
+    // Create a todo in browser1
+    await browser1.waitForSelector('.new-item', { state: 'visible' });
+    const input = browser1.locator('.new-item .text');
+    await input.click();
+    const todoText = `Cross-browser Indent ${Date.now()}`;
+    await input.pressSequentially(todoText);
+    await input.press('Enter');
+    await browser1.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
+
+    // Wait for sync
+    await browser1.waitForTimeout(3000);
+
+    // Load browser2
+    await browser2.goto(APP_URL);
+    await browser2.evaluate(() => localStorage.clear());
+    await browser2.reload();
+
+    const browser2EnabledPromise = new Promise<void>(resolve => {
+      const handler = (msg: { text: () => string }) => {
+        if (msg.text().includes('[Sync] ✓ Enabled')) {
+          browser2.off('console', handler);
+          resolve();
+        }
+      };
+      browser2.on('console', handler);
+    });
+    await Promise.race([browser2EnabledPromise, browser2.waitForTimeout(10000)]);
+
+    // Browser2 should see the todo (not indented)
+    await browser2.waitForSelector(`.todo-item .text:text-is("${todoText}")`, { timeout: 5000 });
+    await expect(browser2.locator('.todo-item.indented')).toHaveCount(0);
+    console.log('Browser2 sees the todo (not indented)');
+
+    // Indent the todo in browser2
+    const todo2 = browser2.locator(`.todo-item .text:text-is("${todoText}")`);
+    await todo2.click();
+    await todo2.press('Tab');
+    await expect(browser2.locator('.todo-item.indented')).toHaveCount(1);
+    console.log('Browser2 indented the todo');
+
+    // Wait for sync and realtime
+    await browser2.waitForTimeout(4000);
+
+    // Browser1 should see indented via realtime
+    await expect(browser1.locator('.todo-item.indented')).toHaveCount(1, { timeout: 5000 });
+    console.log('✓ Indentation synced between browsers');
+
+    await context1.close();
+    await context2.close();
+  });
 });
 
 // Type declarations
