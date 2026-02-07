@@ -17,7 +17,13 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git restore:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(lsof:*)",
+      "Bash(ps:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
