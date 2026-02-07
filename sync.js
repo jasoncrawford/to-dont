@@ -586,7 +586,7 @@
     updates.forEach(applyRemoteChange);
   }
 
-  // Fetch todos from server (initial load only)
+  // Fetch todos from server and merge with local state
   async function fetchAndMergeTodos() {
     if (!syncEnabled) return;
 
@@ -598,26 +598,46 @@
         return;
       }
 
-      // Convert to local format and sort by position
-      const localItems = serverItems.map(toLocalFormat);
-      localItems.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+      const currentLocal = JSON.parse(localStorage.getItem('decay-todos') || '[]');
+      const matchedLocalIds = new Set();
+      const merged = [];
 
-      localStorage.setItem('decay-todos', JSON.stringify(localItems));
+      for (const serverItem of serverItems) {
+        const remoteAsLocal = toLocalFormat(serverItem);
+        const { item: localItem } = findItemByUUID(currentLocal, serverItem.id);
 
-      // Update ID mapping
-      serverItems.forEach(item => {
-        idMapping[item.id] = item.id;
-      });
+        if (localItem) {
+          // Merge: local fields preserved, CRDT fields resolved by timestamp
+          const mergedItem = mergeLocalWithRemote(localItem, remoteAsLocal);
+          mergedItem.id = localItem.id;
+          merged.push(mergedItem);
+          matchedLocalIds.add(localItem.id);
+        } else {
+          // New from server
+          merged.push(remoteAsLocal);
+          idMapping[remoteAsLocal.id] = remoteAsLocal.id;
+        }
+      }
+
+      // Keep local-only items (unsynced new items)
+      for (const localItem of currentLocal) {
+        if (!matchedLocalIds.has(localItem.id)) {
+          merged.push(localItem);
+        }
+      }
+
+      // Sort by position and save
+      merged.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+      localStorage.setItem('decay-todos', JSON.stringify(merged));
       localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
 
-      // Set initial synced state
-      lastSyncedState = JSON.parse(JSON.stringify(localItems));
+      lastSyncedState = JSON.parse(JSON.stringify(merged));
 
       if (typeof window.render === 'function') {
         window.render();
       }
 
-      console.log('[Sync] Loaded', serverItems.length, 'items from server');
+      console.log('[Sync] Merged', serverItems.length, 'server items with', currentLocal.length, 'local items');
 
     } catch (err) {
       console.error('[Sync] Fetch failed:', err);
@@ -805,6 +825,13 @@
     generatePositionBetween: generatePositionBetween,
     generateInitialPositions: generateInitialPositions,
   };
+
+  // Expose internals for testing
+  if (isTestMode) {
+    window.ToDoSync._test = {
+      setSyncEnabled: (val) => { syncEnabled = val; },
+    };
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
