@@ -18,20 +18,24 @@ Authentication is a single static bearer token compared with string equality. No
 
 ## Critical: Data Loss Bugs
 
-### 3. `fetchAndMergeTodos` doesn't merge — it replaces
+### ~~3. `fetchAndMergeTodos` doesn't merge — it replaces~~ FIXED
 **File:** `sync.js:604`
 
-The function does `localStorage.setItem('decay-todos', JSON.stringify(localItems))` — a full overwrite. Any local changes not yet synced are silently destroyed. Called during `enableSync()`, so on every page load with sync enabled, unsynced local changes are lost.
+~~The function does `localStorage.setItem('decay-todos', JSON.stringify(localItems))` — a full overwrite. Any local changes not yet synced are silently destroyed. Called during `enableSync()`, so on every page load with sync enabled, unsynced local changes are lost.~~
+
+Fixed in 8b1e279: rewrote to merge server state with local state via `mergeLocalWithRemote`, preserving unsynced local items and local-only fields.
 
 ### 4. `updateTodoText` doesn't set `textUpdatedAt`
 **File:** `app.js:1273-1280`
 
 The `onblur` handler calls `updateTodoText()`, which saves text without updating the CRDT timestamp. Only `debouncedSave` (line 38) sets `textUpdatedAt`. If a user types then immediately blurs (before the 300ms debounce fires), the CRDT timestamp still reflects the *previous* text. A concurrent edit on another device with an older timestamp could then "win" during merge.
 
-### 5. `toLocalFormat` hardcodes `archived: false`
+### ~~5. `toLocalFormat` hardcodes `archived: false`~~ FIXED
 **File:** `sync.js:235`
 
-Every item from the server has `archived` forced to `false`. Combined with issue #3 (replace-not-merge), archived items are un-archived on every sync fetch. Archive state cannot survive a page reload if sync is enabled.
+~~Every item from the server has `archived` forced to `false`. Combined with issue #3 (replace-not-merge), archived items are un-archived on every sync fetch. Archive state cannot survive a page reload if sync is enabled.~~
+
+Fixed in 8b1e279: `fetchAndMergeTodos` now merges via `mergeLocalWithRemote` which spreads from local first, so `archived`/`archivedAt` are preserved. `toLocalFormat` still defaults `archived: false` for genuinely new items, which is correct.
 
 ---
 
