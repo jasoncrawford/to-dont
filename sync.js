@@ -377,10 +377,15 @@
         return dbItem;
       });
 
-      await apiRequest('/api/sync', {
+      const syncResponse = await apiRequest('/api/sync', {
         method: 'POST',
         body: JSON.stringify({ items: dbItems }),
       });
+
+      // Apply server's merged results back to local state
+      if (syncResponse && syncResponse.mergedItems && syncResponse.mergedItems.length > 0) {
+        applyMergedResponse(syncResponse.mergedItems);
+      }
     }
 
     // Handle deletions
@@ -401,10 +406,45 @@
       }
     }
 
-    // Update last synced state
-    lastSyncedState = JSON.parse(JSON.stringify(todos));
+    // Update last synced state (re-read from localStorage since merge response may have updated it)
+    const updatedStored = localStorage.getItem('decay-todos');
+    lastSyncedState = updatedStored ? JSON.parse(updatedStored) : JSON.parse(JSON.stringify(todos));
 
     console.log('[Sync] ✓ Done');
+  }
+
+  // Apply server's merged results back to local state
+  function applyMergedResponse(mergedDbItems) {
+    const stored = localStorage.getItem('decay-todos');
+    const todos = stored ? JSON.parse(stored) : [];
+    let changed = false;
+
+    for (const dbItem of mergedDbItems) {
+      const remoteAsLocal = toLocalFormat(dbItem);
+      const { index, item: localItem } = findItemByUUID(todos, dbItem.id);
+
+      if (index >= 0 && localItem) {
+        const merged = mergeLocalWithRemote(localItem, remoteAsLocal);
+        merged.id = localItem.id; // Preserve local ID
+
+        if (itemHash(localItem) !== itemHash(merged) ||
+            localItem.position !== merged.position) {
+          todos[index] = merged;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+      localStorage.setItem('decay-todos', JSON.stringify(todos));
+      lastSyncedState = JSON.parse(JSON.stringify(todos));
+      // Only render if user is not actively editing to avoid disrupting input
+      if (typeof window.render === 'function' && !isUserEditing()) {
+        window.render();
+      }
+      console.log('[Sync] Applied server merge results');
+    }
   }
 
   // Sync local todos to server
@@ -722,10 +762,14 @@
               setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
             });
             const dbItems = existingItems.map((item) => toDbFormat(item, item.position));
-            await apiRequest('/api/sync', {
+            const initialSyncResponse = await apiRequest('/api/sync', {
               method: 'POST',
               body: JSON.stringify({ items: dbItems }),
             });
+
+            if (initialSyncResponse && initialSyncResponse.mergedItems && initialSyncResponse.mergedItems.length > 0) {
+              applyMergedResponse(initialSyncResponse.mergedItems);
+            }
             // Save updated items with positions
             localStorage.setItem('decay-todos', JSON.stringify(existingItems));
             lastSyncedState = JSON.parse(JSON.stringify(existingItems));

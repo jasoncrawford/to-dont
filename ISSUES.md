@@ -52,10 +52,12 @@ Fixed in 26dd26a: added `updateTodoText()` calls before `setSectionLevel()` in b
 
 ## High: Sync Protocol Issues
 
-### 6. Sync response is completely ignored
+### ~~6. Sync response is completely ignored~~ FIXED
 **File:** `sync.js:380-383`
 
-The `/api/sync` endpoint returns `{ items, mergedItems, syncedAt }`. The client throws it away. If the server resolved a conflict differently, the client never learns about it and local state diverges from server.
+~~The `/api/sync` endpoint returns `{ items, mergedItems, syncedAt }`. The client throws it away. If the server resolved a conflict differently, the client never learns about it and local state diverges from server.~~
+
+Fixed: `syncChanges()` now captures the sync response and applies `mergedItems` back to local state via new `applyMergedResponse()` function. Uses existing `mergeLocalWithRemote()` for per-field LWW, preserves local IDs, only re-renders if actual changes detected. Same pattern applied to initial sync path in `enableSync()`.
 
 ### 7. `level`, `indented`, and `type` have no CRDT timestamps
 **Files:** `sync.js:496-509`, `api/sync/index.ts:35`
