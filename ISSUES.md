@@ -4,10 +4,12 @@ Identified 2026-02-07 during code review.
 
 ## Critical: Security
 
-### 1. Hardcoded credentials committed to repo
+### ~~1. Hardcoded credentials committed to repo~~ NOT AN ISSUE
 **File:** `sync-config.js:12-15`
 
-Supabase URL, anon key, bearer token, and API URL are hardcoded in a committed file. Anyone with repo access has full database access.
+~~Supabase URL, anon key, bearer token, and API URL are hardcoded in a committed file. Anyone with repo access has full database access.~~
+
+`sync-config.js` is in `.gitignore` — it is not committed to the repo.
 
 ### 2. No Row-Level Security, single shared token
 **Files:** `lib/auth.ts`, `schema.sql`
@@ -38,6 +40,13 @@ Fixed in 7899144: `updateTodoText` now sets `textUpdatedAt` when saving, ensurin
 ~~Every item from the server has `archived` forced to `false`. Combined with issue #3 (replace-not-merge), archived items are un-archived on every sync fetch. Archive state cannot survive a page reload if sync is enabled.~~
 
 Fixed in 8b1e279: `fetchAndMergeTodos` now merges via `mergeLocalWithRemote` which spreads from local first, so `archived`/`archivedAt` are preserved. `toLocalFormat` still defaults `archived: false` for genuinely new items, which is correct.
+
+### ~~24. Section text lost on Tab/Shift+Tab level change~~ FIXED
+**File:** `app.js:677-688`
+
+~~Tab and Shift+Tab handlers in `createSectionElement` called `setSectionLevel()` without first saving the text via `updateTodoText()`. Since `setSectionLevel` triggers a full DOM rebuild (issue #17), any text typed since the last blur/save was silently discarded. The Cmd+Shift+Arrow handlers already had the correct pattern.~~
+
+Fixed in 26dd26a: added `updateTodoText()` calls before `setSectionLevel()` in both Tab and Shift+Tab handlers.
 
 ---
 
