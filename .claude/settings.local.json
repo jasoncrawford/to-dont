@@ -23,7 +23,9 @@
       "Bash(git checkout:*)",
       "Bash(lsof:*)",
       "Bash(ps:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(npx vercel dev:*)",
+      "Bash(node -e:*)"
     ]
   }
 }
