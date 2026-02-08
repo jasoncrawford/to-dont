@@ -37,6 +37,7 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 ### Testing
 - **Playwright** for end-to-end browser tests
 - Tests cover both offline behavior and live sync scenarios
+- **All tests must pass with zero skipped.** If any test is failing or skipped, investigate and fix it — don't leave broken or disabled tests behind. Run `npm test` to verify before finishing work.
 
 ## Key Concepts
 
