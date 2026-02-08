@@ -25,10 +25,12 @@ Authentication is a single static bearer token compared with string equality. No
 
 Fixed in 8b1e279: rewrote to merge server state with local state via `mergeLocalWithRemote`, preserving unsynced local items and local-only fields.
 
-### 4. `updateTodoText` doesn't set `textUpdatedAt`
+### ~~4. `updateTodoText` doesn't set `textUpdatedAt`~~ FIXED
 **File:** `app.js:1273-1280`
 
-The `onblur` handler calls `updateTodoText()`, which saves text without updating the CRDT timestamp. Only `debouncedSave` (line 38) sets `textUpdatedAt`. If a user types then immediately blurs (before the 300ms debounce fires), the CRDT timestamp still reflects the *previous* text. A concurrent edit on another device with an older timestamp could then "win" during merge.
+~~The `onblur` handler calls `updateTodoText()`, which saves text without updating the CRDT timestamp. Only `debouncedSave` (line 38) sets `textUpdatedAt`. If a user types then immediately blurs (before the 300ms debounce fires), the CRDT timestamp still reflects the *previous* text. A concurrent edit on another device with an older timestamp could then "win" during merge.~~
+
+Fixed in 7899144: `updateTodoText` now sets `textUpdatedAt` when saving, ensuring the CRDT timestamp always reflects the latest text.
 
 ### ~~5. `toLocalFormat` hardcodes `archived: false`~~ FIXED
 **File:** `sync.js:235`
