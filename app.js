@@ -677,6 +677,7 @@ function createSectionElement(section) {
     // Tab: demote to level 2
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
+      updateTodoText(section.id, text.textContent); // Save text before level change
       setSectionLevel(section.id, 2);
       return;
     }
@@ -684,6 +685,7 @@ function createSectionElement(section) {
     // Shift-Tab: promote to level 1
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
+      updateTodoText(section.id, text.textContent); // Save text before level change
       setSectionLevel(section.id, 1);
       return;
     }
