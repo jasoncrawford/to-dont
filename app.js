@@ -1275,7 +1275,13 @@ function updateTodoText(id, newText) {
   const todo = todos.find(t => t.id === id);
   if (todo) {
     todo.text = newText.trim();
+    todo.textUpdatedAt = getVirtualNow();
     saveTodos(todos);
+  }
+  // Cancel any pending debounce — this save supersedes it
+  if (saveTimers.has(id)) {
+    clearTimeout(saveTimers.get(id));
+    saveTimers.delete(id);
   }
 }
 

@@ -207,6 +207,33 @@ test.describe('Core Todo Functionality', () => {
   });
 
   test.describe('Inline Editing', () => {
+    test('should update textUpdatedAt when editing via blur', async ({ page }) => {
+      await addTodo(page, 'Original text');
+
+      const stored = await getStoredTodos(page);
+      const initialTextUpdatedAt = stored[0].textUpdatedAt;
+      expect(initialTextUpdatedAt).toBeDefined();
+
+      // Small delay so timestamps differ
+      await page.waitForTimeout(50);
+
+      // Edit the text
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.click();
+      await page.evaluate(() => {
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        el.textContent = 'Edited text';
+      });
+
+      // Blur to trigger updateTodoText
+      await page.locator('body').click({ position: { x: 10, y: 10 } });
+      await page.waitForTimeout(100);
+
+      const updated = await getStoredTodos(page);
+      expect(updated[0].text).toBe('Edited text');
+      expect(updated[0].textUpdatedAt).toBeGreaterThan(initialTextUpdatedAt);
+    });
+
     test('should edit todo text inline', async ({ page }) => {
       await addTodo(page, 'Original text');
 
