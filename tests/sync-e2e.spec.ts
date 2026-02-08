@@ -33,6 +33,19 @@ async function apiDelete(endpoint: string) {
   return response.ok;
 }
 
+async function apiPost(endpoint: string, body: Record<string, unknown>) {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${BEARER_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`API POST ${endpoint} failed: ${response.status}`);
+  return response.json();
+}
+
 async function clearDatabase() {
   const items = await apiGet('/api/items');
   console.log(`Clearing ${items.length} items from database...`);
@@ -1253,6 +1266,93 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('After unindent - indented:', item?.indented);
     expect(item.indented).toBe(false);
     console.log('✓ Unindent synced to database');
+  });
+
+  // ============================================
+  // CRDT Conflict Resolution Tests
+  // ============================================
+
+  test('sync applies server merge when server wins CRDT conflict', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Step 1: Create an item and wait for it to sync
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const originalText = `Conflict Test ${Date.now()}`;
+    await input.pressSequentially(originalText);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${originalText}")`);
+
+    // Click elsewhere to blur
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait for sync to complete
+    await page.waitForTimeout(3000);
+
+    // Verify item is in the database
+    let dbItems = await apiGet('/api/items');
+    const dbItem = dbItems.find((i: { text: string }) => i.text === originalText);
+    expect(dbItem).toBeTruthy();
+    console.log('Item synced to database, id:', dbItem.id.substring(0, 8));
+
+    // Step 2: Directly update the item on the server with a far-future timestamp
+    // This simulates another device editing the item with a newer timestamp.
+    // The realtime subscription will pick up this change and update the browser.
+    const serverText = `Server Wins ${Date.now()}`;
+    const farFutureTimestamp = new Date(Date.now() + 86400000).toISOString(); // +24 hours
+    await apiPost('/api/items', {
+      ...dbItem,
+      text: serverText,
+      text_updated_at: farFutureTimestamp,
+    });
+
+    // Verify server has the new text
+    dbItems = await apiGet('/api/items');
+    const updatedDbItem = dbItems.find((i: { id: string }) => i.id === dbItem.id);
+    expect(updatedDbItem.text).toBe(serverText);
+    console.log('Server text updated to:', serverText);
+
+    // Wait for the realtime subscription to deliver this update to the browser
+    await page.waitForSelector(`.todo-item .text:text-is("${serverText}")`, { timeout: 10000 });
+    console.log('Browser received realtime update with server text');
+
+    // Step 3: Edit the item text in the browser (this will get Date.now() as textUpdatedAt,
+    // which is older than the far-future timestamp on the server)
+    const browserText = `Browser Loses ${Date.now()}`;
+    const todoTextEl = page.locator(`.todo-item .text:text-is("${serverText}")`);
+    await todoTextEl.click();
+    await page.keyboard.press('Meta+a');
+    await page.keyboard.type(browserText);
+
+    // Click elsewhere to blur and trigger save
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Verify the browser shows the browser's text initially
+    await page.waitForSelector(`.todo-item .text:text-is("${browserText}")`);
+    console.log('Browser text set to:', browserText);
+
+    // Step 4 & 5: Wait for sync - server will keep its text (far-future timestamp wins)
+    // and the browser should apply the merged response
+    await page.waitForTimeout(4000);
+
+    // Step 6: Browser should now show the SERVER's text because it applied the merged response
+    const finalText = await page.locator('.todo-item .text').first().textContent();
+    console.log('Browser text after sync:', finalText);
+    expect(finalText).toBe(serverText);
+
+    // Also verify the database still has the server's text
+    dbItems = await apiGet('/api/items');
+    const finalDbItem = dbItems.find((i: { id: string }) => i.id === dbItem.id);
+    expect(finalDbItem.text).toBe(serverText);
+    console.log('Database text confirmed:', finalDbItem.text);
+    console.log('✓ Server CRDT conflict resolution applied to browser');
   });
 
   test('indentation syncs between browsers', async ({ }, testInfo) => {
