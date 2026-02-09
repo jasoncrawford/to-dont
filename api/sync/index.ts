@@ -25,14 +25,26 @@ function mergeItems(client: DbItem, server: DbItem): DbItem {
   const clientPositionTime = new Date(client.position_updated_at).getTime();
   const serverPositionTime = new Date(server.position_updated_at).getTime();
 
+  const clientTypeTime = new Date(client.type_updated_at || 0).getTime();
+  const serverTypeTime = new Date(server.type_updated_at || 0).getTime();
+
+  const clientLevelTime = new Date(client.level_updated_at || 0).getTime();
+  const serverLevelTime = new Date(server.level_updated_at || 0).getTime();
+
+  const clientIndentedTime = new Date(client.indented_updated_at || 0).getTime();
+  const serverIndentedTime = new Date(server.indented_updated_at || 0).getTime();
+
   return {
     id: client.id,
     parent_id: client.parent_id,
-    type: client.type,
+    type: clientTypeTime >= serverTypeTime ? client.type : server.type,
+    type_updated_at: clientTypeTime >= serverTypeTime ? client.type_updated_at : server.type_updated_at,
     created_at: server.created_at, // Keep server's created_at
     updated_at: new Date().toISOString(), // Server sets this
-    level: client.level,
-    indented: client.indented, // Take client's indentation state
+    level: clientLevelTime >= serverLevelTime ? client.level : server.level,
+    level_updated_at: clientLevelTime >= serverLevelTime ? client.level_updated_at : server.level_updated_at,
+    indented: clientIndentedTime >= serverIndentedTime ? client.indented : server.indented,
+    indented_updated_at: clientIndentedTime >= serverIndentedTime ? client.indented_updated_at : server.indented_updated_at,
 
     // Per-field LWW merge
     text: clientTextTime >= serverTextTime ? client.text : server.text,
@@ -117,6 +129,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             important_updated_at: clientItem.important_updated_at || now,
             completed_updated_at: clientItem.completed_updated_at || now,
             position_updated_at: clientItem.position_updated_at || now,
+            type_updated_at: clientItem.type_updated_at || now,
+            level_updated_at: clientItem.level_updated_at || now,
+            indented_updated_at: clientItem.indented_updated_at || now,
           };
         }
 

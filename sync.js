@@ -220,6 +220,9 @@
       important_updated_at: item.importantUpdatedAt ? new Date(item.importantUpdatedAt).toISOString() : now,
       completed_updated_at: item.completedUpdatedAt ? new Date(item.completedUpdatedAt).toISOString() : now,
       position_updated_at: item.positionUpdatedAt ? new Date(item.positionUpdatedAt).toISOString() : now,
+      type_updated_at: item.typeUpdatedAt ? new Date(item.typeUpdatedAt).toISOString() : now,
+      level_updated_at: item.levelUpdatedAt ? new Date(item.levelUpdatedAt).toISOString() : now,
+      indented_updated_at: item.indentedUpdatedAt ? new Date(item.indentedUpdatedAt).toISOString() : now,
     };
   }
 
@@ -242,6 +245,9 @@
       importantUpdatedAt: dbItem.important_updated_at ? new Date(dbItem.important_updated_at).getTime() : Date.now(),
       completedUpdatedAt: dbItem.completed_updated_at ? new Date(dbItem.completed_updated_at).getTime() : Date.now(),
       positionUpdatedAt: dbItem.position_updated_at ? new Date(dbItem.position_updated_at).getTime() : Date.now(),
+      typeUpdatedAt: dbItem.type_updated_at ? new Date(dbItem.type_updated_at).getTime() : Date.now(),
+      levelUpdatedAt: dbItem.level_updated_at ? new Date(dbItem.level_updated_at).getTime() : Date.now(),
+      indentedUpdatedAt: dbItem.indented_updated_at ? new Date(dbItem.indented_updated_at).getTime() : Date.now(),
     };
   }
 
@@ -532,20 +538,22 @@
       merged.positionUpdatedAt = remote.positionUpdatedAt;
     }
 
-    // Level field (no separate timestamp, just take remote if different)
-    // Level only changes via explicit user action (Tab/Shift+Tab)
-    if (remote.level !== undefined && remote.level !== local.level) {
-      merged.level = remote.level;
-    }
-
-    // Type field (section vs todo)
-    if (remote.type !== undefined && remote.type !== local.type) {
+    // Type field
+    if ((remote.typeUpdatedAt || 0) > (local.typeUpdatedAt || 0)) {
       merged.type = remote.type;
+      merged.typeUpdatedAt = remote.typeUpdatedAt;
     }
 
-    // Indented field (no separate timestamp, just take remote if different)
-    if (remote.indented !== undefined && remote.indented !== local.indented) {
+    // Level field
+    if ((remote.levelUpdatedAt || 0) > (local.levelUpdatedAt || 0)) {
+      merged.level = remote.level;
+      merged.levelUpdatedAt = remote.levelUpdatedAt;
+    }
+
+    // Indented field
+    if ((remote.indentedUpdatedAt || 0) > (local.indentedUpdatedAt || 0)) {
       merged.indented = remote.indented;
+      merged.indentedUpdatedAt = remote.indentedUpdatedAt;
     }
 
     return merged;

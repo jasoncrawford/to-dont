@@ -121,6 +121,9 @@ function createNewItem(text = '', insertIndex = -1, todos = null) {
     importantUpdatedAt: now,
     completedUpdatedAt: now,
     positionUpdatedAt: now,
+    typeUpdatedAt: now,
+    levelUpdatedAt: now,
+    indentedUpdatedAt: now,
   };
 }
 
@@ -991,6 +994,7 @@ function setSectionLevel(id, level) {
   const section = todos.find(t => t.id === id);
   if (section && section.type === 'section') {
     section.level = level;
+    section.levelUpdatedAt = getVirtualNow();
     saveTodos(todos);
     render();
     setTimeout(() => {
@@ -1005,6 +1009,7 @@ function setTodoIndent(id, indented) {
   const todo = todos.find(t => t.id === id);
   if (todo && todo.type !== 'section') {
     todo.indented = indented;
+    todo.indentedUpdatedAt = getVirtualNow();
     saveTodos(todos);
     render();
     setTimeout(() => {
@@ -1022,6 +1027,9 @@ function convertToSection(id) {
   todo.type = 'section';
   todo.level = 2; // Default to level 2
   todo.text = '';
+  todo.typeUpdatedAt = getVirtualNow();
+  todo.levelUpdatedAt = getVirtualNow();
+  todo.indentedUpdatedAt = getVirtualNow();
   delete todo.completed;
   delete todo.important;
   delete todo.indented;
@@ -1343,6 +1351,7 @@ function toggleComplete(id) {
       const todoIndex = todos.indexOf(todo);
       const newTodo = createNewItem(split.after, todoIndex + 1, todos);
       newTodo.indented = todo.indented;
+      newTodo.indentedUpdatedAt = getVirtualNow();
       todos.splice(todoIndex + 1, 0, newTodo);
     }
   } else {

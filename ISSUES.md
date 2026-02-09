@@ -59,15 +59,19 @@ Fixed in 26dd26a: added `updateTodoText()` calls before `setSectionLevel()` in b
 
 Fixed: `syncChanges()` now captures the sync response and applies `mergedItems` back to local state via new `applyMergedResponse()` function. Uses existing `mergeLocalWithRemote()` for per-field LWW, preserves local IDs, only re-renders if actual changes detected. Same pattern applied to initial sync path in `enableSync()`.
 
-### 7. `level`, `indented`, and `type` have no CRDT timestamps
+### ~~7. `level`, `indented`, and `type` have no CRDT timestamps~~ FIXED
 **Files:** `sync.js:496-509`, `api/sync/index.ts:35`
 
-Per-field LWW covers text, important, completed, and position — but `level`, `indented`, and `type` have no timestamps. Two devices changing a section's level simultaneously produce inconsistent results.
+~~Per-field LWW covers text, important, completed, and position — but `level`, `indented`, and `type` have no timestamps. Two devices changing a section's level simultaneously produce inconsistent results.~~
 
-### 8. Inconsistent merge direction for non-CRDT fields
+Fixed: Added `type_updated_at`, `level_updated_at`, `indented_updated_at` columns and per-field LWW merge logic matching the existing CRDT pattern. Timestamps set in `app.js` wherever these fields change.
+
+### ~~8. Inconsistent merge direction for non-CRDT fields~~ FIXED
 **Files:** `api/sync/index.ts:35`, `sync.js:496-509`
 
-Server-side merge always takes client's `level` and `indented`. Client-side merge takes remote's if different. These are opposite strategies for the same fields.
+~~Server-side merge always takes client's `level` and `indented`. Client-side merge takes remote's if different. These are opposite strategies for the same fields.~~
+
+Fixed: Both server and client now use LWW timestamp comparison for `type`, `level`, and `indented` (resolved by #7's CRDT timestamps).
 
 ### 9. Deletions are sequential, not batched
 **File:** `sync.js:387-402`

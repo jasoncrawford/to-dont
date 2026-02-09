@@ -47,4 +47,7 @@ export interface DbItem {
   important_updated_at: string;
   completed_updated_at: string;
   position_updated_at: string;
+  type_updated_at: string;
+  level_updated_at: string;
+  indented_updated_at: string;
 }

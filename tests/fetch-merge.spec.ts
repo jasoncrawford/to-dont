@@ -21,6 +21,9 @@ function makeServerItem(overrides: Record<string, unknown> = {}) {
     important_updated_at: now,
     completed_updated_at: now,
     position_updated_at: now,
+    type_updated_at: now,
+    level_updated_at: now,
+    indented_updated_at: now,
     ...overrides,
   };
 }
@@ -207,6 +210,305 @@ test.describe('fetchAndMergeTodos', () => {
     const texts = stored.map((t: { text: string }) => t.text);
     expect(texts).toContain('Existing local');
     expect(texts).toContain('New from server');
+  });
+
+  test('should merge level field using LWW - client newer wins', async ({ page }) => {
+    await setupPage(page);
+
+    const uuid = 'test-uuid-level-client-wins';
+    const newTime = Date.now();
+    const oldTime = Date.now() - 3600000; // 1 hour ago
+
+    // Local item has level=1 with newer timestamp
+    await page.evaluate(({ uuid, newTime, oldTime }) => {
+      const item = {
+        id: uuid,
+        text: 'Level test',
+        createdAt: oldTime,
+        important: false,
+        completed: false,
+        position: 'N',
+        type: 'section',
+        level: 1,
+        indented: false,
+        textUpdatedAt: oldTime,
+        importantUpdatedAt: oldTime,
+        completedUpdatedAt: oldTime,
+        positionUpdatedAt: oldTime,
+        typeUpdatedAt: oldTime,
+        levelUpdatedAt: newTime,       // local level is newer
+        indentedUpdatedAt: oldTime,
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([item]));
+      const mapping: Record<string, string> = {};
+      mapping[uuid] = uuid;
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
+    }, { uuid, newTime, oldTime });
+
+    // Server has level=2 with older timestamp
+    const serverItem = makeServerItem({
+      id: uuid,
+      text: 'Level test',
+      type: 'section',
+      level: 2,
+      level_updated_at: new Date(oldTime).toISOString(),  // server level is older
+    });
+
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([serverItem]),
+      });
+    });
+
+    await enableSyncForTest(page);
+    await page.evaluate(() => window.ToDoSync.refresh());
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    // Level should come from local (newer timestamp)
+    expect(stored[0].level).toBe(1);
+  });
+
+  test('should merge level field using LWW - server newer wins', async ({ page }) => {
+    await setupPage(page);
+
+    const uuid = 'test-uuid-level-server-wins';
+    const newTime = Date.now();
+    const oldTime = Date.now() - 3600000; // 1 hour ago
+
+    // Local item has level=1 with older timestamp
+    await page.evaluate(({ uuid, newTime, oldTime }) => {
+      const item = {
+        id: uuid,
+        text: 'Level test',
+        createdAt: oldTime,
+        important: false,
+        completed: false,
+        position: 'N',
+        type: 'section',
+        level: 1,
+        indented: false,
+        textUpdatedAt: oldTime,
+        importantUpdatedAt: oldTime,
+        completedUpdatedAt: oldTime,
+        positionUpdatedAt: oldTime,
+        typeUpdatedAt: oldTime,
+        levelUpdatedAt: oldTime,       // local level is older
+        indentedUpdatedAt: oldTime,
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([item]));
+      const mapping: Record<string, string> = {};
+      mapping[uuid] = uuid;
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
+    }, { uuid, newTime, oldTime });
+
+    // Server has level=2 with newer timestamp
+    const serverItem = makeServerItem({
+      id: uuid,
+      text: 'Level test',
+      type: 'section',
+      level: 2,
+      level_updated_at: new Date(newTime).toISOString(),  // server level is newer
+    });
+
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([serverItem]),
+      });
+    });
+
+    await enableSyncForTest(page);
+    await page.evaluate(() => window.ToDoSync.refresh());
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    // Level should come from server (newer timestamp)
+    expect(stored[0].level).toBe(2);
+  });
+
+  test('should merge type field using LWW - client newer wins', async ({ page }) => {
+    await setupPage(page);
+
+    const uuid = 'test-uuid-type-client-wins';
+    const newTime = Date.now();
+    const oldTime = Date.now() - 3600000; // 1 hour ago
+
+    // Local item has type='section' with newer timestamp
+    await page.evaluate(({ uuid, newTime, oldTime }) => {
+      const item = {
+        id: uuid,
+        text: 'Type test',
+        createdAt: oldTime,
+        important: false,
+        completed: false,
+        position: 'N',
+        type: 'section',
+        level: 2,
+        indented: false,
+        textUpdatedAt: oldTime,
+        importantUpdatedAt: oldTime,
+        completedUpdatedAt: oldTime,
+        positionUpdatedAt: oldTime,
+        typeUpdatedAt: newTime,        // local type is newer
+        levelUpdatedAt: oldTime,
+        indentedUpdatedAt: oldTime,
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([item]));
+      const mapping: Record<string, string> = {};
+      mapping[uuid] = uuid;
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
+    }, { uuid, newTime, oldTime });
+
+    // Server has type='todo' with older timestamp
+    const serverItem = makeServerItem({
+      id: uuid,
+      text: 'Type test',
+      type: 'todo',
+      type_updated_at: new Date(oldTime).toISOString(),  // server type is older
+    });
+
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([serverItem]),
+      });
+    });
+
+    await enableSyncForTest(page);
+    await page.evaluate(() => window.ToDoSync.refresh());
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    // Type should come from local (newer timestamp)
+    expect(stored[0].type).toBe('section');
+  });
+
+  test('should merge indented field using LWW - client newer wins', async ({ page }) => {
+    await setupPage(page);
+
+    const uuid = 'test-uuid-indented-client-wins';
+    const newTime = Date.now();
+    const oldTime = Date.now() - 3600000; // 1 hour ago
+
+    // Local item has indented=true with newer timestamp
+    await page.evaluate(({ uuid, newTime, oldTime }) => {
+      const item = {
+        id: uuid,
+        text: 'Indented test',
+        createdAt: oldTime,
+        important: false,
+        completed: false,
+        position: 'N',
+        indented: true,
+        textUpdatedAt: oldTime,
+        importantUpdatedAt: oldTime,
+        completedUpdatedAt: oldTime,
+        positionUpdatedAt: oldTime,
+        typeUpdatedAt: oldTime,
+        levelUpdatedAt: oldTime,
+        indentedUpdatedAt: newTime,    // local indented is newer
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([item]));
+      const mapping: Record<string, string> = {};
+      mapping[uuid] = uuid;
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
+    }, { uuid, newTime, oldTime });
+
+    // Server has indented=false with older timestamp
+    const serverItem = makeServerItem({
+      id: uuid,
+      text: 'Indented test',
+      indented: false,
+      indented_updated_at: new Date(oldTime).toISOString(),  // server indented is older
+    });
+
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([serverItem]),
+      });
+    });
+
+    await enableSyncForTest(page);
+    await page.evaluate(() => window.ToDoSync.refresh());
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    // Indented should come from local (newer timestamp)
+    expect(stored[0].indented).toBe(true);
+  });
+
+  test('should merge type, level, and indented fields independently', async ({ page }) => {
+    await setupPage(page);
+
+    const uuid = 'test-uuid-independent-merge';
+    const newTime = Date.now();
+    const oldTime = Date.now() - 3600000; // 1 hour ago
+
+    // Local: level=1 (newer), type='section' (older), indented=false (older)
+    await page.evaluate(({ uuid, newTime, oldTime }) => {
+      const item = {
+        id: uuid,
+        text: 'Independent merge test',
+        createdAt: oldTime,
+        important: false,
+        completed: false,
+        position: 'N',
+        type: 'section',
+        level: 1,
+        indented: false,
+        textUpdatedAt: oldTime,
+        importantUpdatedAt: oldTime,
+        completedUpdatedAt: oldTime,
+        positionUpdatedAt: oldTime,
+        typeUpdatedAt: oldTime,        // local type is older
+        levelUpdatedAt: newTime,       // local level is newer
+        indentedUpdatedAt: oldTime,    // local indented is older
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([item]));
+      const mapping: Record<string, string> = {};
+      mapping[uuid] = uuid;
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
+    }, { uuid, newTime, oldTime });
+
+    // Server: level=2 (older), type='todo' (newer), indented=true (newer)
+    const serverItem = makeServerItem({
+      id: uuid,
+      text: 'Independent merge test',
+      type: 'todo',
+      level: 2,
+      indented: true,
+      type_updated_at: new Date(newTime).toISOString(),       // server type is newer
+      level_updated_at: new Date(oldTime).toISOString(),      // server level is older
+      indented_updated_at: new Date(newTime).toISOString(),   // server indented is newer
+    });
+
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([serverItem]),
+      });
+    });
+
+    await enableSyncForTest(page);
+    await page.evaluate(() => window.ToDoSync.refresh());
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    // Level should come from local (newer timestamp)
+    expect(stored[0].level).toBe(1);
+    // Type should come from server (newer timestamp)
+    // Note: toLocalFormat converts 'todo' to undefined (only 'section' is stored explicitly)
+    expect(stored[0].type).toBeUndefined();
+    // Indented should come from server (newer timestamp)
+    expect(stored[0].indented).toBe(true);
   });
 });
 

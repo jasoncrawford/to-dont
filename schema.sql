@@ -17,7 +17,10 @@ CREATE TABLE items (
   text_updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   important_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  position_updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  position_updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  type_updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  level_updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  indented_updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Indexes for performance
