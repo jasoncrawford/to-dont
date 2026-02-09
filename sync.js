@@ -367,49 +367,51 @@
     if (deletedIds.length > 0) changes.push(`${deletedIds.length} deleted`);
     console.log('[Sync] Syncing:', changes.join(', '));
 
-    // Handle modifications/additions via bulk sync
-    if (modifiedItems.length > 0) {
-      // Determine which items are new vs updated
-      const existingIds = new Set(lastSyncedState?.map(t => t.id) || []);
-
-      const dbItems = modifiedItems.map((item) => {
-        const dbItem = toDbFormat(item, item.position);
-        // Track this ID with event type so we ignore only our own echo
-        // New items will get INSERT echo, existing items will get UPDATE echo
-        const isNew = !existingIds.has(item.id);
-        const eventKey = `${isNew ? 'INSERT' : 'UPDATE'}:${dbItem.id}`;
-        recentlySyncedIds.add(eventKey);
-        setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
-        return dbItem;
-      });
-
-      const syncResponse = await apiRequest('/api/sync', {
-        method: 'POST',
-        body: JSON.stringify({ items: dbItems }),
-      });
-
-      // Apply server's merged results back to local state
-      if (syncResponse && syncResponse.mergedItems && syncResponse.mergedItems.length > 0) {
-        applyMergedResponse(syncResponse.mergedItems);
-      }
-    }
-
-    // Handle deletions
-    for (const localId of deletedIds) {
-      // Get UUID from mapping (or use the ID if it's already a UUID)
+    // Resolve deleted UUIDs upfront and set up realtime echo suppression
+    const deletedUuids = deletedIds.map(localId => {
       const uuid = idMapping[localId] || localId;
-
-      // Track this ID so we ignore the realtime echo
       const eventKey = `DELETE:${uuid}`;
       recentlySyncedIds.add(eventKey);
       setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
+      return uuid;
+    });
 
-      try {
-        await apiRequest(`/api/items/${uuid}`, { method: 'DELETE' });
-      } catch (err) {
-        // Item might already be deleted - that's OK
-        console.log('[Sync] Delete may have already happened:', uuid.substring(0, 8));
-      }
+    // Determine which items are new vs updated
+    const existingIds = new Set(lastSyncedState?.map(t => t.id) || []);
+
+    const dbItems = modifiedItems.map((item) => {
+      const dbItem = toDbFormat(item, item.position);
+      // Track this ID with event type so we ignore only our own echo
+      // New items will get INSERT echo, existing items will get UPDATE echo
+      const isNew = !existingIds.has(item.id);
+      const eventKey = `${isNew ? 'INSERT' : 'UPDATE'}:${dbItem.id}`;
+      recentlySyncedIds.add(eventKey);
+      setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
+      return dbItem;
+    });
+
+    // Send modifications and deletions together in one request
+    const syncBody = { items: dbItems };
+    if (deletedUuids.length > 0) {
+      syncBody.deleteIds = deletedUuids;
+    }
+
+    const syncResponse = await apiRequest('/api/sync', {
+      method: 'POST',
+      body: JSON.stringify(syncBody),
+    });
+
+    // Apply server's merged results back to local state
+    if (syncResponse && syncResponse.mergedItems && syncResponse.mergedItems.length > 0) {
+      applyMergedResponse(syncResponse.mergedItems);
+    }
+
+    // Clean up ID mappings for deleted items
+    for (const localId of deletedIds) {
+      delete idMapping[localId];
+    }
+    if (deletedIds.length > 0) {
+      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
     }
 
     // Update last synced state (re-read from localStorage since merge response may have updated it)
@@ -882,6 +884,11 @@
   if (isTestMode) {
     window.ToDoSync._test = {
       setSyncEnabled: (val) => { syncEnabled = val; },
+      triggerSync: () => {
+        const stored = localStorage.getItem('decay-todos');
+        const todos = stored ? JSON.parse(stored) : [];
+        return syncToServer(todos);
+      },
     };
   }
 

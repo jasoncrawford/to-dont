@@ -5,6 +5,7 @@ import { supabase, DbItem } from '../../lib/supabase';
 interface SyncRequest {
   items: DbItem[];
   since?: string; // ISO timestamp for incremental sync
+  deleteIds?: string[]; // IDs to delete in batch
 }
 
 /**
@@ -77,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { items, since } = req.body as SyncRequest;
+  const { items, since, deleteIds } = req.body as SyncRequest;
 
   if (!items || !Array.isArray(items)) {
     return res.status(400).json({ error: 'Missing or invalid items array' });
@@ -149,6 +150,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Handle batch deletions
+    const deletedIds: string[] = [];
+    if (deleteIds && deleteIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('items')
+        .delete()
+        .in('id', deleteIds);
+
+      if (deleteError) {
+        console.error('Error deleting items:', deleteError);
+        return res.status(500).json({ error: 'Failed to delete items' });
+      }
+      deletedIds.push(...deleteIds);
+    }
+
     // Fetch all items (or just updated ones if since is provided)
     let query = supabase
       .from('items')
@@ -169,6 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       items: serverItems,
       mergedItems, // Return what we merged so client knows the result
+      deletedIds, // Return which items were deleted
       syncedAt: new Date().toISOString(),
     });
   } catch (err) {

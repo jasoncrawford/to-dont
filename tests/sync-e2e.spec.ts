@@ -1166,6 +1166,77 @@ test.describe('E2E Sync Diagnostic', () => {
   });
 
   // ============================================
+  // Batch Delete Tests
+  // ============================================
+
+  test('batch delete via sync endpoint removes multiple items', async () => {
+    const now = new Date().toISOString();
+
+    // Helper to generate a valid UUID v4
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    // Create 3 items via the sync endpoint
+    const item1 = {
+      id: uuid(),
+      parent_id: null,
+      type: 'todo',
+      text: 'Batch delete item 1',
+      important: false,
+      completed_at: null,
+      created_at: now,
+      level: null,
+      indented: false,
+      position: 'f',
+      text_updated_at: now,
+      important_updated_at: now,
+      completed_updated_at: now,
+      position_updated_at: now,
+      type_updated_at: now,
+      level_updated_at: now,
+      indented_updated_at: now,
+    };
+    const item2 = { ...item1, id: uuid(), text: 'Batch delete item 2', position: 'n' };
+    const item3 = { ...item1, id: uuid(), text: 'Batch delete item 3', position: 'u' };
+
+    // Step 1: Create all 3 items
+    await apiPost('/api/sync', { items: [item1, item2, item3] });
+
+    // Step 2: Verify all 3 exist
+    let items = await apiGet('/api/items');
+    const createdTexts = items.map((i: { text: string }) => i.text);
+    expect(createdTexts).toContain('Batch delete item 1');
+    expect(createdTexts).toContain('Batch delete item 2');
+    expect(createdTexts).toContain('Batch delete item 3');
+    console.log('Created 3 items in database');
+
+    // Step 3: Batch delete items 1 and 2 via sync endpoint
+    const deleteResponse = await apiPost('/api/sync', {
+      items: [],
+      deleteIds: [item1.id, item2.id],
+    });
+
+    // Step 4: Verify the response includes deletedIds
+    expect(deleteResponse.deletedIds).toBeDefined();
+    expect(deleteResponse.deletedIds).toContain(item1.id);
+    expect(deleteResponse.deletedIds).toContain(item2.id);
+    console.log('Batch delete response includes deletedIds:', deleteResponse.deletedIds);
+
+    // Step 5: Verify only item3 remains
+    items = await apiGet('/api/items');
+    const remainingTexts = items.map((i: { text: string }) => i.text);
+    expect(remainingTexts).not.toContain('Batch delete item 1');
+    expect(remainingTexts).not.toContain('Batch delete item 2');
+    expect(remainingTexts).toContain('Batch delete item 3');
+    console.log('Only item 3 remains after batch delete');
+  });
+
+  // ============================================
   // Indentation Sync Tests
   // ============================================
 

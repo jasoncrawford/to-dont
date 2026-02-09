@@ -73,10 +73,12 @@ Fixed: Added `type_updated_at`, `level_updated_at`, `indented_updated_at` column
 
 Fixed: Both server and client now use LWW timestamp comparison for `type`, `level`, and `indented` (resolved by #7's CRDT timestamps).
 
-### 9. Deletions are sequential, not batched
+### ~~9. Deletions are sequential, not batched~~ FIXED
 **File:** `sync.js:387-402`
 
-Deletions are individual DELETE requests in a `for` loop. If one fails, remaining deletions stop, but `lastSyncedState` is still updated (line 404), so failed deletes won't be retried.
+~~Deletions are individual DELETE requests in a `for` loop. If one fails, remaining deletions stop, but `lastSyncedState` is still updated (line 404), so failed deletes won't be retried.~~
+
+Fixed: Deletions are now sent as `deleteIds` in the `/api/sync` POST body (single batch request). If the request fails, `lastSyncedState` is not updated, so deletions are naturally retried on the next sync cycle.
 
 ---
 

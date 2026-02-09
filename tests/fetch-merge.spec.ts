@@ -512,12 +512,171 @@ test.describe('fetchAndMergeTodos', () => {
   });
 });
 
+test.describe('batch delete retry', () => {
+
+  test('failed batch delete is retried on next sync cycle', async ({ page }) => {
+    await setupPage(page);
+
+    const localId1 = 'keep-item-1';
+    const localId2 = 'delete-item-2';
+    const now = Date.now();
+
+    // Step 1: Pre-populate localStorage with 2 items
+    await page.evaluate(({ localId1, localId2, now }) => {
+      const items = [
+        {
+          id: localId1,
+          text: 'Item to keep',
+          createdAt: now,
+          important: false,
+          completed: false,
+          position: 'f',
+          textUpdatedAt: now,
+          importantUpdatedAt: now,
+          completedUpdatedAt: now,
+          positionUpdatedAt: now,
+          typeUpdatedAt: now,
+          levelUpdatedAt: now,
+          indentedUpdatedAt: now,
+        },
+        {
+          id: localId2,
+          text: 'Item to delete',
+          createdAt: now,
+          important: false,
+          completed: false,
+          position: 'n',
+          textUpdatedAt: now,
+          importantUpdatedAt: now,
+          completedUpdatedAt: now,
+          positionUpdatedAt: now,
+          typeUpdatedAt: now,
+          levelUpdatedAt: now,
+          indentedUpdatedAt: now,
+        },
+      ];
+      localStorage.setItem('decay-todos', JSON.stringify(items));
+    }, { localId1, localId2, now });
+
+    // Step 2: Enable sync and set up initial lastSyncedState by doing a successful sync
+    let syncCallCount = 0;
+    const syncRequestBodies: unknown[] = [];
+
+    await page.route('**/api/sync', async (route) => {
+      syncCallCount++;
+      const request = route.request();
+      const body = JSON.parse(request.postData() || '{}');
+      syncRequestBodies.push(body);
+
+      if (syncCallCount === 1) {
+        // First call: succeed (initial sync to establish lastSyncedState)
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            items: [],
+            mergedItems: [],
+            deletedIds: [],
+            syncedAt: new Date().toISOString(),
+          }),
+        });
+      } else if (syncCallCount === 2) {
+        // Second call: FAIL (simulating network error during deletion)
+        route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Server error' }),
+        });
+      } else {
+        // Third call: succeed
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            items: [],
+            mergedItems: [],
+            deletedIds: body.deleteIds || [],
+            syncedAt: new Date().toISOString(),
+          }),
+        });
+      }
+    });
+
+    // Also mock /api/items for fetchAndMergeTodos if called
+    await page.route('**/api/items', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    // Enable sync and set up config
+    await page.evaluate((apiUrl) => {
+      (window as any).SYNC_API_URL = apiUrl;
+      (window as any).SYNC_SUPABASE_URL = 'https://fake.supabase.co';
+      (window as any).SYNC_SUPABASE_ANON_KEY = 'fake-key';
+      (window as any).SYNC_BEARER_TOKEN = 'fake-token';
+      window.ToDoSync._test.setSyncEnabled(true);
+    }, FAKE_API);
+
+    // Trigger initial sync to establish lastSyncedState (both items present)
+    await page.evaluate(() => {
+      return window.ToDoSync._test.triggerSync();
+    });
+
+    // Wait for the sync to complete
+    await page.waitForTimeout(500);
+    expect(syncCallCount).toBe(1);
+
+    // Step 3: Remove item2 from localStorage (simulating user deletion)
+    await page.evaluate(({ localId2 }) => {
+      const stored = localStorage.getItem('decay-todos');
+      const items = stored ? JSON.parse(stored) : [];
+      const filtered = items.filter((i: { id: string }) => i.id !== localId2);
+      localStorage.setItem('decay-todos', JSON.stringify(filtered));
+    }, { localId2 });
+
+    // Step 4: Trigger sync - this should fail (mock returns 500)
+    await page.evaluate(() => {
+      return window.ToDoSync._test.triggerSync();
+    });
+    await page.waitForTimeout(500);
+    expect(syncCallCount).toBe(2);
+
+    // The second request should have included deleteIds
+    const secondBody = syncRequestBodies[1] as { deleteIds?: string[] };
+    expect(secondBody.deleteIds).toBeDefined();
+    expect(secondBody.deleteIds!.length).toBe(1);
+    // Capture the UUID that was generated for the deleted item
+    const deletedUuid = secondBody.deleteIds![0];
+    console.log('Delete UUID in failed sync:', deletedUuid);
+
+    // Step 5: Trigger sync again - this should succeed
+    // The deletion should be retried because lastSyncedState was NOT updated on failure
+    await page.evaluate(() => {
+      return window.ToDoSync._test.triggerSync();
+    });
+    await page.waitForTimeout(500);
+    expect(syncCallCount).toBe(3);
+
+    // Step 6: Verify the third request ALSO includes deleteIds with the same UUID
+    // This proves the deletion was re-detected because lastSyncedState wasn't updated on failure
+    const thirdBody = syncRequestBodies[2] as { deleteIds?: string[] };
+    expect(thirdBody.deleteIds).toBeDefined();
+    expect(thirdBody.deleteIds!.length).toBe(1);
+    expect(thirdBody.deleteIds![0]).toBe(deletedUuid);
+    console.log('Deletion was retried on third sync call after second failed');
+  });
+});
+
 // Extend the Window.ToDoSync type from sync.spec.ts with test internals
 declare global {
   interface Window {
     ToDoSync: {
       _test: {
         setSyncEnabled: (val: boolean) => void;
+        triggerSync: () => Promise<void>;
       };
     };
   }
