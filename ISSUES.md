@@ -91,10 +91,12 @@ Fixed: Deletions are now sent as `deleteIds` in the `/api/sync` POST body (singl
 
 Fixed: Extracted canonical implementation into `fractional-index.js` loaded via script tag before both consumers. `sync.js` and `app.js` both delegate to `window.FractionalIndex`. Deleted dead `lib/fractional-index.ts`.
 
-### 11. Monkey-patching `saveTodos` via polling
+### ~~11. Monkey-patching `saveTodos` via polling~~ FIXED
 **File:** `sync.js:741-764`
 
-Sync layer polls every 50ms for `window.saveTodos` to exist, then wraps it. Has a 5-second timeout, after which it silently gives up. If app.js loads slowly, sync never hooks in with no error or indication.
+~~Sync layer polls every 50ms for `window.saveTodos` to exist, then wraps it. Has a 5-second timeout, after which it silently gives up. If app.js loads slowly, sync never hooks in with no error or indication.~~
+
+Fixed: Replaced polling/monkey-patching with an explicit `onSave` hook on `window.ToDoSync`. `app.js`'s `saveTodos()` calls the hook directly after saving to localStorage. No polling, no timeouts, no global `_originalSaveTodos`.
 
 ### 12. Dual ID system creates fragility
 **File:** `sync.js:140-182`

@@ -20,7 +20,6 @@
 
   // Sync state
   let syncEnabled = false;
-  let syncInitialized = false;
   let supabaseClient = null;
   let realtimeChannel = null;
   let isSyncing = false;
@@ -727,32 +726,6 @@
     console.log('[Sync] Disabled');
   }
 
-  // Wrap saveTodos to also sync to server
-  function wrapSaveTodos() {
-    const checkForSaveTodos = setInterval(() => {
-      if (typeof window.saveTodos === 'function' && !window._originalSaveTodos) {
-        clearInterval(checkForSaveTodos);
-
-        window._originalSaveTodos = window.saveTodos;
-
-        window.saveTodos = function(todos) {
-          window._originalSaveTodos(todos);
-
-          if (syncEnabled) {
-            queueServerSync(todos);
-          }
-        };
-
-        console.log('[Sync] ✓ Hooked saveTodos');
-        syncInitialized = true;
-      }
-    }, 50);
-
-    setTimeout(() => {
-      clearInterval(checkForSaveTodos);
-    }, 5000);
-  }
-
   // Apply pending updates when user stops editing
   function setupBlurHandler() {
     document.addEventListener('focusout', () => {
@@ -771,7 +744,6 @@
       return;
     }
 
-    wrapSaveTodos();
     setupBlurHandler();
 
     if (isSyncConfigured()) {
@@ -791,6 +763,12 @@
     isConfigured: isSyncConfigured,
     refresh: fetchAndMergeTodos,
     getConfig: () => ({ ...getConfig() }),
+    // Called by app.js saveTodos() to notify sync layer of changes
+    onSave: function(todos) {
+      if (syncEnabled) {
+        queueServerSync(todos);
+      }
+    },
     // CRDT helpers for app.js
     generatePositionBetween: generatePositionBetween,
     generateInitialPositions: generateInitialPositions,

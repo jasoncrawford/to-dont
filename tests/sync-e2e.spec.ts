@@ -122,7 +122,7 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(items.length).toBe(0);
   });
 
-  test('sync auto-enables and saveTodos wrapper works', async () => {
+  test('sync auto-enables and saveTodos onSave hook works', async () => {
     // Wait for sync to initialize
     await page.waitForTimeout(1000);
 
@@ -130,7 +130,7 @@ test.describe('E2E Sync Diagnostic', () => {
       return {
         isConfigured: window.ToDoSync?.isConfigured() || false,
         isEnabled: window.ToDoSync?.isEnabled() || false,
-        saveTodosWrapped: typeof window._originalSaveTodos === 'function',
+        hasOnSaveHook: typeof window.ToDoSync?.onSave === 'function',
         config: window.ToDoSync?.getConfig() || {},
       };
     });
@@ -139,7 +139,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     expect(state.isConfigured).toBe(true);
     expect(state.isEnabled).toBe(true);
-    expect(state.saveTodosWrapped).toBe(true);
+    expect(state.hasOnSaveHook).toBe(true);
   });
 
   test('creating an item syncs to database', async () => {

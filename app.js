@@ -48,6 +48,10 @@ function loadTodos() {
 
 function saveTodos(todos) {
   localStorage.setItem('decay-todos', JSON.stringify(todos));
+  // Notify sync layer if present
+  if (window.ToDoSync && window.ToDoSync.onSave) {
+    window.ToDoSync.onSave(todos);
+  }
 }
 
 function generateId() {
