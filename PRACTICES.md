@@ -16,13 +16,13 @@ to-dont/
 ├── styles.css          # All styling
 ├── app.js              # Frontend application logic
 ├── sync.js             # Sync layer (Supabase integration)
+├── fractional-index.js # Shared fractional indexing (CRDT ordering)
 ├── api/                # Vercel serverless functions
 │   ├── sync/           # Main sync endpoint (LWW merge)
 │   └── items/          # CRUD operations
 ├── lib/                # Shared backend utilities
 │   ├── auth.ts         # Bearer token auth
-│   ├── supabase.ts     # Database client + types
-│   └── fractional-index.ts  # Ordering algorithm
+│   └── supabase.ts     # Database client + types
 ├── tests/              # Playwright tests
 │   └── helpers.ts      # Shared test utilities
 ├── migrations/         # Database migrations

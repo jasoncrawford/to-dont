@@ -58,39 +58,9 @@ function getVirtualNow() {
   return Date.now() + (timeOffsetDays * 24 * 60 * 60 * 1000);
 }
 
-// CRDT helpers - use sync layer functions if available, otherwise inline
+// CRDT helper - use shared fractional indexing module
 function generatePositionBetween(before, after) {
-  if (window.ToDoSync && window.ToDoSync.generatePositionBetween) {
-    return window.ToDoSync.generatePositionBetween(before, after);
-  }
-  // Fallback inline implementation
-  const MID_CHAR = 'n';
-  const BASE_CHARS = 'abcdefghijklmnopqrstuvwxyz';
-  if (!before && !after) return MID_CHAR;
-  if (!before) {
-    const lastChar = after[after.length - 1];
-    const idx = BASE_CHARS.indexOf(lastChar);
-    if (idx > 1) return after.slice(0, -1) + BASE_CHARS[Math.floor(idx / 2)];
-    return '0' + MID_CHAR;
-  }
-  if (!after) {
-    const lastChar = before[before.length - 1];
-    const idx = BASE_CHARS.indexOf(lastChar);
-    if (idx < BASE_CHARS.length - 2) {
-      const midIdx = idx + Math.ceil((BASE_CHARS.length - 1 - idx) / 2);
-      return before.slice(0, -1) + BASE_CHARS[midIdx];
-    }
-    return before + MID_CHAR;
-  }
-  // Midpoint - simplified
-  if (before < after) {
-    const beforeIdx = BASE_CHARS.indexOf(before[0]);
-    const afterIdx = BASE_CHARS.indexOf(after[0]);
-    if (afterIdx - beforeIdx > 1) {
-      return BASE_CHARS[beforeIdx + Math.floor((afterIdx - beforeIdx) / 2)];
-    }
-  }
-  return before + MID_CHAR;
+  return window.FractionalIndex.generatePositionBetween(before, after);
 }
 
 function getItemPosition(todos, index) {

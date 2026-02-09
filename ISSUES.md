@@ -84,10 +84,12 @@ Fixed: Deletions are now sent as `deleteIds` in the `/api/sync` POST body (singl
 
 ## High: Architectural Weaknesses
 
-### 10. Three copies of fractional indexing algorithm
+### ~~10. Three copies of fractional indexing algorithm~~ FIXED
 **Files:** `lib/fractional-index.ts`, `sync.js:48-134`, `app.js:62-94`
 
-Three implementations with different edge case behavior. If sync.js loads first, app.js uses the sync version; if not, it uses its own. Non-deterministic behavior.
+~~Three implementations with different edge case behavior. If sync.js loads first, app.js uses the sync version; if not, it uses its own. Non-deterministic behavior.~~
+
+Fixed: Extracted canonical implementation into `fractional-index.js` loaded via script tag before both consumers. `sync.js` and `app.js` both delegate to `window.FractionalIndex`. Deleted dead `lib/fractional-index.ts`.
 
 ### 11. Monkey-patching `saveTodos` via polling
 **File:** `sync.js:741-764`
@@ -165,3 +167,8 @@ Used for paste-as-plain-text. Will eventually break in browsers.
 **Files:** `sync.js:122-134`, `lib/fractional-index.ts:168-184`
 
 Only 22 distinct single-char positions between 'c' and 'x'. Lists with >22 items get duplicate positions.
+
+### 25. Flaky sync-e2e tests due to timing
+**Files:** `tests/sync-e2e.spec.ts`
+
+Several sync-e2e tests are intermittently flaky, particularly "creating a section syncs to database" and "unindenting a todo syncs to database". They rely on fixed `waitForTimeout` delays (2-4 seconds) for sync debounce + server round-trip, which can be insufficient when tests run serially after many prior tests. Since sync-e2e tests run serially (shared database state), one flaky failure cascades and skips all subsequent tests.
