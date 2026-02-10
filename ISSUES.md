@@ -123,15 +123,19 @@ Fixed: Added `handleOnline()` listener for the browser `'online'` event. When co
 
 Fixed: Replaced `sort_order` with `position`, added `indented` and all 7 CRDT timestamp fields to the PATCH handler. Also cleaned up stale `sort_order` references in test scripts.
 
-### 15. `archiveOldItems` uses `Date.now()` instead of `getVirtualNow()`
+### ~~15. `archiveOldItems` uses `Date.now()` instead of `getVirtualNow()`~~ FIXED
 **File:** `app.js:196`
 
-`todo.archivedAt = Date.now()` should be `getVirtualNow()`. Inconsistent with every other timestamp in the app.
+~~`todo.archivedAt = Date.now()` should be `getVirtualNow()`. Inconsistent with every other timestamp in the app.~~
 
-### 16. `contentEditable` set to boolean
+Fixed in b2c050e: changed `Date.now()` to `getVirtualNow()` in `archiveOldItems`.
+
+### ~~16. `contentEditable` set to boolean~~ FIXED
 **File:** `app.js:261`
 
-`text.contentEditable = !todo.archived` sets the attribute to boolean `true`/`false`, but the DOM attribute expects string `"true"`/`"false"`.
+~~`text.contentEditable = !todo.archived` sets the attribute to boolean `true`/`false`, but the DOM attribute expects string `"true"`/`"false"`.~~
+
+Fixed in fd9ddbb: changed to `String(!todo.archived)` in `createTodoElement` and `'true'` in `createSectionElement`.
 
 ---
 
