@@ -750,6 +750,18 @@
     });
   }
 
+  // Re-sync when connectivity returns
+  function handleOnline() {
+    if (!syncEnabled) return;
+    console.log('[Sync] Online - re-syncing');
+    const stored = localStorage.getItem('decay-todos');
+    const todos = stored ? JSON.parse(stored) : [];
+    queueServerSync(todos);
+    // Fetch remote changes after the push sync completes
+    // Delay beyond the debounce so local changes are pushed first
+    setTimeout(fetchAndMergeTodos, SERVER_SYNC_DEBOUNCE_MS + 2000);
+  }
+
   // Migrate from old idMapping localStorage key to serverUuid on items
   function migrateIdMapping() {
     const oldMapping = localStorage.getItem('decay-todos-id-mapping');
@@ -785,6 +797,7 @@
     }
 
     setupBlurHandler();
+    window.addEventListener('online', handleOnline);
 
     if (isSyncConfigured()) {
       setTimeout(() => {
@@ -823,6 +836,7 @@
         const todos = stored ? JSON.parse(stored) : [];
         return syncToServer(todos);
       },
+      handleOnline: handleOnline,
     };
   }
 

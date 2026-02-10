@@ -1515,6 +1515,60 @@ test.describe('E2E Sync Diagnostic', () => {
     await context1.close();
     await context2.close();
   });
+
+  test('offline changes sync when connectivity returns', async ({ }, testInfo) => {
+    testInfo.setTimeout(60000);
+
+    page.on('console', msg => {
+      if (msg.text().includes('[Sync]')) {
+        console.log('[Browser]', msg.text());
+      }
+    });
+
+    // Wait for sync to initialize
+    await page.waitForTimeout(1000);
+    const syncEnabled = await page.evaluate(() => window.ToDoSync?.isEnabled());
+    expect(syncEnabled).toBe(true);
+    console.log('Sync enabled, going offline');
+
+    // Go offline
+    await page.context().setOffline(true);
+
+    // Create an item while offline
+    await page.waitForSelector('.new-item', { state: 'visible' });
+    const input = page.locator('.new-item .text');
+    await input.click();
+    const testText = `Offline Item ${Date.now()}`;
+    await input.pressSequentially(testText);
+    await input.press('Enter');
+    await page.waitForSelector(`.todo-item .text:text-is("${testText}")`);
+    console.log('Created item while offline:', testText);
+
+    // Click elsewhere to blur and trigger save to localStorage
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+    // Wait a bit - sync will fail silently because we're offline
+    await page.waitForTimeout(3000);
+
+    // Verify item is NOT in database (we're offline, sync should have failed)
+    let dbItems = await apiGet('/api/items');
+    let found = dbItems.find((item: { text: string }) => item.text === testText);
+    expect(found).toBeFalsy();
+    console.log('Confirmed item NOT in database while offline');
+
+    // Go back online - this should trigger the 'online' event and re-sync
+    await page.context().setOffline(false);
+    console.log('Back online, waiting for re-sync');
+
+    // Wait for the online event handler + debounce + sync
+    await page.waitForTimeout(5000);
+
+    // Verify item is now in database
+    dbItems = await apiGet('/api/items');
+    found = dbItems.find((item: { text: string }) => item.text === testText);
+    expect(found).toBeTruthy();
+    console.log('Item synced to database after coming back online');
+  });
 });
 
 // Type declarations

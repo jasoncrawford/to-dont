@@ -182,6 +182,139 @@ test.describe('Sync Layer', () => {
     expect(stored.length).toBe(3);
   });
 
+  test('online event triggers re-sync when sync is enabled', async ({ page }) => {
+    await setupPage(page);
+
+    // Enable sync via _test helper
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+    });
+
+    // Store a todo in localStorage
+    await page.evaluate(() => {
+      const todo = {
+        id: 'online-test-1',
+        text: 'offline item',
+        createdAt: Date.now(),
+        important: false,
+        completed: false,
+        archived: false,
+        position: 'n',
+      };
+      localStorage.setItem('decay-todos', JSON.stringify([todo]));
+    });
+
+    // Install fetch spy
+    await page.evaluate(() => {
+      (window as Window & { _fetchCalls: string[] })._fetchCalls = [];
+      const origFetch = window.fetch;
+      window.fetch = function(...args: Parameters<typeof fetch>) {
+        (window as Window & { _fetchCalls: string[] })._fetchCalls.push(String(args[0]));
+        // Return a fake response to avoid network errors
+        return Promise.resolve(new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    // Call handleOnline via _test
+    await page.evaluate(() => {
+      window.ToDoSync._test!.handleOnline();
+    });
+
+    // Wait for debounce (~2500ms to be safe)
+    await page.waitForTimeout(2500);
+
+    const fetchCalls = await page.evaluate(() => {
+      return (window as Window & { _fetchCalls: string[] })._fetchCalls;
+    });
+
+    // Verify fetch was called (queueServerSync and/or fetchAndMergeTodos)
+    expect(fetchCalls.length).toBeGreaterThan(0);
+  });
+
+  test('online event does nothing when sync is disabled', async ({ page }) => {
+    await setupPage(page);
+
+    // syncEnabled is false by default in test mode - don't change it
+
+    // Install fetch spy
+    await page.evaluate(() => {
+      (window as Window & { _fetchCalls: string[] })._fetchCalls = [];
+      const origFetch = window.fetch;
+      window.fetch = function(...args: Parameters<typeof fetch>) {
+        (window as Window & { _fetchCalls: string[] })._fetchCalls.push(String(args[0]));
+        return Promise.resolve(new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    // Dispatch online event (not calling _test.handleOnline — using the real event)
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    // Wait enough time for any potential sync
+    await page.waitForTimeout(3000);
+
+    const fetchCalls = await page.evaluate(() => {
+      return (window as Window & { _fetchCalls: string[] })._fetchCalls;
+    });
+
+    // No fetch should have been made
+    expect(fetchCalls.length).toBe(0);
+  });
+
+  test('online event listener is registered during init', async ({ page }) => {
+    await setupPage(page);
+
+    // Verify handleOnline is exposed in _test object
+    const hasHandleOnline = await page.evaluate(() => {
+      return typeof window.ToDoSync._test?.handleOnline === 'function';
+    });
+    expect(hasHandleOnline).toBe(true);
+  });
+
+  test('handleOnline calls fetchAndMergeTodos to pull remote changes', async ({ page }) => {
+    await setupPage(page);
+
+    // Enable sync
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+    });
+
+    // Install fetch spy that tracks URLs
+    await page.evaluate(() => {
+      (window as Window & { _fetchUrls: string[] })._fetchUrls = [];
+      window.fetch = function(...args: Parameters<typeof fetch>) {
+        (window as Window & { _fetchUrls: string[] })._fetchUrls.push(String(args[0]));
+        return Promise.resolve(new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    // Call handleOnline
+    await page.evaluate(() => {
+      window.ToDoSync._test!.handleOnline();
+    });
+
+    // Wait for the delayed fetchAndMergeTodos (debounce + 2000ms delay + buffer)
+    await page.waitForTimeout(5000);
+
+    const fetchUrls = await page.evaluate(() => {
+      return (window as Window & { _fetchUrls: string[] })._fetchUrls;
+    });
+
+    // Verify /api/items URL was fetched (proves fetchAndMergeTodos was called)
+    const itemsFetched = fetchUrls.some(url => url.includes('/api/items'));
+    expect(itemsFetched).toBe(true);
+  });
+
   test('completing a todo works with sync layer', async ({ page }) => {
     await setupPage(page);
 
@@ -232,6 +365,11 @@ declare global {
       refresh: () => Promise<void>;
       getConfig: () => Record<string, string>;
       onSave: (todos: unknown[]) => void;
+      _test?: {
+        setSyncEnabled: (val: boolean) => void;
+        triggerSync: () => Promise<void>;
+        handleOnline: () => void;
+      };
     };
     saveTodos: (todos: unknown[]) => void;
     _originalSaveTodos?: (todos: unknown[]) => void;

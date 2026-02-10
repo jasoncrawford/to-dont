@@ -105,10 +105,12 @@ Fixed: Replaced polling/monkey-patching with an explicit `onSave` hook on `windo
 
 Fixed: UUID now stored directly on each item as `serverUuid` property, eliminating the separate `decay-todos-id-mapping` localStorage key. Includes one-time migration for existing users. No more mapping corruption risk.
 
-### 13. No offline recovery mechanism
+### ~~13. No offline recovery mechanism~~ FIXED
 **File:** `sync.js:411-422`
 
-If offline, sync silently fails. When connectivity returns, nothing triggers re-sync. User must make a new edit to trigger the debounced sync.
+~~If offline, sync silently fails. When connectivity returns, nothing triggers re-sync. User must make a new edit to trigger the debounced sync.~~
+
+Fixed: Added `handleOnline()` listener for the browser `'online'` event. When connectivity returns, pending local changes are pushed and remote changes are pulled automatically.
 
 ---
 
