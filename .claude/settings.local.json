@@ -25,7 +25,19 @@
       "Bash(ps:*)",
       "Bash(git merge:*)",
       "Bash(npx vercel dev:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(find:*)",
+      "Bash(git stash:*)",
+      "Bash(npx:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git rm:*)",
+      "Bash(jobs:*)",
+      "Bash(grep:*)",
+      "Bash(git branch:*)",
+      "Bash(git worktree add:*)",
+      "Bash(git worktree:*)",
+      "Bash(git rebase:*)",
+      "Bash(node --version:*)"
     ]
   }
 }
