@@ -177,14 +177,16 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Check localStorage to see what was saved
     const localData = await page.evaluate(() => {
+      const todosRaw = localStorage.getItem('decay-todos');
+      const todos = todosRaw ? JSON.parse(todosRaw) : [];
       return {
-        todos: localStorage.getItem('decay-todos'),
-        idMapping: localStorage.getItem('decay-todos-id-mapping'),
+        todos: todosRaw,
+        serverUuids: todos.map((t: { id: string; serverUuid?: string }) => ({ id: t.id, serverUuid: t.serverUuid })),
         synced: localStorage.getItem('decay-todos-synced'),
       };
     });
     console.log('localStorage todos:', localData.todos);
-    console.log('localStorage idMapping:', localData.idMapping);
+    console.log('serverUuids on items:', JSON.stringify(localData.serverUuids));
 
     // Check database
     const afterItems = await apiGet('/api/items');

@@ -83,16 +83,13 @@ test.describe('fetchAndMergeTodos', () => {
         archived: true,
         archivedAt: Date.now() - 1 * 24 * 60 * 60 * 1000,
         position: 'N',
+        serverUuid: uuid,
         textUpdatedAt: Date.now() - 15 * 24 * 60 * 60 * 1000,
         importantUpdatedAt: Date.now() - 15 * 24 * 60 * 60 * 1000,
         completedUpdatedAt: Date.now() - 15 * 24 * 60 * 60 * 1000,
         positionUpdatedAt: Date.now() - 15 * 24 * 60 * 60 * 1000,
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      // Set up ID mapping so findItemByUUID can find it
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, uuid);
 
     // Server returns the same item but without archived info (server doesn't store it)
@@ -137,15 +134,13 @@ test.describe('fetchAndMergeTodos', () => {
         important: false,
         completed: false,
         position: 'N',
+        serverUuid: uuid,
         textUpdatedAt: newTime,        // local text is newer
         importantUpdatedAt: oldTime,   // local important is older
         completedUpdatedAt: oldTime,
         positionUpdatedAt: oldTime,
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, oldTime, newTime });
 
     // Server has older text but newer important flag
@@ -231,6 +226,7 @@ test.describe('fetchAndMergeTodos', () => {
         type: 'section',
         level: 1,
         indented: false,
+        serverUuid: uuid,
         textUpdatedAt: oldTime,
         importantUpdatedAt: oldTime,
         completedUpdatedAt: oldTime,
@@ -240,9 +236,6 @@ test.describe('fetchAndMergeTodos', () => {
         indentedUpdatedAt: oldTime,
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, newTime, oldTime });
 
     // Server has level=2 with older timestamp
@@ -290,6 +283,7 @@ test.describe('fetchAndMergeTodos', () => {
         type: 'section',
         level: 1,
         indented: false,
+        serverUuid: uuid,
         textUpdatedAt: oldTime,
         importantUpdatedAt: oldTime,
         completedUpdatedAt: oldTime,
@@ -299,9 +293,6 @@ test.describe('fetchAndMergeTodos', () => {
         indentedUpdatedAt: oldTime,
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, newTime, oldTime });
 
     // Server has level=2 with newer timestamp
@@ -349,6 +340,7 @@ test.describe('fetchAndMergeTodos', () => {
         type: 'section',
         level: 2,
         indented: false,
+        serverUuid: uuid,
         textUpdatedAt: oldTime,
         importantUpdatedAt: oldTime,
         completedUpdatedAt: oldTime,
@@ -358,9 +350,6 @@ test.describe('fetchAndMergeTodos', () => {
         indentedUpdatedAt: oldTime,
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, newTime, oldTime });
 
     // Server has type='todo' with older timestamp
@@ -405,6 +394,7 @@ test.describe('fetchAndMergeTodos', () => {
         completed: false,
         position: 'N',
         indented: true,
+        serverUuid: uuid,
         textUpdatedAt: oldTime,
         importantUpdatedAt: oldTime,
         completedUpdatedAt: oldTime,
@@ -414,9 +404,6 @@ test.describe('fetchAndMergeTodos', () => {
         indentedUpdatedAt: newTime,    // local indented is newer
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, newTime, oldTime });
 
     // Server has indented=false with older timestamp
@@ -463,6 +450,7 @@ test.describe('fetchAndMergeTodos', () => {
         type: 'section',
         level: 1,
         indented: false,
+        serverUuid: uuid,
         textUpdatedAt: oldTime,
         importantUpdatedAt: oldTime,
         completedUpdatedAt: oldTime,
@@ -472,9 +460,6 @@ test.describe('fetchAndMergeTodos', () => {
         indentedUpdatedAt: oldTime,    // local indented is older
       };
       localStorage.setItem('decay-todos', JSON.stringify([item]));
-      const mapping: Record<string, string> = {};
-      mapping[uuid] = uuid;
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(mapping));
     }, { uuid, newTime, oldTime });
 
     // Server: level=2 (older), type='todo' (newer), indented=true (newer)

@@ -24,9 +24,6 @@
   let realtimeChannel = null;
   let isSyncing = false;
 
-  // Maps localStorage IDs to UUIDs
-  let idMapping = JSON.parse(localStorage.getItem('decay-todos-id-mapping') || '{}');
-
   // Track last synced state to detect what actually changed
   let lastSyncedState = null;
 
@@ -61,37 +58,22 @@
     });
   }
 
-  // Get or create UUID for a localStorage item
-  function getOrCreateUUID(localId) {
-    if (!idMapping[localId]) {
-      idMapping[localId] = generateUUID();
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
-    }
-    return idMapping[localId];
+  // Get or assign a serverUuid directly on the item
+  function getOrAssignUUID(item) {
+    if (item.serverUuid) return item.serverUuid;
+    item.serverUuid = generateUUID();
+    return item.serverUuid;
   }
 
-  // Find local ID from UUID (reverse lookup)
-  function getLocalIdFromUUID(uuid) {
-    for (const [localId, mappedUuid] of Object.entries(idMapping)) {
-      if (mappedUuid === uuid) {
-        return localId;
-      }
-    }
-    return null;
-  }
-
-  // Find item in todos by UUID (checks both direct ID and ID mapping)
+  // Find item in todos by UUID (checks serverUuid property, then direct ID match)
   function findItemByUUID(todos, uuid) {
-    // First try direct match (item already has UUID as ID)
-    let index = todos.findIndex(t => t.id === uuid);
+    // First try serverUuid property
+    let index = todos.findIndex(t => t.serverUuid === uuid);
     if (index >= 0) return { index, item: todos[index] };
 
-    // Try reverse lookup (item has local ID, we have UUID)
-    const localId = getLocalIdFromUUID(uuid);
-    if (localId) {
-      index = todos.findIndex(t => t.id === localId);
-      if (index >= 0) return { index, item: todos[index] };
-    }
+    // Fallback: try direct ID match (item ID might be the UUID itself)
+    index = todos.findIndex(t => t.id === uuid);
+    if (index >= 0) return { index, item: todos[index] };
 
     return { index: -1, item: null };
   }
@@ -120,7 +102,7 @@
   function toDbFormat(item, position) {
     const now = new Date().toISOString();
     return {
-      id: getOrCreateUUID(item.id),
+      id: getOrAssignUUID(item),
       parent_id: null,
       type: item.type || 'todo',
       text: item.text || '',
@@ -145,6 +127,7 @@
   function toLocalFormat(dbItem) {
     return {
       id: dbItem.id,
+      serverUuid: dbItem.id,
       text: dbItem.text || '',
       createdAt: new Date(dbItem.created_at).getTime(),
       important: dbItem.important || false,
@@ -284,7 +267,9 @@
 
     // Resolve deleted UUIDs upfront and set up realtime echo suppression
     const deletedUuids = deletedIds.map(localId => {
-      const uuid = idMapping[localId] || localId;
+      // Find the item in lastSyncedState to get its serverUuid
+      const lastItem = lastSyncedState ? lastSyncedState.find(t => t.id === localId) : null;
+      const uuid = (lastItem && lastItem.serverUuid) || localId;
       const eventKey = `DELETE:${uuid}`;
       recentlySyncedIds.add(eventKey);
       setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
@@ -293,6 +278,23 @@
 
     // Determine which items are new vs updated
     const existingIds = new Set(lastSyncedState?.map(t => t.id) || []);
+
+    // Before assigning UUIDs, inherit any serverUuid values from localStorage
+    // that may have been saved by a previous sync but aren't on our todos array
+    // (which was captured earlier in a queueServerSync closure).
+    const storedForUuids = localStorage.getItem('decay-todos');
+    if (storedForUuids) {
+      const storedTodos = JSON.parse(storedForUuids);
+      const uuidByLocalId = new Map();
+      for (const st of storedTodos) {
+        if (st.serverUuid) uuidByLocalId.set(st.id, st.serverUuid);
+      }
+      for (const item of todos) {
+        if (!item.serverUuid && uuidByLocalId.has(item.id)) {
+          item.serverUuid = uuidByLocalId.get(item.id);
+        }
+      }
+    }
 
     const dbItems = modifiedItems.map((item) => {
       const dbItem = toDbFormat(item, item.position);
@@ -305,6 +307,17 @@
       return dbItem;
     });
 
+    // Save updated todos back to localStorage immediately so new serverUuid
+    // fields persist before the API call. This ensures concurrent loadTodos()
+    // calls (from user actions) will see the serverUuid.
+    localStorage.setItem('decay-todos', JSON.stringify(todos));
+
+    // Snapshot what we're about to send - this is what the server will know about.
+    // We must capture this BEFORE the await because user actions during the API
+    // call may modify localStorage, and we need lastSyncedState to reflect only
+    // what the server has confirmed, not unsynced local changes.
+    const sentSnapshot = JSON.parse(JSON.stringify(todos));
+
     // Send modifications and deletions together in one request
     const syncBody = { items: dbItems };
     if (deletedUuids.length > 0) {
@@ -316,22 +329,28 @@
       body: JSON.stringify(syncBody),
     });
 
-    // Apply server's merged results back to local state
+    // Apply server's merged results back to local state AND to our snapshot
     if (syncResponse && syncResponse.mergedItems && syncResponse.mergedItems.length > 0) {
       applyMergedResponse(syncResponse.mergedItems);
+      // Also apply merge results to our snapshot so lastSyncedState reflects
+      // what the server actually has (which may differ from what we sent)
+      for (const dbItem of syncResponse.mergedItems) {
+        const remoteAsLocal = toLocalFormat(dbItem);
+        const { index, item: localItem } = findItemByUUID(sentSnapshot, dbItem.id);
+        if (index >= 0 && localItem) {
+          const merged = mergeLocalWithRemote(localItem, remoteAsLocal);
+          merged.id = localItem.id;
+          merged.serverUuid = localItem.serverUuid || dbItem.id;
+          sentSnapshot[index] = merged;
+        }
+      }
     }
 
-    // Clean up ID mappings for deleted items
-    for (const localId of deletedIds) {
-      delete idMapping[localId];
-    }
-    if (deletedIds.length > 0) {
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
-    }
-
-    // Update last synced state (re-read from localStorage since merge response may have updated it)
-    const updatedStored = localStorage.getItem('decay-todos');
-    lastSyncedState = updatedStored ? JSON.parse(updatedStored) : JSON.parse(JSON.stringify(todos));
+    // Update last synced state from our snapshot (what we sent to the server
+    // plus any server merge results). We do NOT re-read from localStorage
+    // because user actions during the API call may have changed it, and those
+    // unsynced changes would incorrectly appear "already synced".
+    lastSyncedState = sentSnapshot;
 
     console.log('[Sync] ✓ Done');
   }
@@ -349,6 +368,7 @@
       if (index >= 0 && localItem) {
         const merged = mergeLocalWithRemote(localItem, remoteAsLocal);
         merged.id = localItem.id; // Preserve local ID
+        merged.serverUuid = localItem.serverUuid || dbItem.id; // Ensure serverUuid is set
 
         if (itemHash(localItem) !== itemHash(merged) ||
             localItem.position !== merged.position) {
@@ -484,7 +504,7 @@
 
     if (payload.eventType === 'INSERT') {
       const newItem = toLocalFormat(payload.new);
-      // Check if item exists by UUID or by local ID mapping
+      // Check if item exists by serverUuid or direct ID
       const { index: existingIndex } = findItemByUUID(todos, newItem.id);
       if (existingIndex < 0) {
         // Insert in correct position based on fractional index
@@ -495,15 +515,14 @@
             break;
           }
         }
+        newItem.serverUuid = newItem.id;
         todos.splice(insertIndex, 0, newItem);
-        idMapping[newItem.id] = newItem.id;
-        localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
         changed = true;
         console.log('[Sync] + Added:', newItem.text.substring(0, 30));
       }
     } else if (payload.eventType === 'UPDATE') {
       const remoteItem = toLocalFormat(payload.new);
-      // Find item by UUID (checks both direct ID and ID mapping)
+      // Find item by UUID (checks serverUuid property and direct ID)
       const { index, item: localItem } = findItemByUUID(todos, remoteItem.id);
       if (index >= 0 && localItem) {
         // Per-field merge
@@ -521,7 +540,7 @@
       }
     } else if (payload.eventType === 'DELETE') {
       const deletedId = payload.old?.id;
-      // Find item by UUID (checks both direct ID and ID mapping)
+      // Find item by UUID (checks serverUuid property and direct ID)
       const { index } = findItemByUUID(todos, deletedId);
       if (index >= 0) {
         todos.splice(index, 1);
@@ -575,12 +594,13 @@
           // Merge: local fields preserved, CRDT fields resolved by timestamp
           const mergedItem = mergeLocalWithRemote(localItem, remoteAsLocal);
           mergedItem.id = localItem.id;
+          mergedItem.serverUuid = serverItem.id;
           merged.push(mergedItem);
           matchedLocalIds.add(localItem.id);
         } else {
           // New from server
+          remoteAsLocal.serverUuid = remoteAsLocal.id;
           merged.push(remoteAsLocal);
-          idMapping[remoteAsLocal.id] = remoteAsLocal.id;
         }
       }
 
@@ -594,7 +614,6 @@
       // Sort by position and save
       merged.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
       localStorage.setItem('decay-todos', JSON.stringify(merged));
-      localStorage.setItem('decay-todos-id-mapping', JSON.stringify(idMapping));
 
       lastSyncedState = JSON.parse(JSON.stringify(merged));
 
@@ -653,12 +672,6 @@
         throw new Error('Failed to initialize Supabase');
       }
 
-      // Load ID mapping
-      const storedMapping = localStorage.getItem('decay-todos-id-mapping');
-      if (storedMapping) {
-        idMapping = JSON.parse(storedMapping);
-      }
-
       syncEnabled = true;
 
       // Check if first sync
@@ -681,7 +694,7 @@
             });
             // Mark all as recently synced to ignore INSERT echoes
             existingItems.forEach(item => {
-              const uuid = getOrCreateUUID(item.id);
+              const uuid = getOrAssignUUID(item);
               const eventKey = `INSERT:${uuid}`;
               recentlySyncedIds.add(eventKey);
               setTimeout(() => recentlySyncedIds.delete(eventKey), RECENTLY_SYNCED_TTL_MS);
@@ -737,8 +750,35 @@
     });
   }
 
+  // Migrate from old idMapping localStorage key to serverUuid on items
+  function migrateIdMapping() {
+    const oldMapping = localStorage.getItem('decay-todos-id-mapping');
+    if (!oldMapping) return;
+    const mapping = JSON.parse(oldMapping);
+    const stored = localStorage.getItem('decay-todos');
+    if (!stored) {
+      localStorage.removeItem('decay-todos-id-mapping');
+      return;
+    }
+    const todos = JSON.parse(stored);
+    let changed = false;
+    for (const item of todos) {
+      if (!item.serverUuid && mapping[item.id]) {
+        item.serverUuid = mapping[item.id];
+        changed = true;
+      }
+    }
+    if (changed) {
+      localStorage.setItem('decay-todos', JSON.stringify(todos));
+    }
+    localStorage.removeItem('decay-todos-id-mapping');
+  }
+
   // Initialize
   function init() {
+    // Run migration before anything else (even in test mode, so tests can verify it)
+    migrateIdMapping();
+
     if (isTestMode) {
       console.log('[Sync] Test mode - disabled');
       return;

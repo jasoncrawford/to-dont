@@ -98,10 +98,12 @@ Fixed: Extracted canonical implementation into `fractional-index.js` loaded via 
 
 Fixed: Replaced polling/monkey-patching with an explicit `onSave` hook on `window.ToDoSync`. `app.js`'s `saveTodos()` calls the hook directly after saving to localStorage. No polling, no timeouts, no global `_originalSaveTodos`.
 
-### 12. Dual ID system creates fragility
+### ~~12. Dual ID system creates fragility~~ FIXED
 **File:** `sync.js:140-182`
 
-Items have local IDs (timestamp-based) and UUIDs (for server). Mapping stored in separate localStorage key. If mapping gets corrupted or cleared, items duplicate on server. Reverse lookup is O(n) over all mappings.
+~~Items have local IDs (timestamp-based) and UUIDs (for server). Mapping stored in separate localStorage key. If mapping gets corrupted or cleared, items duplicate on server. Reverse lookup is O(n) over all mappings.~~
+
+Fixed: UUID now stored directly on each item as `serverUuid` property, eliminating the separate `decay-todos-id-mapping` localStorage key. Includes one-time migration for existing users. No more mapping corruption risk.
 
 ### 13. No offline recovery mechanism
 **File:** `sync.js:411-422`
