@@ -313,6 +313,7 @@
     // fields persist before the API call. This ensures concurrent loadTodos()
     // calls (from user actions) will see the serverUuid.
     localStorage.setItem('decay-todos', JSON.stringify(todos));
+    if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
 
     // Snapshot what we're about to send - this is what the server will know about.
     // We must capture this BEFORE the await because user actions during the API
@@ -383,6 +384,7 @@
     if (changed) {
       todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
       localStorage.setItem('decay-todos', JSON.stringify(todos));
+      if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
       lastSyncedState = JSON.parse(JSON.stringify(todos));
       // Only render if user is not actively editing to avoid disrupting input
       if (typeof window.render === 'function' && !isUserEditing()) {
@@ -568,6 +570,7 @@
 
     if (changed) {
       localStorage.setItem('decay-todos', JSON.stringify(todos));
+      if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
       // Update our synced state to include this remote change
       lastSyncedState = JSON.parse(JSON.stringify(todos));
       if (typeof window.render === 'function') {
@@ -631,6 +634,7 @@
       // Sort by position and save
       merged.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
       localStorage.setItem('decay-todos', JSON.stringify(merged));
+      if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
 
       lastSyncedState = JSON.parse(JSON.stringify(merged));
 
@@ -727,6 +731,7 @@
             }
             // Save updated items with positions
             localStorage.setItem('decay-todos', JSON.stringify(existingItems));
+            if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
             lastSyncedState = JSON.parse(JSON.stringify(existingItems));
           }
         }
@@ -799,6 +804,7 @@
     }
     if (changed) {
       localStorage.setItem('decay-todos', JSON.stringify(todos));
+      if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
     }
     localStorage.removeItem('decay-todos-id-mapping');
   }
