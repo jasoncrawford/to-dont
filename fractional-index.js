@@ -78,16 +78,61 @@
     return prefix + MID_CHAR;
   }
 
+  function posToNumber(pos) {
+    // Convert a position string to a fractional number in [0, 1)
+    // treating each character as a base-26 digit
+    let result = 0;
+    for (let i = 0; i < pos.length; i++) {
+      const idx = BASE_CHARS.indexOf(pos[i]);
+      result += idx / Math.pow(26, i + 1);
+    }
+    return result;
+  }
+
+  function numberToPos(num, maxLen) {
+    // Convert a fractional number back to a position string
+    let result = '';
+    for (let i = 0; i < maxLen; i++) {
+      num *= 26;
+      const idx = Math.floor(num);
+      result += BASE_CHARS[Math.min(idx, 25)];
+      num -= idx;
+      if (num < 1e-10) break;
+    }
+    return result || 'a';
+  }
+
   function generateInitialPositions(count) {
     if (count === 0) return [];
     if (count === 1) return [MID_CHAR];
-    const positions = [];
+
     const startIdx = 2; // 'c'
     const endIdx = 23; // 'x'
-    const step = (endIdx - startIdx) / (count - 1);
+    const singleCharSlots = endIdx - startIdx + 1; // 22
+
+    if (count <= singleCharSlots) {
+      // Original behavior: evenly space single-char positions from 'c' to 'x'
+      const positions = [];
+      const step = (endIdx - startIdx) / (count - 1);
+      for (let i = 0; i < count; i++) {
+        const charIdx = Math.round(startIdx + step * i);
+        positions.push(BASE_CHARS[charIdx]);
+      }
+      return positions;
+    }
+
+    // For larger lists, convert to base-26 fractional numbers, evenly space
+    // them between 'c' and 'x', then convert back to position strings.
+    // Use enough characters to guarantee uniqueness for the given count.
+    const startVal = posToNumber(BASE_CHARS[startIdx]);
+    const endVal = posToNumber(BASE_CHARS[endIdx]);
+    const maxLen = Math.max(2, Math.ceil(Math.log(count * 2) / Math.log(26)) + 1);
+    const step = (endVal - startVal) / (count - 1);
+
+    const positions = [];
     for (let i = 0; i < count; i++) {
-      const charIdx = Math.round(startIdx + step * i);
-      positions.push(BASE_CHARS[charIdx]);
+      const val = startVal + step * i;
+      positions.push(numberToPos(val, maxLen));
     }
     return positions;
   }
