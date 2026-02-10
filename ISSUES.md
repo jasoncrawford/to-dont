@@ -146,10 +146,12 @@ Fixed in fd9ddbb: changed to `String(!todo.archived)` in `createTodoElement` and
 
 `render()` does `todoList.innerHTML = ''` and recreates every element. Destroys focus, selection, scroll position, and CSS transitions. The codebase is filled with `setTimeout(() => el.focus(), 0)` workarounds.
 
-### 18. `loadTodos()` parses JSON from localStorage on every call
+### ~~18. `loadTodos()` parses JSON from localStorage on every call~~ FIXED
 **File:** `app.js:44-47`
 
-No in-memory cache. Keyboard navigation, drag-and-drop mousemove (`app.js:1487` calls `loadTodos()` per pixel of movement), and `render()` all parse full JSON repeatedly.
+~~No in-memory cache. Keyboard navigation, drag-and-drop mousemove (`app.js:1487` calls `loadTodos()` per pixel of movement), and `render()` all parse full JSON repeatedly.~~
+
+Fixed: Added in-memory JSON string cache. `loadTodos()` uses `===` comparison to detect changes, avoiding redundant parsing. `saveTodos()` updates the cache. New `invalidateTodoCache()` called by sync.js wherever it writes localStorage directly.
 
 ### 19. No pagination — all items fetched always
 **Files:** `api/items/index.ts:20-23`, `api/sync/index.ts`
@@ -170,15 +172,19 @@ Used for paste-as-plain-text. Will eventually break in browsers.
 
 ~130 lines of near-identical keyboard handling code duplicated between the two element constructors.
 
-### 22. Sync dropped if already in progress
+### ~~22. Sync dropped if already in progress~~ FIXED
 **File:** `sync.js:412`
 
-`isSyncing` guard prevents concurrent syncs. If debounce fires while a sync is in progress, the sync is silently dropped (not re-queued).
+~~`isSyncing` guard prevents concurrent syncs. If debounce fires while a sync is in progress, the sync is silently dropped (not re-queued).~~
 
-### 23. `generateInitialPositions` produces duplicates for large lists
+Fixed: When a sync is requested while `isSyncing` is true, a `syncPending` flag is set. After the current sync completes, the pending sync runs automatically so changes are never lost.
+
+### ~~23. `generateInitialPositions` produces duplicates for large lists~~ FIXED
 **Files:** `sync.js:122-134`, `lib/fractional-index.ts:168-184`
 
-Only 22 distinct single-char positions between 'c' and 'x'. Lists with >22 items get duplicate positions.
+~~Only 22 distinct single-char positions between 'c' and 'x'. Lists with >22 items get duplicate positions.~~
+
+Fixed: For lists >22 items, `generateInitialPositions` now computes multi-character positions using base-26 arithmetic, ensuring unique, lexicographically sorted positions for any list size.
 
 ### ~~25. Flaky sync-e2e tests due to timing~~ FIXED
 **Files:** `tests/sync-e2e.spec.ts`
