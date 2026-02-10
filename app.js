@@ -203,6 +203,130 @@ function archiveOldItems(todos) {
   return todos;
 }
 
+// Shared keyboard navigation handlers for both todos and sections.
+// Returns true if the event was handled, false otherwise.
+// `div` is the container element, `textEl` is the contentEditable element,
+// `itemId` is the item's id.
+function handleCommonKeydown(e, div, textEl, itemId) {
+  // Cmd+Shift+Up: move item up (check before plain arrow)
+  if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
+    e.preventDefault();
+    updateTodoText(itemId, textEl.textContent); // Save text before moving
+    moveItemUp(itemId);
+    return true;
+  }
+
+  // Cmd+Shift+Down: move item down (check before plain arrow)
+  if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
+    e.preventDefault();
+    updateTodoText(itemId, textEl.textContent); // Save text before moving
+    moveItemDown(itemId);
+    return true;
+  }
+
+  const todoList = document.getElementById('todoList');
+  const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+  const currentIndex = items.indexOf(div);
+
+  // Cmd+Up: jump to first item
+  if (e.key === 'ArrowUp' && e.metaKey && !e.ctrlKey) {
+    e.preventDefault();
+    textEl.blur();
+    const firstText = items[0]?.querySelector('.text');
+    if (firstText) {
+      firstText.focus();
+      setCursorPosition(firstText, 0);
+    }
+    return true;
+  }
+
+  // Cmd+Down: jump to last item
+  if (e.key === 'ArrowDown' && e.metaKey && !e.ctrlKey) {
+    e.preventDefault();
+    textEl.blur();
+    const lastText = items[items.length - 1]?.querySelector('.text');
+    if (lastText) {
+      lastText.focus();
+      setCursorPosition(lastText, lastText.textContent.length);
+    }
+    return true;
+  }
+
+  // Right arrow at end: move to next item at beginning
+  if (e.key === 'ArrowRight' && currentIndex < items.length - 1) {
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    const atEnd = range.collapsed &&
+      ((range.startContainer === textEl.lastChild && range.startOffset === textEl.lastChild.length) ||
+       (range.startContainer === textEl && range.startOffset === textEl.childNodes.length) ||
+       (!textEl.firstChild && range.startOffset === 0));
+    if (atEnd) {
+      e.preventDefault();
+      textEl.blur();
+      const nextText = items[currentIndex + 1].querySelector('.text');
+      if (nextText) {
+        nextText.focus();
+        setCursorPosition(nextText, 0);
+      }
+      return true;
+    }
+  }
+
+  // Left arrow at start: move to previous item at end
+  if (e.key === 'ArrowLeft' && currentIndex > 0) {
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    const atStart = range.collapsed && range.startOffset === 0 &&
+      (range.startContainer === textEl.firstChild || range.startContainer === textEl || !textEl.firstChild);
+    if (atStart) {
+      e.preventDefault();
+      textEl.blur();
+      const prevText = items[currentIndex - 1].querySelector('.text');
+      if (prevText) {
+        prevText.focus();
+        setCursorPosition(prevText, prevText.textContent.length);
+      }
+      return true;
+    }
+  }
+
+  // Up arrow: move to previous item, or start of line if at first
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (currentIndex > 0) {
+      const cursorPos = window.getSelection().getRangeAt(0).startOffset;
+      textEl.blur();
+      const prevText = items[currentIndex - 1].querySelector('.text');
+      if (prevText) {
+        prevText.focus();
+        setCursorPosition(prevText, cursorPos);
+      }
+    } else {
+      setCursorPosition(textEl, 0);
+    }
+    return true;
+  }
+
+  // Down arrow: move to next item, or end of line if at last
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (currentIndex < items.length - 1) {
+      const cursorPos = window.getSelection().getRangeAt(0).startOffset;
+      textEl.blur();
+      const nextText = items[currentIndex + 1].querySelector('.text');
+      if (nextText) {
+        nextText.focus();
+        setCursorPosition(nextText, cursorPos);
+      }
+    } else {
+      setCursorPosition(textEl, textEl.textContent.length);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 function createTodoElement(todo) {
   const div = document.createElement('div');
   div.className = 'todo-item';
@@ -369,10 +493,6 @@ function createTodoElement(todo) {
   };
 
   text.onkeydown = (e) => {
-    const todoList = document.getElementById('todoList');
-    const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
-    const currentIndex = items.indexOf(div);
-
     // Tab: indent todo
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
@@ -387,22 +507,6 @@ function createTodoElement(todo) {
       return;
     }
 
-    // Cmd+Shift+Up: move item up (check before plain arrow)
-    if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
-      e.preventDefault();
-      updateTodoText(todo.id, text.textContent); // Save text before moving
-      moveItemUp(todo.id);
-      return;
-    }
-
-    // Cmd+Shift+Down: move item down (check before plain arrow)
-    if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
-      e.preventDefault();
-      updateTodoText(todo.id, text.textContent); // Save text before moving
-      moveItemDown(todo.id);
-      return;
-    }
-
     // Backspace at start: merge with previous item
     if (e.key === 'Backspace') {
       const sel = window.getSelection();
@@ -414,15 +518,20 @@ function createTodoElement(todo) {
       const cursorPos = range.startOffset;
       const atStart = cursorPos === 0 && (range.startContainer === text.firstChild || range.startContainer === text);
 
-      if (atStart && currentIndex > 0) {
-        const prevItem = items[currentIndex - 1];
-        // Only merge with other todos, not sections
-        if (prevItem.classList.contains('todo-item')) {
-          e.preventDefault();
-          const prevId = prevItem.dataset.id;
-          text.blur();
-          mergeWithPrevious(todo.id, prevId);
-          return;
+      if (atStart) {
+        const todoList = document.getElementById('todoList');
+        const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
+        const currentIndex = items.indexOf(div);
+        if (currentIndex > 0) {
+          const prevItem = items[currentIndex - 1];
+          // Only merge with other todos, not sections
+          if (prevItem.classList.contains('todo-item')) {
+            e.preventDefault();
+            const prevId = prevItem.dataset.id;
+            text.blur();
+            mergeWithPrevious(todo.id, prevId);
+            return;
+          }
         }
       }
     }
@@ -467,100 +576,8 @@ function createTodoElement(todo) {
       return;
     }
 
-    // Cmd+Up: jump to first item
-    if (e.key === 'ArrowUp' && e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      text.blur();
-      const firstText = items[0]?.querySelector('.text');
-      if (firstText) {
-        firstText.focus();
-        setCursorPosition(firstText, 0);
-      }
-      return;
-    }
-
-    // Cmd+Down: jump to last item
-    if (e.key === 'ArrowDown' && e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      text.blur();
-      const lastText = items[items.length - 1]?.querySelector('.text');
-      if (lastText) {
-        lastText.focus();
-        setCursorPosition(lastText, lastText.textContent.length);
-      }
-      return;
-    }
-
-    // Right arrow at end: move to next item at beginning
-    if (e.key === 'ArrowRight' && currentIndex < items.length - 1) {
-      const sel = window.getSelection();
-      const range = sel.getRangeAt(0);
-      const atEnd = range.collapsed &&
-        ((range.startContainer === text.lastChild && range.startOffset === text.lastChild.length) ||
-         (range.startContainer === text && range.startOffset === text.childNodes.length) ||
-         (!text.firstChild && range.startOffset === 0));
-      if (atEnd) {
-        e.preventDefault();
-        text.blur();
-        const nextText = items[currentIndex + 1].querySelector('.text');
-        if (nextText) {
-          nextText.focus();
-          setCursorPosition(nextText, 0);
-        }
-        return;
-      }
-    }
-
-    // Left arrow at start: move to previous item at end
-    if (e.key === 'ArrowLeft' && currentIndex > 0) {
-      const sel = window.getSelection();
-      const range = sel.getRangeAt(0);
-      const atStart = range.collapsed && range.startOffset === 0 &&
-        (range.startContainer === text.firstChild || range.startContainer === text || !text.firstChild);
-      if (atStart) {
-        e.preventDefault();
-        text.blur();
-        const prevText = items[currentIndex - 1].querySelector('.text');
-        if (prevText) {
-          prevText.focus();
-          setCursorPosition(prevText, prevText.textContent.length);
-        }
-        return;
-      }
-    }
-
-    // Up arrow: move to previous item, or start of line if at first
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (currentIndex > 0) {
-        const cursorPos = window.getSelection().getRangeAt(0).startOffset;
-        text.blur();
-        const prevText = items[currentIndex - 1].querySelector('.text');
-        if (prevText) {
-          prevText.focus();
-          setCursorPosition(prevText, cursorPos);
-        }
-      } else {
-        setCursorPosition(text, 0);
-      }
-      return;
-    }
-
-    // Down arrow: move to next item, or end of line if at last
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (currentIndex < items.length - 1) {
-        const cursorPos = window.getSelection().getRangeAt(0).startOffset;
-        text.blur();
-        const nextText = items[currentIndex + 1].querySelector('.text');
-        if (nextText) {
-          nextText.focus();
-          setCursorPosition(nextText, cursorPos);
-        }
-      } else {
-        setCursorPosition(text, text.textContent.length);
-      }
-    }
+    // Shared navigation handlers (arrows, Cmd+arrows, etc.)
+    handleCommonKeydown(e, div, text, todo.id);
   };
 
   div.appendChild(dragHandle);
@@ -692,123 +709,16 @@ function createSectionElement(section) {
       return;
     }
 
-    // Cmd+Shift+Up: move item up (check before plain arrow)
-    if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
-      e.preventDefault();
-      updateTodoText(section.id, text.textContent); // Save text before moving
-      moveItemUp(section.id);
-      return;
-    }
-
-    // Cmd+Shift+Down: move item down (check before plain arrow)
-    if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
-      e.preventDefault();
-      updateTodoText(section.id, text.textContent); // Save text before moving
-      moveItemDown(section.id);
-      return;
-    }
-
+    // Enter: insert new todo after section
     if (e.key === 'Enter') {
       e.preventDefault();
       text.blur();
       insertTodoAfter(section.id);
-    }
-
-    const todoList = document.getElementById('todoList');
-    const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
-    const currentIndex = items.indexOf(div);
-
-    // Cmd+Up: jump to first item
-    if (e.key === 'ArrowUp' && e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      text.blur();
-      const firstText = items[0]?.querySelector('.text');
-      if (firstText) {
-        firstText.focus();
-        setCursorPosition(firstText, 0);
-      }
       return;
     }
 
-    // Cmd+Down: jump to last item
-    if (e.key === 'ArrowDown' && e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      text.blur();
-      const lastText = items[items.length - 1]?.querySelector('.text');
-      if (lastText) {
-        lastText.focus();
-        setCursorPosition(lastText, lastText.textContent.length);
-      }
-      return;
-    }
-
-    // Right arrow at end: move to next item at beginning
-    if (e.key === 'ArrowRight' && currentIndex < items.length - 1) {
-      const sel = window.getSelection();
-      const range = sel.getRangeAt(0);
-      const atEnd = range.collapsed &&
-        ((range.startContainer === text.lastChild && range.startOffset === text.lastChild.length) ||
-         (range.startContainer === text && range.startOffset === text.childNodes.length) ||
-         (!text.firstChild && range.startOffset === 0));
-      if (atEnd) {
-        e.preventDefault();
-        text.blur();
-        const nextText = items[currentIndex + 1].querySelector('.text');
-        if (nextText) {
-          nextText.focus();
-          setCursorPosition(nextText, 0);
-        }
-        return;
-      }
-    }
-
-    // Left arrow at start: move to previous item at end
-    if (e.key === 'ArrowLeft' && currentIndex > 0) {
-      const sel = window.getSelection();
-      const range = sel.getRangeAt(0);
-      const atStart = range.collapsed && range.startOffset === 0 &&
-        (range.startContainer === text.firstChild || range.startContainer === text || !text.firstChild);
-      if (atStart) {
-        e.preventDefault();
-        text.blur();
-        const prevText = items[currentIndex - 1].querySelector('.text');
-        if (prevText) {
-          prevText.focus();
-          setCursorPosition(prevText, prevText.textContent.length);
-        }
-        return;
-      }
-    }
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (currentIndex < items.length - 1) {
-        const cursorPos = window.getSelection().getRangeAt(0).startOffset;
-        text.blur();
-        const nextText = items[currentIndex + 1].querySelector('.text');
-        if (nextText) {
-          nextText.focus();
-          setCursorPosition(nextText, cursorPos);
-        }
-      } else {
-        setCursorPosition(text, text.textContent.length);
-      }
-    }
-
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (currentIndex > 0) {
-        const cursorPos = window.getSelection().getRangeAt(0).startOffset;
-        text.blur();
-        const prevText = items[currentIndex - 1].querySelector('.text');
-        if (prevText) {
-          prevText.focus();
-          setCursorPosition(prevText, cursorPos);
-        }
-      } else {
-        setCursorPosition(text, 0);
-      }
-    }
+    // Shared navigation handlers (arrows, Cmd+arrows, etc.)
+    handleCommonKeydown(e, div, text, section.id);
   };
 
   // Click to focus text at end
