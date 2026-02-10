@@ -170,7 +170,7 @@ function archiveOldItems(todos) {
   todos.forEach(todo => {
     if (shouldArchive(todo)) {
       todo.archived = true;
-      todo.archivedAt = Date.now();
+      todo.archivedAt = getVirtualNow();
       changed = true;
     }
   });
