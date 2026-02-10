@@ -235,7 +235,7 @@ function createTodoElement(todo) {
 
   const text = document.createElement('div');
   text.className = 'text';
-  text.contentEditable = !todo.archived;
+  text.contentEditable = String(!todo.archived);
   text.textContent = todo.text;
 
   const date = document.createElement('span');
@@ -622,7 +622,7 @@ function createSectionElement(section) {
 
   const text = document.createElement('div');
   text.className = 'text';
-  text.contentEditable = true;
+  text.contentEditable = 'true';
   text.textContent = section.text;
 
   const actions = document.createElement('div');
