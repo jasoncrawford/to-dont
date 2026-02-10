@@ -176,7 +176,9 @@ Used for paste-as-plain-text. Will eventually break in browsers.
 
 Only 22 distinct single-char positions between 'c' and 'x'. Lists with >22 items get duplicate positions.
 
-### 25. Flaky sync-e2e tests due to timing
+### ~~25. Flaky sync-e2e tests due to timing~~ FIXED
 **Files:** `tests/sync-e2e.spec.ts`
 
-Several sync-e2e tests are intermittently flaky, particularly "creating a section syncs to database" and "unindenting a todo syncs to database". They rely on fixed `waitForTimeout` delays (2-4 seconds) for sync debounce + server round-trip, which can be insufficient when tests run serially after many prior tests. Since sync-e2e tests run serially (shared database state), one flaky failure cascades and skips all subsequent tests.
+~~Several sync-e2e tests are intermittently flaky, particularly "creating a section syncs to database" and "unindenting a todo syncs to database". They rely on fixed `waitForTimeout` delays (2-4 seconds) for sync debounce + server round-trip, which can be insufficient when tests run serially after many prior tests. Since sync-e2e tests run serially (shared database state), one flaky failure cascades and skips all subsequent tests.~~
+
+Fixed: Replaced all sync-related `waitForTimeout` calls with `waitForDbCondition()`, a polling helper that queries the database every 300ms until the expected state appears (12s timeout). Also uses Playwright's `toPass()` for cross-browser UI assertions. Remaining `waitForTimeout` calls are short UI/DOM waits (50-500ms) only.

@@ -59,6 +59,28 @@ async function apiPatch(endpoint: string, body: Record<string, unknown>) {
   return response.json();
 }
 
+/**
+ * Poll the database until a condition is met, replacing fixed waitForTimeout.
+ * Returns the items array when condition passes.
+ */
+async function waitForDbCondition(
+  condition: (items: any[]) => boolean,
+  description: string,
+  { interval = 300, timeout = 12000 } = {}
+): Promise<any[]> {
+  const start = Date.now();
+  let lastItems: any[] = [];
+  while (Date.now() - start < timeout) {
+    lastItems = await apiGet('/api/items');
+    if (condition(lastItems)) return lastItems;
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error(
+    `waitForDbCondition timed out after ${timeout}ms waiting for: ${description}\n` +
+    `Database state (${lastItems.length} items): ${JSON.stringify(lastItems.map(i => ({ id: i.id?.substring(0, 8), text: i.text, type: i.type, important: i.important, completed: i.completed, indented: i.indented, level: i.level })), null, 2)}`
+  );
+}
+
 async function clearDatabase() {
   const items = await apiGet('/api/items');
   console.log(`Clearing ${items.length} items from database...`);
@@ -136,9 +158,6 @@ test.describe('E2E Sync Diagnostic', () => {
   });
 
   test('sync auto-enables and saveTodos onSave hook works', async () => {
-    // Wait for sync to initialize
-    await page.waitForTimeout(1000);
-
     const state = await page.evaluate(() => {
       return {
         isConfigured: window.ToDoSync?.isConfigured() || false,
@@ -156,9 +175,6 @@ test.describe('E2E Sync Diagnostic', () => {
   });
 
   test('creating an item syncs to database', async () => {
-    // Wait for sync to fully initialize
-    await page.waitForTimeout(1000);
-
     // Verify sync is enabled
     const syncEnabled = await page.evaluate(() => window.ToDoSync?.isEnabled());
     console.log('Sync enabled:', syncEnabled);
@@ -184,9 +200,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${testText}")`);
     console.log('Item created in UI');
 
-    // Wait for sync (debounce is 1 second)
-    console.log('Waiting 3s for sync...');
-    await page.waitForTimeout(3000);
+    // Wait for sync (polling database until item appears)
+    console.log('Waiting for item to sync to database...');
+    const afterItems = await waitForDbCondition(
+      items => items.some(i => i.text === testText),
+      `item "${testText}" to appear in database`
+    );
 
     // Check localStorage to see what was saved
     const localData = await page.evaluate(() => {
@@ -201,8 +220,6 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('localStorage todos:', localData.todos);
     console.log('serverUuids on items:', JSON.stringify(localData.serverUuids));
 
-    // Check database
-    const afterItems = await apiGet('/api/items');
     console.log('Items after:', afterItems.length);
     console.log('Database items:', JSON.stringify(afterItems.map((i: { id: string; text: string }) => ({
       id: i.id.substring(0, 8),
@@ -218,9 +235,6 @@ test.describe('E2E Sync Diagnostic', () => {
   });
 
   test('items sync between two browser contexts', async () => {
-    // Wait for sync to initialize on page 1
-    await page.waitForTimeout(1000);
-
     // Create context 2
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
@@ -238,7 +252,18 @@ test.describe('E2E Sync Diagnostic', () => {
       await page2.evaluate(() => localStorage.clear());
       await page2.reload();
       await page2.waitForLoadState('domcontentloaded');
-      await page2.waitForTimeout(1000);
+
+      // Wait for sync to initialize on page2
+      const page2SyncPromise = new Promise<void>(resolve => {
+        const handler = (msg: { text: () => string }) => {
+          if (msg.text().includes('[Sync] ✓ Enabled')) {
+            page2.off('console', handler);
+            resolve();
+          }
+        };
+        page2.on('console', handler);
+      });
+      await Promise.race([page2SyncPromise, new Promise<void>(r => setTimeout(r, 10000))]);
 
       // Create item on page 1
       await page.waitForSelector('.new-item', { state: 'visible' });
@@ -251,24 +276,24 @@ test.describe('E2E Sync Diagnostic', () => {
       console.log('Created item on page 1:', testText);
 
       // Wait for sync
-      await page.waitForTimeout(3000);
-
-      // Verify in database
-      const dbItems = await apiGet('/api/items');
+      const dbItems = await waitForDbCondition(
+        items => items.some(i => i.text === testText),
+        `item "${testText}" to sync to database`
+      );
       console.log('Database has:', dbItems.length, 'items');
-      const inDb = dbItems.find((i: { text: string }) => i.text === testText);
-      expect(inDb).toBeTruthy();
       console.log('Item confirmed in database');
 
       // Refresh page 2 to load from server
       await page2.reload();
       await page2.waitForLoadState('domcontentloaded');
-      await page2.waitForTimeout(2000);
 
-      // Check page 2
+      // Check page 2 (poll until item appears in UI)
+      await expect(async () => {
+        const texts = await page2.locator('.todo-item .text').allTextContents();
+        expect(texts).toContain(testText);
+      }).toPass({ timeout: 10000 });
       const page2Items = await page2.locator('.todo-item .text').allTextContents();
       console.log('Page 2 items:', page2Items);
-      expect(page2Items).toContain(testText);
       console.log('✓ Item synced to page 2!');
 
     } finally {
@@ -288,7 +313,10 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Click elsewhere to blur, then wait for sync
     await page.locator('body').click({ position: { x: 10, y: 10 } });
-    await page.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === testText),
+      `item "${testText}" to appear in database`
+    );
 
     // Mark as important by clicking the ! button
     const todo = page.locator(`.todo-item:has(.text:text-is("${testText}"))`);
@@ -299,11 +327,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(todo).toHaveClass(/important/);
     console.log('Marked important in UI');
 
-    // Wait for sync (debounce is 2s)
-    await page.waitForTimeout(3000);
-
-    // Check database
-    const dbItems = await apiGet('/api/items');
+    // Wait for important flag to sync
+    const dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === testText && i.important === true),
+      `item "${testText}" to have important=true in database`
+    );
     const dbItem = dbItems.find((i: { text: string }) => i.text === testText);
     expect(dbItem).toBeTruthy();
     expect(dbItem.important).toBe(true);
@@ -322,12 +350,10 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Click elsewhere to blur, then wait for sync
     await page.locator('body').click({ position: { x: 10, y: 10 } });
-    await page.waitForTimeout(3000);
-
-    // Verify it's in database
-    let dbItems = await apiGet('/api/items');
-    let dbItem = dbItems.find((i: { text: string }) => i.text === testText);
-    expect(dbItem).toBeTruthy();
+    await waitForDbCondition(
+      items => items.some(i => i.text === testText),
+      `item "${testText}" to appear in database`
+    );
     console.log('Item in database before delete');
 
     // Delete the item
@@ -339,13 +365,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator(`.todo-item .text:text-is("${testText}")`)).toHaveCount(0);
     console.log('Deleted from UI');
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
-
-    // Check database - item should be gone
-    dbItems = await apiGet('/api/items');
-    dbItem = dbItems.find((i: { text: string }) => i.text === testText);
-    expect(dbItem).toBeFalsy();
+    // Wait for delete to sync
+    await waitForDbCondition(
+      items => !items.some(i => i.text === testText),
+      `item "${testText}" to be deleted from database`
+    );
     console.log('✓ Delete synced to database');
   });
 
@@ -377,10 +401,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === item1Text) && items.some(i => i.text === item2Text),
+      `both items "${item1Text}" and "${item2Text}" to appear in database`
+    );
 
     // Verify order in database: item1 should be before item2
-    let dbItems = await apiGet('/api/items');
     const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('Before reorder - positions:', item1Before?.position, item2Before?.position);
@@ -396,11 +422,17 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('UI order after reorder:', texts);
     expect(texts[0]).toBe(item2Text);
 
-    // Wait for sync (debounce is 2s, add buffer)
-    await page.waitForTimeout(4000);
+    // Wait for reorder to sync - item2 position should be before item1
+    dbItems = await waitForDbCondition(
+      items => {
+        const i1 = items.find(i => i.text === item1Text);
+        const i2 = items.find(i => i.text === item2Text);
+        return i1 && i2 && i2.position < i1.position;
+      },
+      `item "${item2Text}" to have position before "${item1Text}" in database`
+    );
 
     // Check database order: item2 should now be before item1
-    dbItems = await apiGet('/api/items');
     const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('After reorder - positions:', item1After?.position, item2After?.position);
@@ -437,10 +469,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === item1Text) && items.some(i => i.text === item2Text),
+      `both items "${item1Text}" and "${item2Text}" to appear in database`
+    );
 
     // Verify items in database
-    let dbItems = await apiGet('/api/items');
     const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('Initial positions:', item1Before?.position, item2Before?.position);
@@ -463,7 +497,7 @@ test.describe('E2E Sync Diagnostic', () => {
     });
     await Promise.race([
       syncEnabledPromise,
-      page.waitForTimeout(10000)
+      new Promise<void>(r => setTimeout(r, 10000))
     ]);
 
     // Wait for items to render
@@ -484,11 +518,17 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('After reorder UI order:', texts);
     expect(texts[0]).toBe(item2Text);
 
-    // Wait for sync (debounce is 2s, add buffer)
-    await page.waitForTimeout(4000);
+    // Wait for reorder to sync
+    dbItems = await waitForDbCondition(
+      items => {
+        const i1 = items.find(i => i.text === item1Text);
+        const i2 = items.find(i => i.text === item2Text);
+        return i1 && i2 && i2.position < i1.position;
+      },
+      `item "${item2Text}" to have position before "${item1Text}" in database`
+    );
 
     // Check database order: item2 should now be before item1
-    dbItems = await apiGet('/api/items');
     const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('After reorder - positions:', item1After?.position, item2After?.position);
@@ -525,10 +565,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === item1Text) && items.some(i => i.text === item2Text),
+      `both items "${item1Text}" and "${item2Text}" to appear in database`
+    );
 
-    // Verify items in database
-    let dbItems = await apiGet('/api/items');
     const item1Before = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2Before = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('Before drag - positions:', item1Before?.position, item2Before?.position);
@@ -549,11 +590,16 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('After drag UI order:', texts);
     expect(texts[0]).toBe(item2Text);
 
-    // Wait for sync (debounce is 2s, add buffer)
-    await page.waitForTimeout(4000);
+    // Wait for reorder to sync
+    dbItems = await waitForDbCondition(
+      items => {
+        const i1 = items.find(i => i.text === item1Text);
+        const i2 = items.find(i => i.text === item2Text);
+        return i1 && i2 && i2.position < i1.position;
+      },
+      `item "${item2Text}" to have position before "${item1Text}" in database`
+    );
 
-    // Check database order
-    dbItems = await apiGet('/api/items');
     const item1After = dbItems.find((i: { text: string }) => i.text === item1Text);
     const item2After = dbItems.find((i: { text: string }) => i.text === item2Text);
     console.log('After drag - positions:', item1After?.position, item2After?.position);
@@ -627,7 +673,10 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('Browser1 added all 3 items');
 
     // Wait for sync
-    await browser1.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === 'Item 1') && items.some(i => i.text === 'Item 2') && items.some(i => i.text === 'Item 3'),
+      'all 3 items (Item 1, Item 2, Item 3) to appear in database'
+    );
 
     // Browser2 loads and should see all items
     await browser2.goto(APP_URL);
@@ -658,15 +707,23 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('Browser2 after reorder:', browser2Texts);
     expect(browser2Texts).toEqual(['Item 1', 'Item 3', 'Item 2']);
 
-    // Wait for Browser2's sync to complete (2s debounce + processing time)
-    await browser2.waitForTimeout(4000);
+    // Wait for Browser2's reorder to sync to database
+    await waitForDbCondition(
+      items => {
+        const i2 = items.find(i => i.text === 'Item 2');
+        const i3 = items.find(i => i.text === 'Item 3');
+        return i2 && i3 && i3.position < i2.position;
+      },
+      'Item 3 to have position before Item 2 in database'
+    );
 
     // Browser1 should see the new order via realtime update (NO RELOAD)
+    await expect(async () => {
+      const texts = await browser1.locator('.todo-item .text').allTextContents();
+      expect(texts).toEqual(['Item 1', 'Item 3', 'Item 2']);
+    }).toPass({ timeout: 10000 });
     const browser1Texts = await browser1.locator('.todo-item .text').allTextContents();
     console.log('Browser1 after realtime sync (no reload):', browser1Texts);
-
-    // This assertion should FAIL before the fix is applied
-    expect(browser1Texts).toEqual(['Item 1', 'Item 3', 'Item 2']);
     console.log('✓ Reorder synced between browsers via realtime!');
 
     // Cleanup
@@ -696,7 +753,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector('.todo-item .text:text-is("Will become section")');
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === 'Will become section'),
+      'item "Will become section" to appear in database'
+    );
 
     // Clear the text and press Enter to convert to section
     const todoText = page.locator('.todo-item .text').first();
@@ -710,11 +770,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator('.section-header')).toHaveCount(1);
     await expect(page.locator('.todo-item')).toHaveCount(0);
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
-
-    // Check database
-    const dbItems = await apiGet('/api/items');
+    // Wait for section sync
+    const dbItems = await waitForDbCondition(
+      items => items.some(i => i.type === 'section'),
+      'item to become type=section in database'
+    );
     console.log('Database items:', JSON.stringify(dbItems, null, 2));
     expect(dbItems.length).toBe(1);
     expect(dbItems[0].type).toBe('section');
@@ -754,10 +814,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
-
-    // Verify it's level 2 in database
-    let dbItems = await apiGet('/api/items');
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'My Section' && i.type === 'section' && i.level === 2),
+      'section "My Section" to appear in database with level=2'
+    );
     expect(dbItems[0].level).toBe(2);
     console.log('Before promote - level:', dbItems[0].level);
 
@@ -766,11 +826,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await sectionText.press('Shift+Tab');
     await expect(page.locator('.section-header')).toHaveClass(/level-1/);
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
-
-    // Check database
-    dbItems = await apiGet('/api/items');
+    // Wait for promotion to sync
+    dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'My Section' && i.level === 1),
+      'section "My Section" to have level=1 in database'
+    );
     console.log('After promote - level:', dbItems[0].level);
     expect(dbItems[0].level).toBe(1);
     console.log('✓ Section promotion synced to database');
@@ -808,9 +868,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
-
-    let dbItems = await apiGet('/api/items');
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'Level 1 Section' && i.type === 'section' && i.level === 1),
+      'section "Level 1 Section" to appear in database with level=1'
+    );
     expect(dbItems[0].level).toBe(1);
     console.log('Before demote - level:', dbItems[0].level);
 
@@ -819,10 +880,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await sectionText.press('Tab');
     await expect(page.locator('.section-header')).toHaveClass(/level-2/);
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
-
-    dbItems = await apiGet('/api/items');
+    // Wait for demotion to sync
+    dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'Level 1 Section' && i.level === 2),
+      'section "Level 1 Section" to have level=2 in database'
+    );
     console.log('After demote - level:', dbItems[0].level);
     expect(dbItems[0].level).toBe(2);
     console.log('✓ Section demotion synced to database');
@@ -877,11 +939,14 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.keyboard.type('Item B1');
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
+    // Wait for sync - all 4 items should appear
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'Section A') && items.some(i => i.text === 'Section B') &&
+               items.some(i => i.text === 'Item A1') && items.some(i => i.text === 'Item B1'),
+      'all items (Section A, Item A1, Section B, Item B1) to appear in database'
+    );
 
     // Get initial positions
-    let dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('Initial order:', dbItems.map((i: { text: string }) => i.text));
 
@@ -901,11 +966,17 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('UI order after reorder:', allTexts);
     expect(allTexts[0]).toBe('Section B');
 
-    // Wait for sync
-    await page.waitForTimeout(4000);
+    // Wait for reorder to sync
+    dbItems = await waitForDbCondition(
+      items => {
+        const sA = items.find(i => i.text === 'Section A');
+        const sB = items.find(i => i.text === 'Section B');
+        return sA && sB && sB.position < sA.position;
+      },
+      'Section B to have position before Section A in database'
+    );
 
     // Check database order
-    dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('After reorder:', dbItems.map((i: { text: string }) => i.text));
 
@@ -965,14 +1036,16 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator('.section-header.level-1')).toHaveCount(2);
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
+    // Wait for sync - all items should appear (Section A, Item under A, Section B)
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'Section A') && items.some(i => i.text === 'Item under A') && items.some(i => i.text === 'Section B'),
+      'all items (Section A, Item under A, Section B) to appear in database'
+    );
 
     // Check what we have
     const allItems = await page.locator('.section-header .text, .todo-item .text').allTextContents();
     console.log('UI before reorder:', allItems);
 
-    let dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('DB before:', dbItems.map((i: { text: string, type: string, level: number }) =>
       i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
@@ -989,10 +1062,16 @@ test.describe('E2E Sync Diagnostic', () => {
     // Section B should be first
     expect(afterTexts[0]).toBe('Section B');
 
-    // Wait for sync
-    await page.waitForTimeout(4000);
+    // Wait for reorder to sync
+    dbItems = await waitForDbCondition(
+      items => {
+        const sA = items.find(i => i.text === 'Section A');
+        const sB = items.find(i => i.text === 'Section B');
+        return sA && sB && sB.position < sA.position;
+      },
+      'Section B to have position before Section A in database'
+    );
 
-    dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('DB after:', dbItems.map((i: { text: string, type: string, level: number }) =>
       i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
@@ -1038,7 +1117,7 @@ test.describe('E2E Sync Diagnostic', () => {
       };
       browser1.on('console', handler);
     });
-    await Promise.race([browser1EnabledPromise, browser1.waitForTimeout(10000)]);
+    await Promise.race([browser1EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
     console.log('Browser1 sync enabled');
 
     // Create a section in browser1
@@ -1060,7 +1139,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await browser1.locator('body').click({ position: { x: 10, y: 10 } });
 
     // Wait for sync
-    await browser1.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === 'Shared Section' && i.type === 'section'),
+      'section "Shared Section" to appear in database'
+    );
 
     // Load browser2
     await browser2.goto(APP_URL);
@@ -1076,7 +1158,7 @@ test.describe('E2E Sync Diagnostic', () => {
       };
       browser2.on('console', handler);
     });
-    await Promise.race([browser2EnabledPromise, browser2.waitForTimeout(10000)]);
+    await Promise.race([browser2EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
 
     // Browser2 should see the section
     await browser2.waitForSelector('.section-header .text:text-is("Shared Section")', { timeout: 5000 });
@@ -1089,8 +1171,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(browser2.locator('.section-header')).toHaveClass(/level-1/);
     console.log('Browser2 promoted section to level 1');
 
-    // Wait for sync and realtime
-    await browser2.waitForTimeout(4000);
+    // Wait for level change to sync
+    await waitForDbCondition(
+      items => items.some(i => i.text === 'Shared Section' && i.level === 1),
+      'section "Shared Section" to have level=1 in database'
+    );
 
     // Browser1 should see level 1 via realtime
     await expect(browser1.locator('.section-header')).toHaveClass(/level-1/, { timeout: 5000 });
@@ -1141,10 +1226,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await sectionText.pressSequentially('Section B');
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
+    // Wait for sync - all items should appear
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === 'Section A') && items.some(i => i.text === 'Section B') && items.some(i => i.text === 'Item under A'),
+      'all items (Section A, Item under A, Section B) to appear in database'
+    );
 
-    let dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('Before drag:', dbItems.map((i: { text: string }) => i.text));
 
@@ -1167,10 +1254,16 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('UI after drag:', uiOrder);
     expect(uiOrder[0]).toBe('Section B');
 
-    // Wait for sync
-    await page.waitForTimeout(4000);
+    // Wait for drag reorder to sync
+    dbItems = await waitForDbCondition(
+      items => {
+        const sA = items.find(i => i.text === 'Section A');
+        const sB = items.find(i => i.text === 'Section B');
+        return sA && sB && sB.position < sA.position;
+      },
+      'Section B to have position before Section A in database'
+    );
 
-    dbItems = await apiGet('/api/items');
     dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
     console.log('After drag:', dbItems.map((i: { text: string }) => i.text));
 
@@ -1407,10 +1500,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
 
     // Wait for initial sync
-    await page.waitForTimeout(3000);
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === todoText && i.indented === false),
+      `item "${todoText}" to appear in database with indented=false`
+    );
 
     // Check database - should NOT be indented
-    let dbItems = await apiGet('/api/items');
     let item = dbItems.find((i: { text: string }) => i.text === todoText);
     console.log('Before indent - indented:', item?.indented);
     expect(item.indented).toBe(false);
@@ -1424,11 +1519,13 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator('.todo-item.indented')).toHaveCount(1);
     console.log('UI shows indented');
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
+    // Wait for indent to sync
+    dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === todoText && i.indented === true),
+      `item "${todoText}" to have indented=true in database`
+    );
 
     // Check database - should have indented = true
-    dbItems = await apiGet('/api/items');
     item = dbItems.find((i: { text: string }) => i.text === todoText);
     console.log('After indent - indented:', item?.indented);
     expect(item.indented).toBe(true);
@@ -1454,7 +1551,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
 
     // Wait for initial creation sync
-    await page.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === todoText),
+      `item "${todoText}" to appear in database`
+    );
 
     // Indent
     const todo = page.locator(`.todo-item .text:text-is("${todoText}")`);
@@ -1463,9 +1563,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator('.todo-item.indented')).toHaveCount(1);
 
     // Wait for indent sync
-    await page.waitForTimeout(3000);
-
-    let dbItems = await apiGet('/api/items');
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === todoText && i.indented === true),
+      `item "${todoText}" to have indented=true in database`
+    );
     let item = dbItems.find((i: { text: string }) => i.text === todoText);
     console.log('After indent - indented:', item?.indented);
     expect(item.indented).toBe(true);
@@ -1476,11 +1577,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(page.locator('.todo-item.indented')).toHaveCount(0);
     console.log('UI shows unindented');
 
-    // Wait for sync
-    await page.waitForTimeout(3000);
-
-    // Check database
-    dbItems = await apiGet('/api/items');
+    // Wait for unindent to sync
+    dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === todoText && i.indented === false),
+      `item "${todoText}" to have indented=false in database`
+    );
     item = dbItems.find((i: { text: string }) => i.text === todoText);
     console.log('After unindent - indented:', item?.indented);
     expect(item.indented).toBe(false);
@@ -1513,10 +1614,12 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
     // Wait for sync to complete
-    await page.waitForTimeout(3000);
+    let dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === originalText),
+      `item "${originalText}" to appear in database`
+    );
 
     // Verify item is in the database
-    let dbItems = await apiGet('/api/items');
     const dbItem = dbItems.find((i: { text: string }) => i.text === originalText);
     expect(dbItem).toBeTruthy();
     console.log('Item synced to database, id:', dbItem.id.substring(0, 8));
@@ -1559,7 +1662,10 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Step 4 & 5: Wait for sync - server will keep its text (far-future timestamp wins)
     // and the browser should apply the merged response
-    await page.waitForTimeout(4000);
+    await expect(async () => {
+      const text = await page.locator('.todo-item .text').first().textContent();
+      expect(text).toBe(serverText);
+    }).toPass({ timeout: 12000 });
 
     // Step 6: Browser should now show the SERVER's text because it applied the merged response
     const finalText = await page.locator('.todo-item .text').first().textContent();
@@ -1608,7 +1714,7 @@ test.describe('E2E Sync Diagnostic', () => {
       };
       browser1.on('console', handler);
     });
-    await Promise.race([browser1EnabledPromise, browser1.waitForTimeout(10000)]);
+    await Promise.race([browser1EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
     console.log('Browser1 sync enabled');
 
     // Create a todo in browser1
@@ -1621,7 +1727,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await browser1.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
 
     // Wait for sync
-    await browser1.waitForTimeout(3000);
+    await waitForDbCondition(
+      items => items.some(i => i.text === todoText),
+      `item "${todoText}" to appear in database`
+    );
 
     // Load browser2
     await browser2.goto(APP_URL);
@@ -1637,7 +1746,7 @@ test.describe('E2E Sync Diagnostic', () => {
       };
       browser2.on('console', handler);
     });
-    await Promise.race([browser2EnabledPromise, browser2.waitForTimeout(10000)]);
+    await Promise.race([browser2EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
 
     // Browser2 should see the todo (not indented)
     await browser2.waitForSelector(`.todo-item .text:text-is("${todoText}")`, { timeout: 5000 });
@@ -1651,8 +1760,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await expect(browser2.locator('.todo-item.indented')).toHaveCount(1);
     console.log('Browser2 indented the todo');
 
-    // Wait for sync and realtime
-    await browser2.waitForTimeout(4000);
+    // Wait for indent to sync to database
+    await waitForDbCondition(
+      items => items.some(i => i.text === todoText && i.indented === true),
+      `item "${todoText}" to have indented=true in database`
+    );
 
     // Browser1 should see indented via realtime
     await expect(browser1.locator('.todo-item.indented')).toHaveCount(1, { timeout: 5000 });
@@ -1671,8 +1783,7 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Wait for sync to initialize
-    await page.waitForTimeout(1000);
+    // Sync already initialized in beforeEach
     const syncEnabled = await page.evaluate(() => window.ToDoSync?.isEnabled());
     expect(syncEnabled).toBe(true);
     console.log('Sync enabled, going offline');
@@ -1693,7 +1804,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Click elsewhere to blur and trigger save to localStorage
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
-    // Wait a bit - sync will fail silently because we're offline
+    // Wait for sync attempt to fail (debounce is ~2s, give it time to try and fail)
     await page.waitForTimeout(3000);
 
     // Verify item is NOT in database (we're offline, sync should have failed)
@@ -1706,11 +1817,11 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.context().setOffline(false);
     console.log('Back online, waiting for re-sync');
 
-    // Wait for the online event handler + debounce + sync
-    await page.waitForTimeout(5000);
-
-    // Verify item is now in database
-    dbItems = await apiGet('/api/items');
+    // Wait for re-sync after coming back online
+    dbItems = await waitForDbCondition(
+      items => items.some(i => i.text === testText),
+      `item "${testText}" to appear in database after coming back online`
+    );
     found = dbItems.find((item: { text: string }) => item.text === testText);
     expect(found).toBeTruthy();
     console.log('Item synced to database after coming back online');
