@@ -23,6 +23,8 @@
   let supabaseClient = null;
   let realtimeChannel = null;
   let isSyncing = false;
+  let syncPending = false;
+  let pendingSyncTodos = null;
 
   // Track last synced state to detect what actually changed
   let lastSyncedState = null;
@@ -392,7 +394,14 @@
 
   // Sync local todos to server
   async function syncToServer(todos) {
-    if (!syncEnabled || isSyncing) return;
+    if (!syncEnabled) return;
+
+    if (isSyncing) {
+      // A sync is already in progress; mark as pending so it runs after
+      syncPending = true;
+      pendingSyncTodos = todos;
+      return;
+    }
 
     isSyncing = true;
     try {
@@ -401,6 +410,14 @@
       console.error('[Sync] Sync failed:', err);
     } finally {
       isSyncing = false;
+
+      // If another sync was requested while we were busy, run it now
+      if (syncPending) {
+        syncPending = false;
+        const todosToSync = pendingSyncTodos;
+        pendingSyncTodos = null;
+        syncToServer(todosToSync);
+      }
     }
   }
 
@@ -837,6 +854,10 @@
         return syncToServer(todos);
       },
       handleOnline: handleOnline,
+      isSyncing: () => isSyncing,
+      isSyncPending: () => syncPending,
+      setIsSyncing: (val) => { isSyncing = val; },
+      syncToServer: (todos) => syncToServer(todos),
     };
   }
 
