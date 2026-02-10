@@ -151,4 +151,106 @@ test.describe('Fractional Indexing - Shared Module', () => {
       expect(testCase.match).toBe(true);
     }
   });
+
+  test('generateInitialPositions with exactly 22 items produces unique sorted positions', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const positions = fi.generateInitialPositions(22);
+      const unique = new Set(positions);
+      const sorted = [...positions].sort();
+      return {
+        count: positions.length,
+        allUnique: unique.size === positions.length,
+        inOrder: JSON.stringify(positions) === JSON.stringify(sorted),
+        positions,
+      };
+    });
+
+    expect(result.count).toBe(22);
+    expect(result.allUnique).toBe(true);
+    expect(result.inOrder).toBe(true);
+  });
+
+  test('generateInitialPositions with 23 items produces unique sorted positions', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const positions = fi.generateInitialPositions(23);
+      const unique = new Set(positions);
+      const sorted = [...positions].sort();
+      return {
+        count: positions.length,
+        allUnique: unique.size === positions.length,
+        inOrder: JSON.stringify(positions) === JSON.stringify(sorted),
+        positions,
+      };
+    });
+
+    expect(result.count).toBe(23);
+    expect(result.allUnique).toBe(true);
+    expect(result.inOrder).toBe(true);
+  });
+
+  test('generateInitialPositions with 50 items produces unique sorted positions', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const positions = fi.generateInitialPositions(50);
+      const unique = new Set(positions);
+      const sorted = [...positions].sort();
+      return {
+        count: positions.length,
+        allUnique: unique.size === positions.length,
+        inOrder: JSON.stringify(positions) === JSON.stringify(sorted),
+        positions,
+      };
+    });
+
+    expect(result.count).toBe(50);
+    expect(result.allUnique).toBe(true);
+    expect(result.inOrder).toBe(true);
+  });
+
+  test('generateInitialPositions with 100 items produces unique sorted positions', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const positions = fi.generateInitialPositions(100);
+      const unique = new Set(positions);
+      const sorted = [...positions].sort();
+      return {
+        count: positions.length,
+        allUnique: unique.size === positions.length,
+        inOrder: JSON.stringify(positions) === JSON.stringify(sorted),
+        positions,
+      };
+    });
+
+    expect(result.count).toBe(100);
+    expect(result.allUnique).toBe(true);
+    expect(result.inOrder).toBe(true);
+  });
+
+  test('generateInitialPositions positions are lexicographically strictly increasing', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      // Test across several sizes including beyond single-char limit
+      const sizes = [5, 10, 22, 23, 30, 50, 100];
+      const results: { size: number; strictlyIncreasing: boolean }[] = [];
+
+      for (const size of sizes) {
+        const positions = fi.generateInitialPositions(size);
+        let strictlyIncreasing = true;
+        for (let i = 1; i < positions.length; i++) {
+          if (positions[i] <= positions[i - 1]) {
+            strictlyIncreasing = false;
+            break;
+          }
+        }
+        results.push({ size, strictlyIncreasing });
+      }
+      return results;
+    });
+
+    for (const r of result) {
+      expect(r.strictlyIncreasing).toBe(true);
+    }
+  });
 });
