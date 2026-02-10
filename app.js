@@ -41,17 +41,42 @@ function debouncedSave(id, text) {
   }, SAVE_DEBOUNCE_MS));
 }
 
+// In-memory cache for parsed todos to avoid repeated JSON.parse on every call.
+// loadTodos() is called on every render, keyboard event, and mouse move during drag.
+let _todosCacheJson = null; // the raw JSON string that produced the cache
+
 function loadTodos() {
   const data = localStorage.getItem('decay-todos');
-  return data ? JSON.parse(data) : [];
+  if (!data) {
+    _todosCacheJson = null;
+    return [];
+  }
+  // Cache hit: the JSON in localStorage matches what we cached.
+  // We still call JSON.parse on the cached string to return a fresh deep copy
+  // each time, since callers mutate the returned array.
+  if (_todosCacheJson !== null && data === _todosCacheJson) {
+    return JSON.parse(_todosCacheJson);
+  }
+  // Cache miss: store the raw JSON for future comparisons
+  _todosCacheJson = data;
+  return JSON.parse(data);
 }
 
 function saveTodos(todos) {
-  localStorage.setItem('decay-todos', JSON.stringify(todos));
+  const json = JSON.stringify(todos);
+  localStorage.setItem('decay-todos', json);
+  // Update cache so subsequent loadTodos() calls see a cache hit
+  _todosCacheJson = json;
   // Notify sync layer if present
   if (window.ToDoSync && window.ToDoSync.onSave) {
     window.ToDoSync.onSave(todos);
   }
+}
+
+// Invalidate the in-memory cache. Called by sync.js when it writes
+// directly to localStorage bypassing saveTodos().
+function invalidateTodoCache() {
+  _todosCacheJson = null;
 }
 
 function generateId() {
