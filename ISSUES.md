@@ -167,10 +167,12 @@ Both GET and POST endpoints fetch the entire items table. Since items are never 
 
 Used for paste-as-plain-text. Will eventually break in browsers.
 
-### 21. Duplicated keyboard handler code
+### ~~21. Duplicated keyboard handler code~~ FIXED
 **Files:** `app.js` `createSectionElement` vs `createTodoElement`
 
-~130 lines of near-identical keyboard handling code duplicated between the two element constructors.
+~~~130 lines of near-identical keyboard handling code duplicated between the two element constructors.~~
+
+Fixed: Extracted 8 shared keyboard navigation patterns into `handleCommonKeydown()`. Both element constructors delegate to it, reducing app.js by 90 lines.
 
 ### ~~22. Sync dropped if already in progress~~ FIXED
 **File:** `sync.js:412`
