@@ -100,7 +100,7 @@ async function runTests() {
     important: false,
     completed_at: null,
     created_at: new Date().toISOString(),
-    sort_order: 0,
+    position: 'f',
   };
 
   await test('POST /api/items creates item', async () => {
@@ -129,6 +129,16 @@ async function runTests() {
     if (data.important !== true) throw new Error(`Important not updated: ${data.important}`);
   });
 
+  // Test 5b: PATCH position and indented
+  await test('PATCH /api/items/:id updates position and indented', async () => {
+    const data = await apiRequest<Item>(`/api/items/${testId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ position: 'z', indented: true }),
+    });
+    if (data.position !== 'z') throw new Error(`Position not updated: ${data.position}`);
+    if (data.indented !== true) throw new Error(`Indented not updated: ${data.indented}`);
+  });
+
   // Test 6: Verify update persisted
   await test('GET /api/items shows updated item', async () => {
     const data = await apiRequest<Item[]>('/api/items');
@@ -146,7 +156,7 @@ async function runTests() {
       important: false,
       completed_at: null,
       created_at: new Date().toISOString(),
-      sort_order: 1,
+      position: 'n',
     };
 
     const data = await apiRequest<{ items: Item[]; syncedAt: string }>('/api/sync', {

@@ -116,10 +116,12 @@ Fixed: Added `handleOnline()` listener for the browser `'online'` event. When co
 
 ## Medium: Bugs
 
-### 14. PATCH endpoint references nonexistent `sort_order` field
+### ~~14. PATCH endpoint references nonexistent `sort_order` field~~ FIXED
 **File:** `api/items/[id].ts:34`
 
-`sort_order` doesn't exist in `DbItem` or the schema. The field is `position`. PATCH also can't update `indented`, `position`, or any CRDT timestamp fields.
+~~`sort_order` doesn't exist in `DbItem` or the schema. The field is `position`. PATCH also can't update `indented`, `position`, or any CRDT timestamp fields.~~
+
+Fixed: Replaced `sort_order` with `position`, added `indented` and all 7 CRDT timestamp fields to the PATCH handler. Also cleaned up stale `sort_order` references in test scripts.
 
 ### 15. `archiveOldItems` uses `Date.now()` instead of `getVirtualNow()`
 **File:** `app.js:196`

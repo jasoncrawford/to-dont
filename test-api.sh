@@ -29,7 +29,7 @@ test_endpoint() {
 
 test_endpoint "GET items" "GET" "/api/items"
 TEST_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-test_endpoint "POST items" "POST" "/api/items" '{"id":"'$TEST_UUID'","text":"test","type":"todo","created_at":"2026-01-01T00:00:00Z","sort_order":0}'
+test_endpoint "POST items" "POST" "/api/items" '{"id":"'$TEST_UUID'","text":"test","type":"todo","created_at":"2026-01-01T00:00:00Z","position":"n"}'
 test_endpoint "POST sync" "POST" "/api/sync" '{"items":[]}'
 test_endpoint "GET debug" "GET" "/api/debug"
 

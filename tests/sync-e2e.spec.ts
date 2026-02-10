@@ -46,6 +46,19 @@ async function apiPost(endpoint: string, body: Record<string, unknown>) {
   return response.json();
 }
 
+async function apiPatch(endpoint: string, body: Record<string, unknown>) {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${BEARER_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`API PATCH ${endpoint} failed: ${response.status}`);
+  return response.json();
+}
+
 async function clearDatabase() {
   const items = await apiGet('/api/items');
   console.log(`Clearing ${items.length} items from database...`);
@@ -1236,6 +1249,139 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(remainingTexts).not.toContain('Batch delete item 2');
     expect(remainingTexts).toContain('Batch delete item 3');
     console.log('Only item 3 remains after batch delete');
+  });
+
+  // ============================================
+  // PATCH Endpoint Tests
+  // ============================================
+
+  test('PATCH endpoint updates position and indented fields', async () => {
+    const now = new Date().toISOString();
+
+    // Helper to generate a valid UUID v4
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    // Step 1: Create an item via the API
+    const itemId = uuid();
+    const item = {
+      id: itemId,
+      parent_id: null,
+      type: 'todo',
+      text: 'PATCH test item',
+      important: false,
+      completed_at: null,
+      created_at: now,
+      level: null,
+      indented: false,
+      position: 'f',
+      text_updated_at: now,
+      important_updated_at: now,
+      completed_updated_at: now,
+      position_updated_at: now,
+      type_updated_at: now,
+      level_updated_at: now,
+      indented_updated_at: now,
+    };
+
+    await apiPost('/api/items', item);
+
+    // Verify item was created
+    let dbItems = await apiGet('/api/items');
+    let found = dbItems.find((i: { id: string }) => i.id === itemId);
+    expect(found).toBeTruthy();
+    expect(found.position).toBe('f');
+    expect(found.indented).toBe(false);
+    console.log('Created item with position=f, indented=false');
+
+    // Step 2: PATCH the item with updated position and indented
+    const patchData = { position: 'z', indented: true };
+    const patchResult = await apiPatch(`/api/items/${itemId}`, patchData);
+
+    // Step 3: Verify the PATCH response has the updated fields
+    expect(patchResult.position).toBe('z');
+    expect(patchResult.indented).toBe(true);
+    console.log('PATCH response: position=z, indented=true');
+
+    // Step 4: GET the item and verify persistence
+    dbItems = await apiGet('/api/items');
+    found = dbItems.find((i: { id: string }) => i.id === itemId);
+    expect(found).toBeTruthy();
+    expect(found.position).toBe('z');
+    expect(found.indented).toBe(true);
+    console.log('GET confirms persisted: position=z, indented=true');
+
+    // Cleanup
+    await apiDelete(`/api/items/${itemId}`);
+    console.log('PATCH endpoint correctly updates position and indented');
+  });
+
+  test('PATCH endpoint updates CRDT timestamp fields', async () => {
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 60000).toISOString();
+
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    // Create an item
+    const itemId = uuid();
+    const item = {
+      id: itemId,
+      parent_id: null,
+      type: 'todo',
+      text: 'CRDT timestamp test',
+      important: false,
+      completed_at: null,
+      created_at: now,
+      level: null,
+      indented: false,
+      position: 'n',
+      text_updated_at: now,
+      important_updated_at: now,
+      completed_updated_at: now,
+      position_updated_at: now,
+      type_updated_at: now,
+      level_updated_at: now,
+      indented_updated_at: now,
+    };
+
+    await apiPost('/api/items', item);
+
+    // PATCH with CRDT timestamp fields
+    const patchData = {
+      text_updated_at: later,
+      position_updated_at: later,
+      indented_updated_at: later,
+    };
+    const patchResult = await apiPatch(`/api/items/${itemId}`, patchData);
+
+    // Postgres may normalize 'Z' to '+00:00', so compare as timestamps
+    const laterTime = new Date(later).getTime();
+    expect(new Date(patchResult.text_updated_at).getTime()).toBe(laterTime);
+    expect(new Date(patchResult.position_updated_at).getTime()).toBe(laterTime);
+    expect(new Date(patchResult.indented_updated_at).getTime()).toBe(laterTime);
+    console.log('PATCH correctly updates CRDT timestamp fields');
+
+    // Verify persistence
+    const dbItems = await apiGet('/api/items');
+    const found = dbItems.find((i: { id: string }) => i.id === itemId);
+    expect(new Date(found.text_updated_at).getTime()).toBe(laterTime);
+    expect(new Date(found.position_updated_at).getTime()).toBe(laterTime);
+    expect(new Date(found.indented_updated_at).getTime()).toBe(laterTime);
+
+    // Cleanup
+    await apiDelete(`/api/items/${itemId}`);
+    console.log('CRDT timestamps persisted correctly');
   });
 
   // ============================================

@@ -31,8 +31,16 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: string) 
   if (updates.text !== undefined) updateData.text = updates.text;
   if (updates.important !== undefined) updateData.important = updates.important;
   if (updates.completed_at !== undefined) updateData.completed_at = updates.completed_at;
-  if (updates.sort_order !== undefined) updateData.sort_order = updates.sort_order;
+  if (updates.position !== undefined) updateData.position = updates.position;
   if (updates.level !== undefined) updateData.level = updates.level;
+  if (updates.indented !== undefined) updateData.indented = updates.indented;
+  if (updates.text_updated_at !== undefined) updateData.text_updated_at = updates.text_updated_at;
+  if (updates.important_updated_at !== undefined) updateData.important_updated_at = updates.important_updated_at;
+  if (updates.completed_updated_at !== undefined) updateData.completed_updated_at = updates.completed_updated_at;
+  if (updates.position_updated_at !== undefined) updateData.position_updated_at = updates.position_updated_at;
+  if (updates.type_updated_at !== undefined) updateData.type_updated_at = updates.type_updated_at;
+  if (updates.level_updated_at !== undefined) updateData.level_updated_at = updates.level_updated_at;
+  if (updates.indented_updated_at !== undefined) updateData.indented_updated_at = updates.indented_updated_at;
 
   if (Object.keys(updateData).length === 0) {
     return res.status(400).json({ error: 'No fields to update' });
