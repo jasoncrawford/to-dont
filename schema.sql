@@ -1,5 +1,10 @@
 -- Run this in your Supabase SQL Editor (supabase.com > your project > SQL Editor)
 
+-- ============================================
+-- Items table (DEPRECATED - kept for transition period)
+-- Will be dropped via migrations/004_drop_items_table.sql
+-- ============================================
+
 -- Create the items table with CRDT-friendly structure
 CREATE TABLE items (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,7 +50,7 @@ CREATE TRIGGER items_updated_at
 ALTER PUBLICATION supabase_realtime ADD TABLE items;
 
 -- ============================================
--- Events table for event sourcing
+-- Events table for event sourcing (PRIMARY)
 -- ============================================
 
 CREATE TABLE events (

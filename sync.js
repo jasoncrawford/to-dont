@@ -328,31 +328,6 @@
     return { index: -1, item: null };
   }
 
-  // Migrate from old idMapping localStorage key to serverUuid on items
-  function migrateIdMapping() {
-    const oldMapping = localStorage.getItem('decay-todos-id-mapping');
-    if (!oldMapping) return;
-    const mapping = JSON.parse(oldMapping);
-    const stored = localStorage.getItem('decay-todos');
-    if (!stored) {
-      localStorage.removeItem('decay-todos-id-mapping');
-      return;
-    }
-    const todos = JSON.parse(stored);
-    let changed = false;
-    for (const item of todos) {
-      if (!item.serverUuid && mapping[item.id]) {
-        item.serverUuid = mapping[item.id];
-        changed = true;
-      }
-    }
-    if (changed) {
-      localStorage.setItem('decay-todos', JSON.stringify(todos));
-      if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
-    }
-    localStorage.removeItem('decay-todos-id-mapping');
-  }
-
   // Old-style state-based sync (used as fallback when EventLog not available)
   let lastSyncedState = null;
   let pendingSyncTodos = null;
@@ -773,8 +748,6 @@
 
   // Initialize
   function init() {
-    migrateIdMapping();
-
     if (isTestMode) {
       console.log('[Sync] Test mode - disabled');
       return;
