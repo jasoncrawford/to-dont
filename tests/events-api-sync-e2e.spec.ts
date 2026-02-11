@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { randomUUID } from 'crypto';
 
 /**
  * Events API tests - verifies the event sourcing endpoints.
@@ -12,7 +13,7 @@ const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
 
 function uuid() {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 async function apiPost(endpoint: string, body: Record<string, unknown>) {
