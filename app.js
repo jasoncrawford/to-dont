@@ -31,12 +31,16 @@ function debouncedSave(id, text) {
   // Set new timer
   saveTimers.set(id, setTimeout(() => {
     saveTimers.delete(id);
-    const todos = loadTodos();
-    const todo = todos.find(t => t.id === id);
-    if (todo) {
-      todo.text = text.trim();
-      todo.textUpdatedAt = getVirtualNow(); // CRDT: track text update time
-      saveTodos(todos);
+    if (window.EventLog) {
+      EventLog.emitFieldChanged(id, 'text', text.trim());
+    } else {
+      const todos = loadTodos();
+      const todo = todos.find(t => t.id === id);
+      if (todo) {
+        todo.text = text.trim();
+        todo.textUpdatedAt = getVirtualNow();
+        saveTodos(todos);
+      }
     }
   }, SAVE_DEBOUNCE_MS));
 }
@@ -80,12 +84,14 @@ function invalidateTodoCache() {
 }
 
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return crypto.randomUUID();
 }
 
 function getVirtualNow() {
   return Date.now() + (timeOffsetDays * 24 * 60 * 60 * 1000);
 }
+// Expose globally so event-log.js can use it
+window.getVirtualNow = getVirtualNow;
 
 // CRDT helper - use shared fractional indexing module
 function generatePositionBetween(before, after) {
@@ -191,15 +197,20 @@ function shouldArchive(todo) {
 }
 
 function archiveOldItems(todos) {
-  let changed = false;
-  todos.forEach(todo => {
-    if (shouldArchive(todo)) {
-      todo.archived = true;
-      todo.archivedAt = getVirtualNow();
-      changed = true;
+  const toArchive = todos.filter(shouldArchive);
+  if (toArchive.length > 0) {
+    if (window.EventLog) {
+      EventLog.emitFieldsChanged(toArchive.map(t => ({ itemId: t.id, field: 'archived', value: true })));
+      // Re-read materialized state after events
+      return loadTodos();
+    } else {
+      toArchive.forEach(todo => {
+        todo.archived = true;
+        todo.archivedAt = getVirtualNow();
+      });
+      saveTodos(todos);
     }
-  });
-  if (changed) saveTodos(todos);
+  }
   return todos;
 }
 
@@ -451,24 +462,26 @@ function createTodoElement(todo) {
       const todos = loadTodos();
       const currentTodo = todos.find(t => t.id === todo.id);
       if (currentTodo) {
-        let changed = false;
+        let newImportant = null;
         // Typing a ! turns on important
         if (currentCount > prevExclamationCount && !currentTodo.important) {
-          currentTodo.important = true;
-          currentTodo.importantUpdatedAt = getVirtualNow();
-          changed = true;
+          newImportant = true;
         }
         // Deleting last ! turns off important
         if (currentCount === 0 && prevExclamationCount > 0 && currentTodo.important) {
-          currentTodo.important = false;
-          currentTodo.importantUpdatedAt = getVirtualNow();
-          changed = true;
+          newImportant = false;
         }
-        if (changed) {
-          saveTodos(todos);
+        if (newImportant !== null) {
+          if (window.EventLog) {
+            EventLog.emitFieldChanged(todo.id, 'important', newImportant);
+          } else {
+            currentTodo.important = newImportant;
+            currentTodo.importantUpdatedAt = getVirtualNow();
+            saveTodos(todos);
+          }
           // Update visual styling
           const btn = div.querySelector('.important-btn');
-          if (currentTodo.important) {
+          if (newImportant) {
             div.classList.add(`important-level-${getImportanceLevel(currentTodo.createdAt)}`);
             div.style.opacity = '';
             if (btn) btn.classList.add('active');
@@ -751,15 +764,18 @@ function reorderTodo(draggedId, targetId) {
   const [dragged] = todos.splice(draggedIndex, 1);
   const newTargetIndex = todos.findIndex(t => t.id === targetId);
 
-  // Generate new position between neighbors
   const before = newTargetIndex > 0 ? getItemPosition(todos, newTargetIndex - 1) : null;
   const after = getItemPosition(todos, newTargetIndex);
-  dragged.position = generatePositionBetween(before, after);
-  dragged.positionUpdatedAt = getVirtualNow();
+  const newPos = generatePositionBetween(before, after);
 
-  todos.splice(newTargetIndex, 0, dragged);
-
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitFieldChanged(draggedId, 'position', newPos);
+  } else {
+    dragged.position = newPos;
+    dragged.positionUpdatedAt = getVirtualNow();
+    todos.splice(newTargetIndex, 0, dragged);
+    saveTodos(todos);
+  }
   render();
 }
 
@@ -858,10 +874,15 @@ function render() {
 function addTodo(text) {
   if (!text.trim()) return;
   const todos = loadTodos();
-  // Add to end (where the input is)
   const newTodo = createNewItem(text, todos.length, todos);
-  todos.push(newTodo);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitItemCreated(newTodo.id, {
+      text: newTodo.text, position: newTodo.position,
+    });
+  } else {
+    todos.push(newTodo);
+    saveTodos(todos);
+  }
   render();
 }
 
@@ -902,9 +923,13 @@ function setSectionLevel(id, level) {
   const todos = loadTodos();
   const section = todos.find(t => t.id === id);
   if (section && section.type === 'section') {
-    section.level = level;
-    section.levelUpdatedAt = getVirtualNow();
-    saveTodos(todos);
+    if (window.EventLog) {
+      EventLog.emitFieldChanged(id, 'level', level);
+    } else {
+      section.level = level;
+      section.levelUpdatedAt = getVirtualNow();
+      saveTodos(todos);
+    }
     render();
     setTimeout(() => {
       const el = document.querySelector(`[data-id="${id}"] .text`);
@@ -917,9 +942,13 @@ function setTodoIndent(id, indented) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
   if (todo && todo.type !== 'section') {
-    todo.indented = indented;
-    todo.indentedUpdatedAt = getVirtualNow();
-    saveTodos(todos);
+    if (window.EventLog) {
+      EventLog.emitFieldChanged(id, 'indented', indented);
+    } else {
+      todo.indented = indented;
+      todo.indentedUpdatedAt = getVirtualNow();
+      saveTodos(todos);
+    }
     render();
     setTimeout(() => {
       const el = document.querySelector(`[data-id="${id}"] .text`);
@@ -933,16 +962,24 @@ function convertToSection(id) {
   const todo = todos.find(t => t.id === id);
   if (!todo) return;
 
-  todo.type = 'section';
-  todo.level = 2; // Default to level 2
-  todo.text = '';
-  todo.typeUpdatedAt = getVirtualNow();
-  todo.levelUpdatedAt = getVirtualNow();
-  todo.indentedUpdatedAt = getVirtualNow();
-  delete todo.completed;
-  delete todo.important;
-  delete todo.indented;
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitBatch([
+      { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
+      { type: 'field_changed', itemId: id, field: 'level', value: 2 },
+      { type: 'field_changed', itemId: id, field: 'text', value: '' },
+    ]);
+  } else {
+    todo.type = 'section';
+    todo.level = 2;
+    todo.text = '';
+    todo.typeUpdatedAt = getVirtualNow();
+    todo.levelUpdatedAt = getVirtualNow();
+    todo.indentedUpdatedAt = getVirtualNow();
+    delete todo.completed;
+    delete todo.important;
+    delete todo.indented;
+    saveTodos(todos);
+  }
   render();
 
   // Focus the section
@@ -958,8 +995,14 @@ function insertTodoAfter(afterId) {
   if (index === -1) return;
 
   const newTodo = createNewItem('', index + 1, todos);
-  todos.splice(index + 1, 0, newTodo);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitItemCreated(newTodo.id, {
+      text: '', position: newTodo.position,
+    });
+  } else {
+    todos.splice(index + 1, 0, newTodo);
+    saveTodos(todos);
+  }
   render();
 
   // Focus the new item
@@ -975,8 +1018,14 @@ function insertTodoBefore(beforeId) {
   if (index === -1) return;
 
   const newTodo = createNewItem('', index, todos);
-  todos.splice(index, 0, newTodo);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitItemCreated(newTodo.id, {
+      text: '', position: newTodo.position,
+    });
+  } else {
+    todos.splice(index, 0, newTodo);
+    saveTodos(todos);
+  }
   render();
 
   // Keep focus on the original item (at start)
@@ -994,16 +1043,20 @@ function splitTodoAt(id, textBefore, textAfter) {
   const index = todos.findIndex(t => t.id === id);
   if (index === -1) return;
 
-  const originalTodo = todos[index];
-
-  // Update original todo with text before cursor
-  originalTodo.text = textBefore.trim();
-  originalTodo.textUpdatedAt = getVirtualNow();
-
   // Create new todo with text after cursor
   const newTodo = createNewItem(textAfter, index + 1, todos);
-  todos.splice(index + 1, 0, newTodo);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitBatch([
+      { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+      { type: 'item_created', itemId: newTodo.id, value: { text: newTodo.text, position: newTodo.position } },
+    ]);
+  } else {
+    const originalTodo = todos[index];
+    originalTodo.text = textBefore.trim();
+    originalTodo.textUpdatedAt = getVirtualNow();
+    todos.splice(index + 1, 0, newTodo);
+    saveTodos(todos);
+  }
   render();
 
   // Focus the new item at the start
@@ -1027,13 +1080,18 @@ function mergeWithPrevious(currentId, prevId) {
 
   // Remember where to place cursor (at end of previous text)
   const cursorPos = prevTodo.text.length;
+  const mergedText = prevTodo.text + currentTodo.text;
 
-  // Merge text: previous + current
-  prevTodo.text = prevTodo.text + currentTodo.text;
-
-  // Remove current todo
-  todos.splice(currentIndex, 1);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitBatch([
+      { type: 'field_changed', itemId: prevId, field: 'text', value: mergedText },
+      { type: 'item_deleted', itemId: currentId },
+    ]);
+  } else {
+    prevTodo.text = mergedText;
+    todos.splice(currentIndex, 1);
+    saveTodos(todos);
+  }
   render();
 
   // Focus the merged item at the join point
@@ -1059,7 +1117,6 @@ function moveItemUp(id) {
   // Find where to insert
   let insertAt;
   if (currentItem.type === 'section') {
-    // For sections, find the previous section and insert before its group
     let prevSectionIndex = -1;
     for (let i = actualIndex - 1; i >= 0; i--) {
       if (todos[i].type === 'section' && !todos[i].archived) {
@@ -1068,14 +1125,12 @@ function moveItemUp(id) {
       }
     }
     if (prevSectionIndex === -1) {
-      // No previous section, insert at the start
       insertAt = 0;
     } else {
       const prevGroupIndices = getItemGroup(todos, prevSectionIndex);
       insertAt = prevGroupIndices[0];
     }
   } else {
-    // For regular items, insert before the previous item's group
     const prevActiveId = active[activeIndex - 1].id;
     const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
     const prevGroupIndices = getItemGroup(todos, prevActualIndex);
@@ -1084,28 +1139,31 @@ function moveItemUp(id) {
 
   // Extract the group
   const group = groupIndices.map(i => todos[i]);
-  // Remove from end to preserve indices
   for (let i = groupIndices.length - 1; i >= 0; i--) {
     todos.splice(groupIndices[i], 1);
   }
 
   // Generate new positions for the group
-  const now = getVirtualNow();
   const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
   const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
-  // Each item in group gets a position between before and after
   let lastPos = before;
+  const positionChanges = [];
   group.forEach((item, i) => {
     const nextPos = i === group.length - 1 ? after : null;
-    item.position = generatePositionBetween(lastPos, nextPos || after);
-    item.positionUpdatedAt = now;
-    lastPos = item.position;
+    const newPos = generatePositionBetween(lastPos, nextPos || after);
+    positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
+    item.position = newPos;
+    lastPos = newPos;
   });
 
-  // Insert at new position
-  todos.splice(insertAt, 0, ...group);
-
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitFieldsChanged(positionChanges);
+  } else {
+    const now = getVirtualNow();
+    group.forEach(item => { item.positionUpdatedAt = now; });
+    todos.splice(insertAt, 0, ...group);
+    saveTodos(todos);
+  }
   render();
 
   setTimeout(() => {
@@ -1125,10 +1183,8 @@ function moveItemDown(id) {
   const groupIndices = getItemGroup(todos, actualIndex);
   const groupSize = groupIndices.length;
 
-  // Find where to insert
   let insertAt;
   if (currentItem.type === 'section') {
-    // For sections, find the next section and insert after its group
     let nextSectionIndex = -1;
     for (let i = groupIndices[groupIndices.length - 1] + 1; i < todos.length; i++) {
       if (todos[i].type === 'section' && !todos[i].archived) {
@@ -1137,50 +1193,48 @@ function moveItemDown(id) {
       }
     }
     if (nextSectionIndex === -1) {
-      // No next section, insert at the end
       insertAt = todos.length;
     } else {
       const nextGroupIndices = getItemGroup(todos, nextSectionIndex);
       insertAt = nextGroupIndices[nextGroupIndices.length - 1] + 1;
     }
   } else {
-    // For regular items, find the next item not in our group and insert after it
     let nextIndex = activeIndex + 1;
     while (nextIndex < active.length && groupIndices.includes(todos.findIndex(t => t.id === active[nextIndex].id))) {
       nextIndex++;
     }
     if (nextIndex >= active.length) return;
-
     const nextActiveId = active[nextIndex].id;
     const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
     insertAt = nextActualIndex + 1;
   }
 
-  // Extract the group
   const group = groupIndices.map(i => todos[i]);
-  // Remove from end to preserve indices
   for (let i = groupIndices.length - 1; i >= 0; i--) {
     todos.splice(groupIndices[i], 1);
   }
-  // Insert at new position (adjusted for removed items)
   const adjustedInsert = insertAt - groupSize;
 
-  // Generate new positions for the group
-  const now = getVirtualNow();
   const before = adjustedInsert > 0 ? getItemPosition(todos, adjustedInsert - 1) : null;
   const after = adjustedInsert < todos.length ? getItemPosition(todos, adjustedInsert) : null;
-  // Each item in group gets a position between before and after
   let lastPos = before;
+  const positionChanges = [];
   group.forEach((item, i) => {
     const nextPos = i === group.length - 1 ? after : null;
-    item.position = generatePositionBetween(lastPos, nextPos || after);
-    item.positionUpdatedAt = now;
-    lastPos = item.position;
+    const newPos = generatePositionBetween(lastPos, nextPos || after);
+    positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
+    item.position = newPos;
+    lastPos = newPos;
   });
 
-  todos.splice(adjustedInsert, 0, ...group);
-
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitFieldsChanged(positionChanges);
+  } else {
+    const now = getVirtualNow();
+    group.forEach(item => { item.positionUpdatedAt = now; });
+    todos.splice(adjustedInsert, 0, ...group);
+    saveTodos(todos);
+  }
   render();
 
   setTimeout(() => {
@@ -1190,12 +1244,16 @@ function moveItemDown(id) {
 }
 
 function updateTodoText(id, newText) {
-  const todos = loadTodos();
-  const todo = todos.find(t => t.id === id);
-  if (todo) {
-    todo.text = newText.trim();
-    todo.textUpdatedAt = getVirtualNow();
-    saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitFieldChanged(id, 'text', newText.trim());
+  } else {
+    const todos = loadTodos();
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+      todo.text = newText.trim();
+      todo.textUpdatedAt = getVirtualNow();
+      saveTodos(todos);
+    }
   }
   // Cancel any pending debounce — this save supersedes it
   if (saveTimers.has(id)) {
@@ -1208,14 +1266,23 @@ function toggleImportant(id) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
   if (todo) {
-    todo.important = !todo.important;
-    todo.importantUpdatedAt = getVirtualNow(); // CRDT: track important update time
-    // If rescuing from archive, unarchive but keep original date
-    if (todo.archived && todo.important) {
-      todo.archived = false;
-      todo.archivedAt = null;
+    const newImportant = !todo.important;
+    if (window.EventLog) {
+      const events = [{ itemId: id, field: 'important', value: newImportant }];
+      // If rescuing from archive, unarchive
+      if (todo.archived && newImportant) {
+        events.push({ itemId: id, field: 'archived', value: false });
+      }
+      EventLog.emitFieldsChanged(events);
+    } else {
+      todo.important = newImportant;
+      todo.importantUpdatedAt = getVirtualNow();
+      if (todo.archived && todo.important) {
+        todo.archived = false;
+        todo.archivedAt = null;
+      }
+      saveTodos(todos);
     }
-    saveTodos(todos);
     render();
   }
 }
@@ -1241,40 +1308,58 @@ function toggleComplete(id) {
   const todo = todos.find(t => t.id === id);
   if (!todo) return;
 
-  const now = getVirtualNow();
-  const wasCompleted = todo.completed;
-  todo.completed = !todo.completed;
-  todo.completedUpdatedAt = now; // CRDT: track completed update time
+  const newCompleted = !todo.completed;
 
-  if (todo.completed) {
-    todo.completedAt = now;
-
-    // Check for sequence item (contains arrow)
-    const split = splitOnArrow(todo.text);
-    if (split) {
-      // Update current item to just the first part
-      todo.text = split.before;
-      todo.textUpdatedAt = now;
-
-      // Create new item with the rest
-      const todoIndex = todos.indexOf(todo);
-      const newTodo = createNewItem(split.after, todoIndex + 1, todos);
-      newTodo.indented = todo.indented;
-      newTodo.indentedUpdatedAt = getVirtualNow();
-      todos.splice(todoIndex + 1, 0, newTodo);
+  if (window.EventLog) {
+    const batch = [
+      { type: 'field_changed', itemId: id, field: 'completed', value: newCompleted },
+    ];
+    if (newCompleted) {
+      // Check for sequence item (contains arrow)
+      const split = splitOnArrow(todo.text);
+      if (split) {
+        batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
+        const todoIndex = todos.indexOf(todo);
+        const newTodo = createNewItem(split.after, todoIndex + 1, todos);
+        batch.push({ type: 'item_created', itemId: newTodo.id, value: {
+          text: newTodo.text, position: newTodo.position,
+          indented: todo.indented || false,
+        }});
+      }
     }
+    EventLog.emitBatch(batch);
   } else {
-    delete todo.completedAt;
+    const now = getVirtualNow();
+    todo.completed = newCompleted;
+    todo.completedUpdatedAt = now;
+    if (todo.completed) {
+      todo.completedAt = now;
+      const split = splitOnArrow(todo.text);
+      if (split) {
+        todo.text = split.before;
+        todo.textUpdatedAt = now;
+        const todoIndex = todos.indexOf(todo);
+        const newTodo = createNewItem(split.after, todoIndex + 1, todos);
+        newTodo.indented = todo.indented;
+        newTodo.indentedUpdatedAt = getVirtualNow();
+        todos.splice(todoIndex + 1, 0, newTodo);
+      }
+    } else {
+      delete todo.completedAt;
+    }
+    saveTodos(todos);
   }
-
-  saveTodos(todos);
   render();
 }
 
 function deleteTodo(id) {
-  let todos = loadTodos();
-  todos = todos.filter(t => t.id !== id);
-  saveTodos(todos);
+  if (window.EventLog) {
+    EventLog.emitItemDeleted(id);
+  } else {
+    let todos = loadTodos();
+    todos = todos.filter(t => t.id !== id);
+    saveTodos(todos);
+  }
   render();
 }
 
@@ -1282,26 +1367,31 @@ function restoreTodo(id) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
   if (todo) {
-    todo.archived = false;
-    todo.archivedAt = null;
-    todo.createdAt = getVirtualNow();
-    saveTodos(todos);
+    if (window.EventLog) {
+      EventLog.emitFieldChanged(id, 'archived', false);
+    } else {
+      todo.archived = false;
+      todo.archivedAt = null;
+      todo.createdAt = getVirtualNow();
+      saveTodos(todos);
+    }
     render();
   }
 }
 
 function archiveCompleted() {
   const todos = loadTodos();
-  let changed = false;
-  todos.forEach(todo => {
-    if (todo.completed && !todo.archived) {
-      todo.archived = true;
-      todo.archivedAt = getVirtualNow();
-      changed = true;
+  const toArchive = todos.filter(t => t.completed && !t.archived);
+  if (toArchive.length > 0) {
+    if (window.EventLog) {
+      EventLog.emitFieldsChanged(toArchive.map(t => ({ itemId: t.id, field: 'archived', value: true })));
+    } else {
+      toArchive.forEach(todo => {
+        todo.archived = true;
+        todo.archivedAt = getVirtualNow();
+      });
+      saveTodos(todos);
     }
-  });
-  if (changed) {
-    saveTodos(todos);
     render();
   }
 }
@@ -1505,23 +1595,28 @@ document.addEventListener('mouseup', () => {
   }
 
   // Generate new positions for the group (CRDT-friendly ordering)
-  const now = getVirtualNow();
   const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
   const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
   let lastPos = before;
+  const positionChanges = [];
   group.forEach((item, i) => {
     const nextPos = i === group.length - 1 ? after : null;
-    item.position = generatePositionBetween(lastPos, nextPos || after);
-    item.positionUpdatedAt = now;
-    lastPos = item.position;
+    const newPos = generatePositionBetween(lastPos, nextPos || after);
+    positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
+    item.position = newPos;
+    lastPos = newPos;
   });
 
-  // Insert group at new position
-  todos.splice(insertAt, 0, ...group);
-
-  const archived = todos.filter(t => t.archived);
-  const active = todos.filter(t => !t.archived);
-  saveTodos([...active, ...archived]);
+  if (window.EventLog) {
+    EventLog.emitFieldsChanged(positionChanges);
+  } else {
+    const now = getVirtualNow();
+    group.forEach(item => { item.positionUpdatedAt = now; });
+    todos.splice(insertAt, 0, ...group);
+    const archived = todos.filter(t => t.archived);
+    const active = todos.filter(t => !t.archived);
+    saveTodos([...active, ...archived]);
+  }
 
   // Clean up
   if (dragState.isSection) {
