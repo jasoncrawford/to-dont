@@ -278,7 +278,7 @@ test.describe('Sync Layer', () => {
     expect(hasHandleOnline).toBe(true);
   });
 
-  test('handleOnline calls fetchAndMergeTodos to pull remote changes', async ({ page }) => {
+  test('handleOnline triggers event-based sync', async ({ page }) => {
     await setupPage(page);
 
     // Enable sync
@@ -291,7 +291,7 @@ test.describe('Sync Layer', () => {
       (window as Window & { _fetchUrls: string[] })._fetchUrls = [];
       window.fetch = function(...args: Parameters<typeof fetch>) {
         (window as Window & { _fetchUrls: string[] })._fetchUrls.push(String(args[0]));
-        return Promise.resolve(new Response(JSON.stringify([]), {
+        return Promise.resolve(new Response(JSON.stringify({ events: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }));
@@ -303,18 +303,16 @@ test.describe('Sync Layer', () => {
       window.ToDoSync._test!.handleOnline();
     });
 
-    // Wait for the delayed fetchAndMergeTodos (debounce + 2000ms delay + buffer)
-    await page.waitForTimeout(5000);
+    // Wait for debounce
+    await page.waitForTimeout(3000);
 
     const fetchUrls = await page.evaluate(() => {
       return (window as Window & { _fetchUrls: string[] })._fetchUrls;
     });
 
-    // With EventLog available, handleOnline triggers event-based sync (/api/events)
-    // rather than fetchAndMergeTodos (/api/items)
+    // handleOnline triggers event-based sync only
     const eventsFetched = fetchUrls.some(url => url.includes('/api/events'));
-    const itemsFetched = fetchUrls.some(url => url.includes('/api/items'));
-    expect(eventsFetched || itemsFetched).toBe(true);
+    expect(eventsFetched).toBe(true);
   });
 
   test('completing a todo works with sync layer', async ({ page }) => {
@@ -353,221 +351,6 @@ test.describe('Sync Layer', () => {
     const stored = await getStoredTodos(page);
     expect(stored.length).toBe(1);
   });
-  test('sync requested during active sync is queued and runs after', async ({ page }) => {
-    await setupPage(page);
-
-    // Enable sync and set up a fake fetch that we can control
-    await page.evaluate(() => {
-      window.ToDoSync._test!.setSyncEnabled(true);
-
-      // Track how many times sync API was called
-      (window as any)._syncCallCount = 0;
-      (window as any)._syncCallBodies = [];
-
-      // Create a controllable fetch: first call takes a while, second resolves immediately
-      let resolveFirstSync: (() => void) | null = null;
-      (window as any)._resolveFirstSync = () => {
-        if (resolveFirstSync) resolveFirstSync();
-      };
-
-      window.fetch = function(...args: Parameters<typeof fetch>) {
-        const url = String(args[0]);
-        (window as any)._syncCallCount++;
-
-        if (url.includes('/api/sync')) {
-          const body = args[1]?.body;
-          if (body) {
-            (window as any)._syncCallBodies.push(JSON.parse(body as string));
-          }
-
-          if ((window as any)._syncCallCount === 1) {
-            // First sync call: delay resolution until we signal it
-            return new Promise<Response>((resolve) => {
-              resolveFirstSync = () => {
-                resolve(new Response(JSON.stringify({ mergedItems: [] }), {
-                  status: 200,
-                  headers: { 'Content-Type': 'application/json' },
-                }));
-              };
-            });
-          }
-        }
-
-        // All subsequent calls resolve immediately
-        return Promise.resolve(new Response(JSON.stringify({ mergedItems: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }));
-      };
-    });
-
-    // Store initial todo
-    await page.evaluate(() => {
-      const todo1 = {
-        id: 'sync-test-1',
-        text: 'first item',
-        createdAt: Date.now(),
-        important: false,
-        completed: false,
-        archived: false,
-        position: 'n',
-      };
-      localStorage.setItem('decay-todos', JSON.stringify([todo1]));
-    });
-
-    // Trigger the first sync (which will be blocked by our controlled fetch)
-    await page.evaluate(() => {
-      window.ToDoSync._test!.syncToServer([{
-        id: 'sync-test-1',
-        text: 'first item',
-        createdAt: Date.now(),
-        important: false,
-        completed: false,
-        archived: false,
-        position: 'n',
-      }]);
-    });
-
-    // Give it a moment to enter the syncing state
-    await page.waitForTimeout(50);
-
-    // Verify we're currently syncing
-    const isSyncing = await page.evaluate(() => window.ToDoSync._test!.isSyncing());
-    expect(isSyncing).toBe(true);
-
-    // Now trigger a second sync while the first is in progress
-    await page.evaluate(() => {
-      window.ToDoSync._test!.syncToServer([{
-        id: 'sync-test-1',
-        text: 'updated item',
-        createdAt: Date.now(),
-        important: true,
-        completed: false,
-        archived: false,
-        position: 'n',
-        textUpdatedAt: Date.now(),
-        importantUpdatedAt: Date.now(),
-      }]);
-    });
-
-    // The second sync should be pending, not dropped
-    const isPending = await page.evaluate(() => window.ToDoSync._test!.isSyncPending());
-    expect(isPending).toBe(true);
-
-    // Now resolve the first sync
-    await page.evaluate(() => {
-      (window as any)._resolveFirstSync();
-    });
-
-    // Wait for the pending sync to complete
-    await page.waitForTimeout(500);
-
-    // Verify the pending sync ran (should have made 2 API calls total)
-    const callCount = await page.evaluate(() => (window as any)._syncCallCount);
-    expect(callCount).toBeGreaterThanOrEqual(2);
-
-    // After everything completes, syncing should be false and pending should be false
-    const finalSyncing = await page.evaluate(() => window.ToDoSync._test!.isSyncing());
-    const finalPending = await page.evaluate(() => window.ToDoSync._test!.isSyncPending());
-    expect(finalSyncing).toBe(false);
-    expect(finalPending).toBe(false);
-  });
-
-  test('sync is not dropped when isSyncing is true - pending data reaches server', async ({ page }) => {
-    await setupPage(page);
-
-    await page.evaluate(() => {
-      window.ToDoSync._test!.setSyncEnabled(true);
-
-      // Track sync bodies sent to server
-      (window as any)._syncBodies = [];
-      let resolveFirst: (() => void) | null = null;
-      (window as any)._resolveFirst = () => { if (resolveFirst) resolveFirst(); };
-      let callNum = 0;
-
-      window.fetch = function(...args: Parameters<typeof fetch>) {
-        callNum++;
-        const url = String(args[0]);
-        if (url.includes('/api/sync')) {
-          const body = args[1]?.body;
-          if (body) {
-            (window as any)._syncBodies.push(JSON.parse(body as string));
-          }
-          if (callNum === 1) {
-            return new Promise<Response>((resolve) => {
-              resolveFirst = () => {
-                resolve(new Response(JSON.stringify({ mergedItems: [] }), {
-                  status: 200,
-                  headers: { 'Content-Type': 'application/json' },
-                }));
-              };
-            });
-          }
-        }
-        return Promise.resolve(new Response(JSON.stringify({ mergedItems: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }));
-      };
-    });
-
-    // Set up initial state and start first sync
-    await page.evaluate(() => {
-      localStorage.setItem('decay-todos', JSON.stringify([{
-        id: 'item-1',
-        text: 'original',
-        createdAt: Date.now(),
-        important: false,
-        completed: false,
-        archived: false,
-        position: 'n',
-      }]));
-
-      // Start first sync
-      window.ToDoSync._test!.syncToServer([{
-        id: 'item-1',
-        text: 'original',
-        createdAt: Date.now(),
-        important: false,
-        completed: false,
-        archived: false,
-        position: 'n',
-      }]);
-    });
-
-    await page.waitForTimeout(50);
-
-    // Queue a second sync with changed data while first is active
-    await page.evaluate(() => {
-      window.ToDoSync._test!.syncToServer([{
-        id: 'item-1',
-        text: 'changed during sync',
-        createdAt: Date.now(),
-        important: true,
-        completed: false,
-        archived: false,
-        position: 'n',
-        textUpdatedAt: Date.now(),
-        importantUpdatedAt: Date.now(),
-      }]);
-    });
-
-    // Resolve first sync
-    await page.evaluate(() => (window as any)._resolveFirst());
-
-    // Wait for pending sync to complete
-    await page.waitForTimeout(500);
-
-    // Verify the second sync body contained the updated data
-    const syncBodies = await page.evaluate(() => (window as any)._syncBodies);
-    expect(syncBodies.length).toBeGreaterThanOrEqual(2);
-
-    // The second sync should have the updated text
-    const lastSyncItems = syncBodies[syncBodies.length - 1].items;
-    const syncedItem = lastSyncItems.find((i: any) => i.text === 'changed during sync');
-    expect(syncedItem).toBeDefined();
-    expect(syncedItem.important).toBe(true);
-  });
 });
 
 // Type declarations for test
@@ -578,18 +361,15 @@ declare global {
       disable: () => void;
       isEnabled: () => boolean;
       isConfigured: () => boolean;
-      migrate: () => Promise<unknown>;
       refresh: () => Promise<void>;
       getConfig: () => Record<string, string>;
       onSave: (todos: unknown[]) => void;
       _test?: {
         setSyncEnabled: (val: boolean) => void;
-        triggerSync: () => Promise<void>;
+        triggerEventSync: () => Promise<void>;
         handleOnline: () => void;
         isSyncing: () => boolean;
         isSyncPending: () => boolean;
-        setIsSyncing: (val: boolean) => void;
-        syncToServer: (todos: unknown[]) => Promise<void>;
       };
     };
     saveTodos: (todos: unknown[]) => void;
