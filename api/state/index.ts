@@ -51,6 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         importantUpdatedAt: event.timestamp,
         completedUpdatedAt: event.timestamp,
         positionUpdatedAt: event.timestamp,
+        typeUpdatedAt: event.timestamp,
+        levelUpdatedAt: event.timestamp,
+        indentedUpdatedAt: event.timestamp,
+        archivedUpdatedAt: event.timestamp,
       });
     } else if (event.type === 'field_changed') {
       const item = items.get(event.itemId);
@@ -85,12 +89,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         case 'type':
           item.type = event.value;
+          item.typeUpdatedAt = event.timestamp;
           break;
         case 'level':
           item.level = event.value;
+          item.levelUpdatedAt = event.timestamp;
           break;
         case 'indented':
           item.indented = event.value;
+          item.indentedUpdatedAt = event.timestamp;
           break;
         case 'archived':
           item.archived = event.value;
@@ -99,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           } else {
             item.archivedAt = null;
           }
+          item.archivedUpdatedAt = event.timestamp;
           break;
       }
     } else if (event.type === 'item_deleted') {
