@@ -22,12 +22,22 @@ export default defineConfig({
       testIgnore: /sync-e2e/,
     },
     {
+      name: 'sync-e2e-api',
+      use: {
+        browserName: 'chromium',
+        baseURL: `http://localhost:${SYNC_TEST_PORT}`,
+      },
+      testMatch: /events-api-sync-e2e/,
+    },
+    {
       name: 'sync-e2e',
       use: {
         browserName: 'chromium',
         baseURL: `http://localhost:${SYNC_TEST_PORT}`,
       },
       testMatch: /sync-e2e/,
+      testIgnore: /events-api/,
+      dependencies: ['sync-e2e-api'],
     },
   ],
   webServer: {
