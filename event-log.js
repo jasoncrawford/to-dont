@@ -42,12 +42,11 @@
       return [];
     }
     if (_eventsCacheJson !== null && data === _eventsCacheJson) {
-      // Return deep copy since callers may mutate
-      return JSON.parse(_eventsCacheJson);
+      return structuredClone(_eventsCache);
     }
     _eventsCacheJson = data;
     _eventsCache = JSON.parse(data);
-    return JSON.parse(data);
+    return structuredClone(_eventsCache);
   }
 
   function saveEvents(events) {
