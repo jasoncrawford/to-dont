@@ -134,13 +134,7 @@
       }
       EventLog.markEventsPushed(seqMap);
 
-      // Update cursor to the highest seq we received
-      const maxSeq = Math.max(...result.events.map(e => e.seq));
-      if (maxSeq > getLastSeq()) {
-        setLastSeq(maxSeq);
-      }
-
-      console.log('[Sync] Pushed', result.events.length, 'events, cursor now at', getLastSeq());
+      console.log('[Sync] Pushed', result.events.length, 'events');
     }
   }
 
