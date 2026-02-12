@@ -71,7 +71,7 @@ async function waitForDbCondition(
   const start = Date.now();
   let lastItems: any[] = [];
   while (Date.now() - start < timeout) {
-    lastItems = await apiGet('/api/items');
+    lastItems = await apiGet('/api/state');
     if (condition(lastItems)) return lastItems;
     await new Promise(r => setTimeout(r, interval));
   }
@@ -82,18 +82,18 @@ async function waitForDbCondition(
 }
 
 async function clearDatabase() {
-  const items = await apiGet('/api/items');
-  console.log(`Clearing ${items.length} items from database...`);
-  for (const item of items) {
-    await apiDelete(`/api/items/${item.id}`);
-  }
-  // Clear events table to prevent stale events from resurrecting items
+  // Clear events table (source of truth for event-based sync)
   await fetch(`${API_URL}/api/events`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${BEARER_TOKEN}` },
   });
-  const remaining = await apiGet('/api/items');
-  console.log(`Database now has ${remaining.length} items (events cleared)`);
+  // Also clear items table (used by server API tests)
+  const items = await apiGet('/api/items');
+  for (const item of items) {
+    await apiDelete(`/api/items/${item.id}`);
+  }
+  const remaining = await apiGet('/api/state');
+  console.log(`Database cleared (${remaining.length} items in event projection)`);
 }
 
 test.describe('E2E Sync Diagnostic', () => {
@@ -158,7 +158,7 @@ test.describe('E2E Sync Diagnostic', () => {
   });
 
   test('database starts empty after clear', async () => {
-    const items = await apiGet('/api/items');
+    const items = await apiGet('/api/state');
     expect(items.length).toBe(0);
   });
 
@@ -186,7 +186,7 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(syncEnabled).toBe(true);
 
     // Verify database is empty
-    const beforeItems = await apiGet('/api/items');
+    const beforeItems = await apiGet('/api/state');
     console.log('Items before:', beforeItems.length);
     expect(beforeItems.length).toBe(0);
 
@@ -1825,7 +1825,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForTimeout(3000);
 
     // Verify item is NOT in database (we're offline, sync should have failed)
-    let dbItems = await apiGet('/api/items');
+    let dbItems = await apiGet('/api/state');
     let found = dbItems.find((item: { text: string }) => item.text === testText);
     expect(found).toBeFalsy();
     console.log('Confirmed item NOT in database while offline');
