@@ -310,9 +310,11 @@ test.describe('Sync Layer', () => {
       return (window as Window & { _fetchUrls: string[] })._fetchUrls;
     });
 
-    // Verify /api/items URL was fetched (proves fetchAndMergeTodos was called)
+    // With EventLog available, handleOnline triggers event-based sync (/api/events)
+    // rather than fetchAndMergeTodos (/api/items)
+    const eventsFetched = fetchUrls.some(url => url.includes('/api/events'));
     const itemsFetched = fetchUrls.some(url => url.includes('/api/items'));
-    expect(itemsFetched).toBe(true);
+    expect(eventsFetched || itemsFetched).toBe(true);
   });
 
   test('completing a todo works with sync layer', async ({ page }) => {

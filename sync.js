@@ -329,6 +329,8 @@
   }
 
   // Old-style state-based sync (used as fallback when EventLog not available)
+  let oldIsSyncing = false;
+  let oldSyncPending = false;
   let lastSyncedState = null;
   let pendingSyncTodos = null;
   const recentlySyncedIds = new Set();
@@ -513,21 +515,23 @@
   }
 
   async function syncToServer(todos) {
-    if (!syncEnabled) return;
-    if (isSyncing) {
-      syncPending = true;
+    if (!syncEnabled || !todos) return;
+    if (oldIsSyncing) {
+      oldSyncPending = true;
       pendingSyncTodos = todos;
       return;
     }
-    isSyncing = true;
+    oldIsSyncing = true;
     try { await syncChanges(todos); } catch (err) { console.error('[Sync] Sync failed:', err); }
     finally {
-      isSyncing = false;
-      if (syncPending) {
-        syncPending = false;
+      oldIsSyncing = false;
+      if (oldSyncPending) {
+        oldSyncPending = false;
         const todosToSync = pendingSyncTodos;
         pendingSyncTodos = null;
-        syncToServer(todosToSync);
+        if (todosToSync) {
+          syncToServer(todosToSync);
+        }
       }
     }
   }
@@ -693,15 +697,25 @@
         localStorage.setItem('decay-todos-synced', 'true');
       }
 
-      // Subscribe to realtime (both new events table and old items table)
+      // Subscribe to realtime
       subscribeToRealtime();
-      subscribeToOldRealtime();
+      // Only subscribe to old items table if EventLog isn't available
+      // (when EventLog is active, the events table subscription is the
+      // source of truth and old realtime would create duplicates)
+      if (!window.EventLog) {
+        subscribeToOldRealtime();
+      }
 
       // Pull events and fetch items
       if (window.EventLog) {
         await syncCycle();
       }
-      await fetchAndMergeTodos();
+      // Only fetch from old items table if EventLog isn't available
+      // (when EventLog is active, events are the source of truth and
+      // fetchAndMergeTodos would create duplicates)
+      if (!window.EventLog) {
+        await fetchAndMergeTodos();
+      }
 
       console.log('[Sync] ✓ Enabled');
       return true;
@@ -743,7 +757,9 @@
     if (window.EventLog) {
       queueServerSync();
     }
-    setTimeout(fetchAndMergeTodos, SERVER_SYNC_DEBOUNCE_MS + 2000);
+    if (!window.EventLog) {
+      setTimeout(fetchAndMergeTodos, SERVER_SYNC_DEBOUNCE_MS + 2000);
+    }
   }
 
   // Initialize
@@ -811,9 +827,10 @@
       },
       triggerEventSync: () => syncCycle(),
       handleOnline: handleOnline,
-      isSyncing: () => isSyncing,
-      isSyncPending: () => syncPending,
-      setIsSyncing: (val) => { isSyncing = val; },
+      // Expose old sync flags (syncToServer uses these)
+      isSyncing: () => oldIsSyncing,
+      isSyncPending: () => oldSyncPending,
+      setIsSyncing: (val) => { oldIsSyncing = val; },
       syncToServer: (todos) => syncToServer(todos),
     };
   }

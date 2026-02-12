@@ -12,6 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return handlePost(req, res);
   } else if (req.method === 'GET') {
     return handleGet(req, res);
+  } else if (req.method === 'DELETE') {
+    return handleDelete(req, res);
   } else {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -54,6 +56,21 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
   const result = (inserted || []).map((e: DbEvent) => fromDbEvent(e));
   return res.status(200).json({ events: result });
+}
+
+async function handleDelete(req: VercelRequest, res: VercelResponse) {
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('events')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000');
+
+  if (error) {
+    console.error('Error deleting events:', error);
+    return res.status(500).json({ error: 'Failed to delete events' });
+  }
+
+  return res.status(204).end();
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {

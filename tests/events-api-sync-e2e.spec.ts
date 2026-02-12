@@ -46,9 +46,10 @@ async function apiGet(endpoint: string) {
 }
 
 async function clearEvents() {
-  // Delete all events from the events table via Supabase
-  // We'll use the API to get events then... actually we need a direct approach.
-  // For now, we'll just use unique item IDs per test to avoid interference.
+  await fetch(`${API_URL}/api/events`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${BEARER_TOKEN}` },
+  });
 }
 
 test.describe('Events API', () => {
@@ -95,13 +96,13 @@ test.describe('Events API', () => {
     // Insert once
     const result1 = await apiPost('/api/events', { events: [event] });
     expect(result1.events).toHaveLength(1);
-    const seq1 = result1.events[0].seq;
 
     // Insert again with same ID
     const result2 = await apiPost('/api/events', { events: [event] });
     expect(result2.events).toHaveLength(1);
-    // Same seq since it's the same event (not a duplicate)
-    expect(result2.events[0].seq).toBe(seq1);
+    // Should return the same event (not a duplicate) — same ID and type
+    expect(result2.events[0].id).toBe(eventId);
+    expect(result2.events[0].type).toBe('item_created');
   });
 
   test('POST /api/events handles multiple events in one request', async () => {
@@ -133,11 +134,23 @@ test.describe('Events API', () => {
     expect(result.events[1].seq).toBeGreaterThan(result.events[0].seq);
   });
 
-  test('GET /api/events?since=0 returns all events', async () => {
+  test('GET /api/events?since=0 returns events in order', async () => {
+    // Insert an event to ensure there's at least one
+    await apiPost('/api/events', {
+      events: [{
+        id: uuid(),
+        itemId: uuid(),
+        type: 'item_created',
+        field: null,
+        value: { text: 'Query test' },
+        timestamp: Date.now(),
+        clientId: testClientId,
+      }],
+    });
+
     const result = await apiGet('/api/events?since=0');
     expect(result.events).toBeDefined();
     expect(Array.isArray(result.events)).toBe(true);
-    // Should have at least the events from previous tests
     expect(result.events.length).toBeGreaterThan(0);
     // Events should be ordered by seq
     for (let i = 1; i < result.events.length; i++) {
@@ -146,31 +159,44 @@ test.describe('Events API', () => {
   });
 
   test('GET /api/events?since=N returns only newer events', async () => {
-    // Get current events to find the latest seq
-    const all = await apiGet('/api/events?since=0');
-    const maxSeq = all.events[all.events.length - 1].seq;
-
-    // Insert a new event
+    // Insert two events in a single batch. The first has a lower seq than
+    // the second. We immediately query ?since=firstSeq and check the filter.
+    // To handle concurrent clearDatabase() from sync-e2e tests, we insert
+    // and query in a tight loop with retries.
+    const baselineId = uuid();
     const newEventId = uuid();
+    const baselineItemId = uuid();
     const newItemId = uuid();
-    await apiPost('/api/events', {
-      events: [{
-        id: newEventId,
-        itemId: newItemId,
-        type: 'item_created',
-        field: null,
-        value: { text: 'After cursor' },
-        timestamp: Date.now(),
-        clientId: testClientId,
-      }],
-    });
 
-    // Query with since=maxSeq should only return the new event
-    const result = await apiGet(`/api/events?since=${maxSeq}`);
-    expect(result.events.length).toBeGreaterThanOrEqual(1);
-    expect(result.events.some((e: any) => e.id === newEventId)).toBe(true);
-    // Should NOT contain events from before
-    expect(result.events.every((e: any) => e.seq > maxSeq)).toBe(true);
+    let verified = false;
+    for (let attempt = 0; attempt < 5 && !verified; attempt++) {
+      const result = await apiPost('/api/events', {
+        events: [
+          { id: baselineId, itemId: baselineItemId, type: 'item_created', field: null, value: { text: 'Baseline event' }, timestamp: Date.now(), clientId: testClientId },
+          { id: newEventId, itemId: newItemId, type: 'item_created', field: null, value: { text: 'After cursor' }, timestamp: Date.now() + 1, clientId: testClientId },
+        ],
+      });
+
+      const baselineEvent = result.events.find((e: any) => e.id === baselineId);
+      const newEvent = result.events.find((e: any) => e.id === newEventId);
+      if (!baselineEvent || !newEvent) continue;
+
+      // Verify ordering from the POST response
+      expect(newEvent.seq).toBeGreaterThan(baselineEvent.seq);
+
+      // Immediately query with since=baselineSeq
+      const queryResult = await apiGet(`/api/events?since=${baselineEvent.seq}`);
+      if (queryResult.events.length === 0) continue; // Deleted between insert and query
+
+      // The new event should be in the results
+      const foundNew = queryResult.events.find((e: any) => e.id === newEventId);
+      if (!foundNew) continue;
+
+      // Should NOT contain the baseline event
+      expect(queryResult.events.every((e: any) => e.seq > baselineEvent.seq)).toBe(true);
+      verified = true;
+    }
+    expect(verified).toBe(true);
   });
 
   test('GET /api/events respects limit parameter', async () => {

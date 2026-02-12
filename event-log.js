@@ -197,6 +197,20 @@
   }
 
   function materializeState(state) {
+    // Preserve serverUuid from existing stored state (set by sync.js old path)
+    const existing = localStorage.getItem(TODOS_KEY);
+    if (existing) {
+      const existingTodos = JSON.parse(existing);
+      const uuidMap = new Map();
+      for (const t of existingTodos) {
+        if (t.serverUuid) uuidMap.set(t.id, t.serverUuid);
+      }
+      for (const item of state) {
+        if (!item.serverUuid && uuidMap.has(item.id)) {
+          item.serverUuid = uuidMap.get(item.id);
+        }
+      }
+    }
     const json = JSON.stringify(state);
     localStorage.setItem(TODOS_KEY, json);
     // Update the app.js cache so loadTodos() sees fresh data
