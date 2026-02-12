@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const result = Array.from(items.values());
-  result.sort((a: any, b: any) => (a.position || 'n').localeCompare(b.position || 'n'));
+  result.sort((a: any, b: any) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
 
   return res.status(200).json(result);
 }

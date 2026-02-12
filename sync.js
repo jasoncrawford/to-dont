@@ -506,7 +506,7 @@
       }
     }
     if (changed) {
-      todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+      todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR) || a.id.localeCompare(b.id));
       localStorage.setItem('decay-todos', JSON.stringify(todos));
       if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
       lastSyncedState = JSON.parse(JSON.stringify(todos));
@@ -572,7 +572,7 @@
         merged.id = localItem.id;
         if (itemHash(localItem) !== itemHash(merged) || localItem.position !== merged.position) {
           todos[index] = merged;
-          todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+          todos.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR) || a.id.localeCompare(b.id));
           changed = true;
         }
       }
@@ -621,7 +621,7 @@
       for (const localItem of currentLocal) {
         if (!matchedLocalIds.has(localItem.id)) merged.push(localItem);
       }
-      merged.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR));
+      merged.sort((a, b) => (a.position || MID_CHAR).localeCompare(b.position || MID_CHAR) || a.id.localeCompare(b.id));
       localStorage.setItem('decay-todos', JSON.stringify(merged));
       if (typeof invalidateTodoCache === 'function') invalidateTodoCache();
       lastSyncedState = JSON.parse(JSON.stringify(merged));

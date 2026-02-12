@@ -169,7 +169,7 @@
 
     // Convert to array and sort by position
     const result = Array.from(items.values());
-    result.sort((a, b) => (a.position || 'n').localeCompare(b.position || 'n'));
+    result.sort((a, b) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
     return result;
   }
 

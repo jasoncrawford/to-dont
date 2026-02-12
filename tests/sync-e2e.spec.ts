@@ -952,7 +952,7 @@ test.describe('E2E Sync Diagnostic', () => {
     );
 
     // Get initial positions
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('Initial order:', dbItems.map((i: { text: string }) => i.text));
 
     const sectionAPos = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
@@ -982,7 +982,7 @@ test.describe('E2E Sync Diagnostic', () => {
     );
 
     // Check database order
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('After reorder:', dbItems.map((i: { text: string }) => i.text));
 
     const sectionAPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
@@ -1051,7 +1051,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const allItems = await page.locator('.section-header .text, .todo-item .text').allTextContents();
     console.log('UI before reorder:', allItems);
 
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('DB before:', dbItems.map((i: { text: string, type: string, level: number }) =>
       i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
 
@@ -1077,7 +1077,7 @@ test.describe('E2E Sync Diagnostic', () => {
       'Section B to have position before Section A in database'
     );
 
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('DB after:', dbItems.map((i: { text: string, type: string, level: number }) =>
       i.type === 'section' ? `[L${i.level}] ${i.text}` : i.text));
 
@@ -1237,7 +1237,7 @@ test.describe('E2E Sync Diagnostic', () => {
       'all items (Section A, Item under A, Section B) to appear in database'
     );
 
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('Before drag:', dbItems.map((i: { text: string }) => i.text));
 
     const sectionAPos = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
@@ -1269,7 +1269,7 @@ test.describe('E2E Sync Diagnostic', () => {
       'Section B to have position before Section A in database'
     );
 
-    dbItems.sort((a: { position: string }, b: { position: string }) => a.position.localeCompare(b.position));
+    dbItems.sort((a: { position: string; id: string }, b: { position: string; id: string }) => a.position.localeCompare(b.position) || a.id.localeCompare(b.id));
     console.log('After drag:', dbItems.map((i: { text: string }) => i.text));
 
     const sectionAPosAfter = dbItems.find((i: { text: string }) => i.text === 'Section A')?.position;
