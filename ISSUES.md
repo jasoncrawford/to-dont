@@ -1,28 +1,10 @@
 # Issues
 
-## #1 - `pushEvents` cursor advancement skips remote events
-**Severity: High (data loss)**
+## ~~#1 - `pushEvents` cursor advancement skips remote events~~ FIXED (a1e6f8e)
 
-In `sync.js:137-143`, `pushEvents()` advances the event cursor to the max seq of the events it just pushed. Then `pullEvents()` fetches `since=getLastSeq()`. If other clients pushed events with seq values between the old cursor and your pushed events' max seq, those events are permanently skipped.
+## ~~#2 - `archived` field has no LWW protection~~ FIXED (0ccfaa3)
 
-**Example:**
-1. Cursor = 40
-2. Other client pushed events at seq 41-47 while you were offline
-3. You push, server assigns your events seq 48-50
-4. `pushEvents` advances cursor to 50
-5. `pullEvents` fetches `since=50` — events 41-47 are never pulled
-
-**Fix:** Remove the cursor advancement from `pushEvents()`. Only `pullEvents()` should advance the cursor, since it fetches ALL events (including your own) and advances past all of them.
-
-## #2 - `archived` field has no LWW protection
-**Severity: Medium**
-
-In `event-log.js:119`, the LWW guard checks `item[tsKey]`, but for `archived`, `tsKey` = `'archivedUpdatedAt'` which is never initialized in `item_created` and never set in the `archived` switch case. So `item[tsKey]` is always `undefined`, the guard is always skipped, and out-of-order archived events apply in array order rather than by timestamp.
-
-## #3 - Client and server projection diverge
-**Severity: Medium**
-
-The client `projectState` (`event-log.js`) applies LWW for `type`, `level`, and `indented` using `*UpdatedAt` timestamps. The server `api/state/index.ts` applies those field changes unconditionally with no LWW check. This means `GET /api/state` can return different results than the client for the same event log when events arrive out of order.
+## ~~#3 - Client and server projection diverge~~ FIXED (c3bcb66)
 
 ## #4 - Unbounded event log in localStorage
 **Severity: High (will eventually break)**
@@ -52,3 +34,13 @@ If `syncCycle` fails, it logs the error and stops. The next sync only happens on
 
 - `event-log.js`: `isUUID()` defined but never called
 - `event-log.js`: `idMap` in `migrateFromState()` declared but never used
+
+## #11 - Old API endpoints and items table are dead weight
+**Severity: Low**
+
+The client no longer uses `/api/sync`, `/api/items`, or the items table (all replaced by `/api/events` and `/api/state`). Migration 004 renames items to items_deprecated but hasn't been applied. The old endpoints and table can be cleaned up once event-based sync is proven in production.
+
+## #12 - No sync status indicator in the UI
+**Severity: Low-Medium**
+
+Users have no visibility into whether their data is synced or stuck. If sync silently fails (bad network, server down), there's no indication. A subtle status indicator (e.g., a dot or icon showing synced/syncing/error) would build trust for multi-device users.
