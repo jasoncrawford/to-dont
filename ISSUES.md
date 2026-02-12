@@ -6,12 +6,7 @@
 
 ## ~~#3 - Client and server projection diverge~~ FIXED (c3bcb66)
 
-## #4 - Unbounded event log in localStorage
-**Severity: High (will eventually break)**
-
-Events accumulate forever in `decay-events`. localStorage has a ~5MB limit. Each event is ~200-300 bytes, giving roughly 15,000-25,000 events before a `QuotaExceededError`. No compaction strategy exists.
-
-**Possible fix:** After events are synced (have `seq`), periodically compact by generating synthetic `item_created` events from current state and discarding the old log.
+## ~~#4 - Unbounded event log in localStorage~~ FIXED (e2b5ec5)
 
 ## ~~#5 - Dual sync still active~~ FIXED (aa2b34e)
 
