@@ -107,6 +107,7 @@
           typeUpdatedAt: event.timestamp,
           levelUpdatedAt: event.timestamp,
           indentedUpdatedAt: event.timestamp,
+          archivedUpdatedAt: event.timestamp,
         });
       } else if (event.type === 'field_changed') {
         const item = items.get(event.itemId);
@@ -160,6 +161,7 @@
             } else {
               item.archivedAt = null;
             }
+            item.archivedUpdatedAt = event.timestamp;
             break;
         }
       } else if (event.type === 'item_deleted') {
