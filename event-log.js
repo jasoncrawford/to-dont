@@ -294,14 +294,14 @@
   function migrateFromState() {
     // If we already have events, no migration needed
     const existingEvents = localStorage.getItem(EVENTS_KEY);
-    if (existingEvents && JSON.parse(existingEvents).length > 0) return;
+    if (existingEvents && JSON.parse(existingEvents).length > 0) return false;
 
     // If we have existing todos, generate synthetic events
     const existingTodos = localStorage.getItem(TODOS_KEY);
-    if (!existingTodos) return;
+    if (!existingTodos) return false;
 
     const todos = JSON.parse(existingTodos);
-    if (todos.length === 0) return;
+    if (todos.length === 0) return false;
 
     const events = [];
     // Map from event itemId (UUID) back to original id for materialized state
@@ -359,6 +359,7 @@
       }
     }
     materializeState(projected);
+    return true;
   }
 
   function isUUID(str) {
@@ -370,27 +371,29 @@
   // ============================================
 
   // Run migration on load (idempotent)
-  migrateFromState();
+  const migrated = migrateFromState();
 
-  // Always ensure materialized state is consistent with event log
-  const initEvents = loadEvents();
-  if (initEvents.length > 0) {
-    const state = projectState(initEvents);
-    // Preserve serverUuid from existing materialized state
-    const existingTodos = localStorage.getItem(TODOS_KEY);
-    if (existingTodos) {
-      const existing = JSON.parse(existingTodos);
-      const uuidById = new Map();
-      for (const t of existing) {
-        if (t.serverUuid) uuidById.set(t.id, t.serverUuid);
-      }
-      for (const item of state) {
-        if (uuidById.has(item.id)) {
-          item.serverUuid = uuidById.get(item.id);
+  if (!migrated) {
+    // Ensure materialized state is consistent with event log
+    const initEvents = loadEvents();
+    if (initEvents.length > 0) {
+      const state = projectState(initEvents);
+      // Preserve serverUuid from existing materialized state
+      const existingTodos = localStorage.getItem(TODOS_KEY);
+      if (existingTodos) {
+        const existing = JSON.parse(existingTodos);
+        const uuidById = new Map();
+        for (const t of existing) {
+          if (t.serverUuid) uuidById.set(t.id, t.serverUuid);
+        }
+        for (const item of state) {
+          if (uuidById.has(item.id)) {
+            item.serverUuid = uuidById.get(item.id);
+          }
         }
       }
+      materializeState(state);
     }
-    materializeState(state);
   }
 
   // ============================================
