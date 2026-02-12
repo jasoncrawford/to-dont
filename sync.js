@@ -181,6 +181,14 @@
     try {
       await pushEvents();
       await pullEvents();
+
+      // Compact event log if all events are synced
+      if (window.EventLog) {
+        const unpushed = EventLog.getUnpushedEvents();
+        if (unpushed.length === 0) {
+          EventLog.compactEvents();
+        }
+      }
     } catch (err) {
       console.error('[Sync] Sync failed:', err);
     } finally {
