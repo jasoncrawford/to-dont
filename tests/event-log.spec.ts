@@ -262,6 +262,133 @@ test.describe('Event Log', () => {
     expect(clientId2).toBe(clientId);
   });
 
+  test('items with identical positions are sorted deterministically by ID', async ({ page }) => {
+    await setupPage(page);
+
+    const now = Date.now();
+    await page.evaluate((now) => {
+      localStorage.setItem('decay-events', JSON.stringify([
+        {
+          id: crypto.randomUUID(),
+          itemId: 'aaaaaaaa-0000-0000-0000-000000000001',
+          type: 'item_created',
+          field: null,
+          value: { text: 'Item A', position: 'n' },
+          timestamp: now,
+          clientId: 'test',
+          seq: null,
+        },
+        {
+          id: crypto.randomUUID(),
+          itemId: 'aaaaaaaa-0000-0000-0000-000000000003',
+          type: 'item_created',
+          field: null,
+          value: { text: 'Item B', position: 'n' },
+          timestamp: now + 1,
+          clientId: 'test',
+          seq: null,
+        },
+        {
+          id: crypto.randomUUID(),
+          itemId: 'aaaaaaaa-0000-0000-0000-000000000002',
+          type: 'item_created',
+          field: null,
+          value: { text: 'Item C', position: 'n' },
+          timestamp: now + 2,
+          clientId: 'test',
+          seq: null,
+        },
+      ]));
+    }, now);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(3);
+    // All have position 'n', so they should sort by ID: 0001 < 0002 < 0003
+    expect(stored[0].text).toBe('Item A'); // id ends ...0001
+    expect(stored[1].text).toBe('Item C'); // id ends ...0002
+    expect(stored[2].text).toBe('Item B'); // id ends ...0003
+  });
+
+  test('position tiebreaker does not affect items with different positions', async ({ page }) => {
+    await setupPage(page);
+
+    const now = Date.now();
+    await page.evaluate((now) => {
+      localStorage.setItem('decay-events', JSON.stringify([
+        {
+          id: crypto.randomUUID(),
+          itemId: 'zzzzzzzz-0000-0000-0000-000000000001',
+          type: 'item_created',
+          field: null,
+          value: { text: 'Item X', position: 'a' },
+          timestamp: now,
+          clientId: 'test',
+          seq: null,
+        },
+        {
+          id: crypto.randomUUID(),
+          itemId: 'aaaaaaaa-0000-0000-0000-000000000001',
+          type: 'item_created',
+          field: null,
+          value: { text: 'Item Y', position: 'z' },
+          timestamp: now + 1,
+          clientId: 'test',
+          seq: null,
+        },
+      ]));
+    }, now);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(2);
+    // Position 'a' < 'z', so X comes first despite having a later ID
+    expect(stored[0].text).toBe('Item X');
+    expect(stored[1].text).toBe('Item Y');
+  });
+
+  test('projectState produces same order regardless of event insertion order', async ({ page }) => {
+    await setupPage(page);
+
+    const now = Date.now();
+    const result = await page.evaluate((now) => {
+      const makeEvents = (order: string[]) => order.map((suffix, i) => ({
+        id: crypto.randomUUID(),
+        itemId: `aaaaaaaa-0000-0000-0000-00000000000${suffix}`,
+        type: 'item_created',
+        field: null,
+        value: { text: `Item ${suffix}`, position: 'n' },
+        timestamp: now + i,
+        clientId: 'test',
+        seq: null,
+      }));
+
+      const eventsOriginal = makeEvents(['3', '1', '2']);
+      const eventsReversed = makeEvents(['2', '1', '3']);
+
+      const projectedOriginal = (window as any).EventLog.projectState(eventsOriginal);
+      const projectedReversed = (window as any).EventLog.projectState(eventsReversed);
+
+      return {
+        originalOrder: projectedOriginal.map((i: any) => i.id),
+        reversedOrder: projectedReversed.map((i: any) => i.id),
+      };
+    }, now);
+
+    // Both orderings should produce the same item order
+    expect(result.originalOrder).toEqual(result.reversedOrder);
+    // And that order should be sorted by ID
+    expect(result.originalOrder).toEqual([
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'aaaaaaaa-0000-0000-0000-000000000002',
+      'aaaaaaaa-0000-0000-0000-000000000003',
+    ]);
+  });
+
   test('item_deleted removes item from projected state', async ({ page }) => {
     await setupPage(page);
     await addTodo(page, 'Will delete');
