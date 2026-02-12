@@ -90,23 +90,25 @@
         items.set(event.itemId, {
           id: event.itemId,
           text: val.text || '',
-          createdAt: event.timestamp,
+          createdAt: val.createdAt || event.timestamp,
           important: val.important || false,
-          completed: false,
+          completed: val.completed || false,
+          completedAt: val.completedAt || undefined,
           archived: val.archived || false,
+          archivedAt: val.archivedAt || undefined,
           position: val.position || 'n',
           type: val.type || undefined,
           level: val.level || undefined,
           indented: val.indented || false,
           // Track per-field timestamps for LWW
-          textUpdatedAt: event.timestamp,
-          importantUpdatedAt: event.timestamp,
-          completedUpdatedAt: event.timestamp,
-          positionUpdatedAt: event.timestamp,
-          typeUpdatedAt: event.timestamp,
-          levelUpdatedAt: event.timestamp,
-          indentedUpdatedAt: event.timestamp,
-          archivedUpdatedAt: event.timestamp,
+          textUpdatedAt: val.textUpdatedAt || event.timestamp,
+          importantUpdatedAt: val.importantUpdatedAt || event.timestamp,
+          completedUpdatedAt: val.completedUpdatedAt || event.timestamp,
+          positionUpdatedAt: val.positionUpdatedAt || event.timestamp,
+          typeUpdatedAt: val.typeUpdatedAt || event.timestamp,
+          levelUpdatedAt: val.levelUpdatedAt || event.timestamp,
+          indentedUpdatedAt: val.indentedUpdatedAt || event.timestamp,
+          archivedUpdatedAt: val.archivedUpdatedAt || event.timestamp,
         });
       } else if (event.type === 'field_changed') {
         const item = items.get(event.itemId);
@@ -288,6 +290,60 @@
   }
 
   // ============================================
+  // Log Compaction
+  // ============================================
+
+  function compactEvents() {
+    const events = loadEvents();
+    if (events.length === 0) return;
+
+    // Keep unsynced events — they haven't reached the server yet
+    const unsynced = events.filter(e => e.seq === null);
+
+    // Project current state from ALL events
+    const state = projectState(events);
+
+    // Create one synthetic item_created per live item, capturing full state
+    const syntheticEvents = state.map(item => ({
+      id: crypto.randomUUID(),
+      itemId: item.id,
+      type: 'item_created',
+      field: null,
+      value: {
+        text: item.text,
+        createdAt: item.createdAt,
+        important: item.important,
+        completed: item.completed,
+        completedAt: item.completedAt,
+        archived: item.archived,
+        archivedAt: item.archivedAt,
+        position: item.position,
+        type: item.type,
+        level: item.level,
+        indented: item.indented,
+        textUpdatedAt: item.textUpdatedAt,
+        importantUpdatedAt: item.importantUpdatedAt,
+        completedUpdatedAt: item.completedUpdatedAt,
+        positionUpdatedAt: item.positionUpdatedAt,
+        typeUpdatedAt: item.typeUpdatedAt,
+        levelUpdatedAt: item.levelUpdatedAt,
+        indentedUpdatedAt: item.indentedUpdatedAt,
+        archivedUpdatedAt: item.archivedUpdatedAt,
+      },
+      timestamp: item.createdAt,
+      clientId: clientId,
+      seq: 0, // Marks as already synced
+    }));
+
+    // New log = snapshots + unsynced edits
+    const compacted = syntheticEvents.concat(unsynced);
+    saveEvents(compacted);
+
+    console.log('[EventLog] Compacted', events.length, 'events to', compacted.length,
+      '(' + syntheticEvents.length, 'snapshots +', unsynced.length, 'unsynced)');
+  }
+
+  // ============================================
   // Migration from existing state
   // ============================================
 
@@ -421,6 +477,7 @@
     getUnpushedEvents: getUnpushedEvents,
     markEventsPushed: markEventsPushed,
     appendRemoteEvents: appendRemoteEvents,
+    compactEvents: compactEvents,
   };
 
 })();

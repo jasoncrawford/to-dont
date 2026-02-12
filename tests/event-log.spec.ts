@@ -389,6 +389,121 @@ test.describe('Event Log', () => {
     ]);
   });
 
+  test('compactEvents reduces event count while preserving state', async ({ page }) => {
+    await setupPage(page);
+    await addTodo(page, 'First item');
+    await addTodo(page, 'Second item');
+    await toggleImportant(page, 'First item');
+
+    // Verify we have multiple events before compaction
+    let events = await getEventLog(page);
+    const preCompactCount = events.length;
+    expect(preCompactCount).toBeGreaterThan(2);
+
+    // Get state before compaction
+    const stateBefore = await getStoredTodos(page);
+
+    // Mark all events as synced (compaction only replaces synced events)
+    await page.evaluate(() => {
+      const events = JSON.parse(localStorage.getItem('decay-events') || '[]');
+      for (const e of events) e.seq = 1;
+      localStorage.setItem('decay-events', JSON.stringify(events));
+    });
+
+    // Compact
+    await page.evaluate(() => (window as any).EventLog.compactEvents());
+
+    // After compaction: should have exactly 2 synthetic item_created events (no unsynced)
+    events = await getEventLog(page);
+    expect(events.length).toBe(2);
+    expect(events.every((e: any) => e.type === 'item_created')).toBe(true);
+
+    // State should be preserved
+    const stateAfter = await getStoredTodos(page);
+    expect(stateAfter.length).toBe(stateBefore.length);
+    for (let i = 0; i < stateBefore.length; i++) {
+      expect(stateAfter[i].id).toBe(stateBefore[i].id);
+      expect(stateAfter[i].text).toBe(stateBefore[i].text);
+      expect(stateAfter[i].important).toBe(stateBefore[i].important);
+      expect(stateAfter[i].completed).toBe(stateBefore[i].completed);
+      expect(stateAfter[i].position).toBe(stateBefore[i].position);
+    }
+  });
+
+  test('compactEvents preserves unsynced events', async ({ page }) => {
+    await setupPage(page);
+    await addTodo(page, 'Synced item');
+
+    // Mark existing events as synced
+    await page.evaluate(() => {
+      const events = JSON.parse(localStorage.getItem('decay-events') || '[]');
+      for (const e of events) e.seq = 1;
+      localStorage.setItem('decay-events', JSON.stringify(events));
+    });
+
+    // Add another item (unsynced, seq=null)
+    await addTodo(page, 'Unsynced item');
+
+    const eventsBefore = await getEventLog(page);
+    const unsyncedBefore = eventsBefore.filter((e: any) => e.seq === null);
+    expect(unsyncedBefore.length).toBeGreaterThan(0);
+
+    // Compact
+    await page.evaluate(() => (window as any).EventLog.compactEvents());
+
+    const eventsAfter = await getEventLog(page);
+    // Should have 2 snapshots + unsynced events
+    const snapshots = eventsAfter.filter((e: any) => e.type === 'item_created' && e.seq === 0);
+    const unsynced = eventsAfter.filter((e: any) => e.seq === null);
+    expect(snapshots.length).toBe(2); // both items as snapshots
+    expect(unsynced.length).toBe(unsyncedBefore.length);
+
+    // State should still have both items
+    const stored = await getStoredTodos(page);
+    const texts = stored.map((t: any) => t.text);
+    expect(texts).toContain('Synced item');
+    expect(texts).toContain('Unsynced item');
+  });
+
+  test('compactEvents preserves completed/archived state in snapshots', async ({ page }) => {
+    await setupPage(page);
+    await addTodo(page, 'Complete me');
+    await completeTodo(page, 'Complete me');
+
+    // Mark all as synced
+    await page.evaluate(() => {
+      const events = JSON.parse(localStorage.getItem('decay-events') || '[]');
+      for (const e of events) e.seq = 1;
+      localStorage.setItem('decay-events', JSON.stringify(events));
+    });
+
+    // Compact
+    await page.evaluate(() => (window as any).EventLog.compactEvents());
+
+    // Reload to verify the compacted events reconstruct state correctly
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].text).toBe('Complete me');
+    expect(stored[0].completed).toBe(true);
+    expect(stored[0].completedAt).toBeDefined();
+  });
+
+  test('compactEvents on empty log is a no-op', async ({ page }) => {
+    await setupPage(page);
+
+    // Ensure empty event log
+    await page.evaluate(() => localStorage.removeItem('decay-events'));
+
+    // Should not throw
+    await page.evaluate(() => (window as any).EventLog.compactEvents());
+
+    const events = await getEventLog(page);
+    expect(events).toHaveLength(0);
+  });
+
   test('item_deleted removes item from projected state', async ({ page }) => {
     await setupPage(page);
     await addTodo(page, 'Will delete');
