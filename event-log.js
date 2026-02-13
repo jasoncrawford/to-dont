@@ -360,8 +360,6 @@
     if (todos.length === 0) return false;
 
     const events = [];
-    // Map from event itemId (UUID) back to original id for materialized state
-    const idMap = new Map();
 
     for (const todo of todos) {
       // Use existing ID as the event itemId — preserves old IDs during transition
@@ -416,10 +414,6 @@
     }
     materializeState(projected);
     return true;
-  }
-
-  function isUUID(str) {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
   }
 
   // ============================================
