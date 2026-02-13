@@ -351,6 +351,150 @@ test.describe('Sync Layer', () => {
     const stored = await getStoredTodos(page);
     expect(stored.length).toBe(1);
   });
+
+  test('pullEvents paginates when server returns full pages', async ({ page }) => {
+    await setupPage(page);
+
+    const result = await page.evaluate(async () => {
+      const PAGE_SIZE = window.ToDoSync._test!.PULL_PAGE_SIZE;
+      let fetchCallCount = 0;
+
+      // Mock fetch to return paginated responses
+      window.fetch = function(...args: Parameters<typeof fetch>) {
+        fetchCallCount++;
+        const url = String(args[0]);
+        const sinceMatch = url.match(/since=(\d+)/);
+        const since = sinceMatch ? parseInt(sinceMatch[1]) : 0;
+
+        let count: number;
+        if (since < PAGE_SIZE * 2) {
+          count = PAGE_SIZE; // Full pages
+        } else {
+          count = 10; // Partial final page
+        }
+
+        const events = [];
+        for (let i = 1; i <= count; i++) {
+          events.push({
+            id: `evt-${since + i}`,
+            itemId: `item-${since + i}`,
+            type: 'item_created',
+            field: null,
+            value: { text: 'test', position: 'n' },
+            timestamp: Date.now(),
+            clientId: 'other-client',
+            seq: since + i,
+          });
+        }
+
+        return Promise.resolve(new Response(JSON.stringify({ events }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+
+      (window as any).SYNC_API_URL = '';
+      (window as any).SYNC_BEARER_TOKEN = 'test';
+
+      await window.ToDoSync._test!.pullEvents();
+
+      const cursor = parseInt(localStorage.getItem('decay-event-cursor') || '0');
+      return { fetchCallCount, cursor, PAGE_SIZE };
+    });
+
+    // 2 full pages + 1 partial = 3 fetches
+    expect(result.fetchCallCount).toBe(3);
+    expect(result.cursor).toBe(result.PAGE_SIZE * 2 + 10);
+  });
+
+  test('pullEvents stops after single page when fewer than PAGE_SIZE', async ({ page }) => {
+    await setupPage(page);
+
+    const result = await page.evaluate(async () => {
+      let fetchCallCount = 0;
+
+      window.fetch = function() {
+        fetchCallCount++;
+        const events = [];
+        for (let i = 1; i <= 50; i++) {
+          events.push({
+            id: `evt-${i}`,
+            itemId: `item-${i}`,
+            type: 'item_created',
+            field: null,
+            value: { text: 'test', position: 'n' },
+            timestamp: Date.now(),
+            clientId: 'other-client',
+            seq: i,
+          });
+        }
+
+        return Promise.resolve(new Response(JSON.stringify({ events }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+
+      (window as any).SYNC_API_URL = '';
+      (window as any).SYNC_BEARER_TOKEN = 'test';
+
+      await window.ToDoSync._test!.pullEvents();
+
+      const cursor = parseInt(localStorage.getItem('decay-event-cursor') || '0');
+      return { fetchCallCount, cursor };
+    });
+
+    expect(result.fetchCallCount).toBe(1);
+    expect(result.cursor).toBe(50);
+  });
+
+  test('pullEvents respects MAX_PULL_PAGES safety cap', async ({ page }) => {
+    await setupPage(page);
+
+    const result = await page.evaluate(async () => {
+      const PAGE_SIZE = window.ToDoSync._test!.PULL_PAGE_SIZE;
+      const MAX_PAGES = window.ToDoSync._test!.MAX_PULL_PAGES;
+      let fetchCallCount = 0;
+
+      // Always return a full page (simulates infinite events)
+      // Reuse a small set of itemIds to avoid localStorage quota issues
+      window.fetch = function(...args: Parameters<typeof fetch>) {
+        fetchCallCount++;
+        const url = String(args[0]);
+        const sinceMatch = url.match(/since=(\d+)/);
+        const since = sinceMatch ? parseInt(sinceMatch[1]) : 0;
+
+        const events = [];
+        for (let i = 1; i <= PAGE_SIZE; i++) {
+          events.push({
+            id: `evt-${since + i}`,
+            itemId: `item-${(i - 1) % 5}`,
+            type: 'item_created',
+            field: null,
+            value: { text: 'test', position: 'n' },
+            timestamp: Date.now(),
+            clientId: 'other-client',
+            seq: since + i,
+          });
+        }
+
+        return Promise.resolve(new Response(JSON.stringify({ events }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+
+      (window as any).SYNC_API_URL = '';
+      (window as any).SYNC_BEARER_TOKEN = 'test';
+
+      await window.ToDoSync._test!.pullEvents();
+
+      return { fetchCallCount, MAX_PAGES };
+    });
+
+    // Should stop at MAX_PULL_PAGES
+    expect(result.fetchCallCount).toBe(result.MAX_PAGES);
+  });
 });
 
 // Type declarations for test
@@ -370,6 +514,9 @@ declare global {
         handleOnline: () => void;
         isSyncing: () => boolean;
         isSyncPending: () => boolean;
+        pullEvents: () => Promise<void>;
+        PULL_PAGE_SIZE: number;
+        MAX_PULL_PAGES: number;
       };
     };
     saveTodos: (todos: unknown[]) => void;

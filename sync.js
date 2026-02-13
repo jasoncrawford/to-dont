@@ -36,6 +36,10 @@
     localStorage.setItem(CURSOR_KEY, String(seq));
   }
 
+  // Pull pagination constants
+  const PULL_PAGE_SIZE = 500;
+  const MAX_PULL_PAGES = 50;
+
   // Debounce timer for server sync
   let serverSyncTimer = null;
   const SERVER_SYNC_DEBOUNCE_MS = 2000;
@@ -138,33 +142,47 @@
     }
   }
 
-  // Pull new events from server
+  // Pull new events from server, paginating until all caught up
   async function pullEvents() {
     if (!window.EventLog) return;
 
-    const since = getLastSeq();
-    const result = await apiRequest(`/api/events?since=${since}`);
-
-    if (!result || !result.events || result.events.length === 0) return;
-
-    // Filter out our own events (trivial echo suppression by clientId)
     const myClientId = EventLog.getClientId();
-    const remoteEvents = result.events.filter(e => e.clientId !== myClientId);
+    let allRemoteEvents = [];
+    let pageCount = 0;
+    let hasMore = true;
 
-    if (remoteEvents.length > 0) {
-      console.log('[Sync] Pulled', remoteEvents.length, 'remote events');
-      EventLog.appendRemoteEvents(remoteEvents);
+    while (hasMore && pageCount < MAX_PULL_PAGES) {
+      const since = getLastSeq();
+      const result = await apiRequest(`/api/events?since=${since}&limit=${PULL_PAGE_SIZE}`);
+
+      if (!result || !result.events || result.events.length === 0) break;
+
+      // Filter out our own events (trivial echo suppression by clientId)
+      const remoteEvents = result.events.filter(e => e.clientId !== myClientId);
+      if (remoteEvents.length > 0) {
+        allRemoteEvents = allRemoteEvents.concat(remoteEvents);
+      }
+
+      // Update cursor to the highest seq from ALL events (including ours)
+      const maxSeq = Math.max(...result.events.map(e => e.seq));
+      if (maxSeq > getLastSeq()) {
+        setLastSeq(maxSeq);
+      }
+
+      pageCount++;
+
+      // If we got fewer than PULL_PAGE_SIZE, we've caught up
+      hasMore = result.events.length >= PULL_PAGE_SIZE;
+    }
+
+    if (allRemoteEvents.length > 0) {
+      console.log('[Sync] Pulled', allRemoteEvents.length, 'remote events in', pageCount, 'page(s)');
+      EventLog.appendRemoteEvents(allRemoteEvents);
 
       // Render if not editing
       if (typeof window.render === 'function' && !isUserEditing()) {
         window.render();
       }
-    }
-
-    // Update cursor to the highest seq from ALL events (including ours)
-    const maxSeq = Math.max(...result.events.map(e => e.seq));
-    if (maxSeq > getLastSeq()) {
-      setLastSeq(maxSeq);
     }
   }
 
@@ -420,6 +438,9 @@
       handleOnline: handleOnline,
       isSyncing: () => isSyncing,
       isSyncPending: () => syncPending,
+      pullEvents: pullEvents,
+      PULL_PAGE_SIZE: PULL_PAGE_SIZE,
+      MAX_PULL_PAGES: MAX_PULL_PAGES,
     };
   }
 
