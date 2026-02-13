@@ -1,7 +1,6 @@
 import { Page, expect } from '@playwright/test';
-import * as path from 'path';
 
-export const APP_URL = `file://${path.resolve(__dirname, '../index.html')}?test-mode=1`;
+export const APP_URL = 'http://localhost:5173/?test-mode=1';
 
 export async function setupPage(page: Page) {
   // Clear localStorage before each test

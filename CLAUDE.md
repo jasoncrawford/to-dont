@@ -17,9 +17,10 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 ## Architecture
 
 ### Frontend
-- **Single-page vanilla JS app** - No framework, no build step
+- **Single-page vanilla JS app** - Non-module scripts served by Vite
 - **Core logic in app.js** - Renders DOM directly, event handlers inline
 - **Sync layer in sync.js** - Optional cloud sync, loaded separately
+- **Vite dev server** - Serves frontend, generates `sync-config.js` from env vars, proxies `/api/*` to Vercel dev
 - Uses `contenteditable` divs for text editing with Selection/Range API
 
 ### Data & Sync
@@ -58,14 +59,18 @@ Each item tracks per-field timestamps for conflict resolution:
 ## Running the App
 
 ```bash
-# Just open in browser (works offline)
-open index.html
+# Start Vite dev server (frontend only, sync disabled)
+npm run dev
+
+# Start Vite + API server (full stack with sync)
+npm run dev        # Terminal 1: Vite on :5173
+npm run dev:api    # Terminal 2: Vercel dev on :3001 (proxied via Vite)
+
+# Build for production
+npm run build
 
 # Run tests
 npm test
-
-# Run API locally (for sync development)
-vercel dev
 ```
 
 ## Files to Read First

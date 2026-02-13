@@ -1,5 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
+const VITE_PORT = 5173;
 const SYNC_TEST_PORT = 3001;
 
 export default defineConfig({
@@ -17,7 +18,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         browserName: 'chromium',
-        baseURL: `file://${process.cwd()}/index.html`,
+        baseURL: `http://localhost:${VITE_PORT}`,
       },
       testIgnore: /sync-e2e/,
     },
@@ -40,9 +41,16 @@ export default defineConfig({
       dependencies: ['sync-e2e-api'],
     },
   ],
-  webServer: {
-    command: `npx vercel dev --listen ${SYNC_TEST_PORT} --yes`,
-    port: SYNC_TEST_PORT,
-    reuseExistingServer: false,
-  },
+  webServer: [
+    {
+      command: `npx vite --port ${VITE_PORT}`,
+      port: VITE_PORT,
+      reuseExistingServer: false,
+    },
+    {
+      command: `npx vercel dev --listen ${SYNC_TEST_PORT} --yes`,
+      port: SYNC_TEST_PORT,
+      reuseExistingServer: false,
+    },
+  ],
 });

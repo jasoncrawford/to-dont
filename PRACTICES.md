@@ -2,11 +2,12 @@
 
 ## Technology Stack
 
-- **Frontend**: Vanilla HTML, CSS, JavaScript (no framework)
+- **Frontend**: Vanilla HTML, CSS, JavaScript (non-module scripts)
+- **Build**: Vite (dev server, build, env-driven `sync-config.js` generation)
 - **Storage**: Browser localStorage + optional Supabase sync
 - **Backend**: Vercel serverless functions (TypeScript)
 - **Database**: Supabase (PostgreSQL)
-- **Testing**: Playwright (end-to-end browser tests)
+- **Testing**: Playwright (end-to-end browser tests via Vite dev server)
 
 ## Project Structure
 
@@ -16,7 +17,10 @@ to-dont/
 ├── styles.css          # All styling
 ├── app.js              # Frontend application logic
 ├── sync.js             # Sync layer (Supabase integration)
+├── event-log.js        # Event sourcing layer
 ├── fractional-index.js # Shared fractional indexing (CRDT ordering)
+├── vite.config.js      # Vite config (sync-config plugin, legacy script copy, API proxy)
+├── .env.example        # Required env vars template
 ├── api/                # Vercel serverless functions
 │   ├── sync/           # Main sync endpoint (LWW merge)
 │   └── items/          # CRUD operations
@@ -64,14 +68,20 @@ Tests run with `?test-mode=1` which enables virtual time manipulation for testin
 4. **Run automated tests** - `npm test`
 5. **Commit** - Clear message explaining what and why
 
-### Running Locally with Sync
+### Running Locally
 ```bash
-# Start the API server
-vercel dev
+# Frontend only (sync disabled)
+npm run dev
 
-# Then open index.html in browser
-# Sync will auto-enable if configured
+# Full stack (two terminals)
+npm run dev        # Vite dev server on :5173
+npm run dev:api    # Vercel dev on :3001 (proxied via Vite)
+
+# Build for production
+npm run build
 ```
+
+Environment variables are read from `.env.local` (see `.env.example`). The Vite plugin generates `sync-config.js` from these vars at serve/build time — no gitignored credential file needed.
 
 ## Sync Architecture
 

@@ -4,6 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "vite",
+    "dev:api": "vercel dev --listen 3001 --yes",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
@@ -12,12 +16,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0",
-    "dotenv": "^17.2.3"
+    "@supabase/supabase-js": "^2.49.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vite": "^6.4.1"
   }
 }

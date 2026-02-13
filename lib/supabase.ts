@@ -1,9 +1,4 @@
-import { config } from 'dotenv';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-// Load .env.local and .env files
-config({ path: '.env.local' });
-config({ path: '.env' });
 
 let _supabase: SupabaseClient | null = null;
 
