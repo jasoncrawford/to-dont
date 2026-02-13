@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { validateAuth } from '../../lib/auth';
 import { supabase, DbItem } from '../../lib/supabase';
+import { withLogging } from '../../lib/log';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default withLogging(async function handler(req: VercelRequest, res: VercelResponse) {
   if (!validateAuth(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -19,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-}
+});
 
 async function handlePatch(req: VercelRequest, res: VercelResponse, id: string) {
   const updates = req.body as Partial<DbItem>;

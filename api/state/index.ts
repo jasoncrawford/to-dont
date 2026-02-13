@@ -2,12 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { validateAuth } from '../../lib/auth';
 import { getSupabase } from '../../lib/supabase';
 import { DbEvent, fromDbEvent } from '../../lib/events';
+import { withLogging } from '../../lib/log';
 
 /**
  * GET /api/state - Projects all events into a materialized item array.
  * Used by tests as a replacement for GET /api/items.
  */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default withLogging(async function handler(req: VercelRequest, res: VercelResponse) {
   if (!validateAuth(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -120,4 +121,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   result.sort((a: any, b: any) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
 
   return res.status(200).json(result);
-}
+});

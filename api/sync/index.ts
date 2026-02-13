@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { validateAuth } from '../../lib/auth';
 import { supabase, DbItem } from '../../lib/supabase';
+import { withLogging } from '../../lib/log';
 
 interface SyncRequest {
   items: DbItem[];
@@ -69,7 +70,7 @@ function mergeItems(client: DbItem, server: DbItem): DbItem {
   };
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default withLogging(async function handler(req: VercelRequest, res: VercelResponse) {
   if (!validateAuth(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -192,4 +193,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Sync error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-}
+});

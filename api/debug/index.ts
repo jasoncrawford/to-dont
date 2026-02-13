@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { withLogging } from '../../lib/log';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default withLogging(async function handler(req: VercelRequest, res: VercelResponse) {
   // Check which env vars are set (without revealing values)
   const envStatus = {
     SUPABASE_URL: !!process.env.SUPABASE_URL,
@@ -13,4 +14,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   return res.status(200).json(envStatus);
-}
+});
