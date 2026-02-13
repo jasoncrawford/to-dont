@@ -14,21 +14,11 @@
 
 ## ~~#7 - `loadEvents()` never uses its parsed cache~~ FIXED (6ff8894)
 
-## #8 - No pagination for catch-up pulls
-**Severity: Low-Medium**
+## ~~#8 - No pagination for catch-up pulls~~ FIXED (4df5a16)
 
-`pullEvents` uses a server limit of 500 events. A client that's been offline could have thousands to catch up on. There's no follow-up pull when the limit is reached — remaining events are only caught on the next sync cycle.
+## ~~#9 - No retry/backoff for sync failures~~ FIXED (00c3dca)
 
-## #9 - No retry/backoff for sync failures
-**Severity: Low**
-
-If `syncCycle` fails, it logs the error and stops. The next sync only happens on a new mutation or online event. No periodic background retry or exponential backoff.
-
-## #10 - Dead code
-**Severity: Low**
-
-- `event-log.js`: `isUUID()` defined but never called
-- `event-log.js`: `idMap` in `migrateFromState()` declared but never used
+## ~~#10 - Dead code~~ FIXED (9fc8984)
 
 ## #11 - Old API endpoints and items table are dead weight
 **Severity: Low**
