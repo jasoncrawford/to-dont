@@ -44,6 +44,13 @@
   let serverSyncTimer = null;
   const SERVER_SYNC_DEBOUNCE_MS = 2000;
 
+  // Retry with exponential backoff
+  let retryTimer = null;
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
+  const BASE_RETRY_MS = 5000;
+  const MAX_RETRY_MS = 60000;
+
   // Pending remote events (queued while user is editing)
   let pendingRemoteEvents = [];
 
@@ -186,6 +193,33 @@
     }
   }
 
+  // Clear any pending retry timer
+  function clearRetryTimer() {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  }
+
+  // Schedule a retry with exponential backoff
+  function scheduleRetry() {
+    if (retryCount >= MAX_RETRIES) {
+      console.warn('[Sync] Max retries reached (' + MAX_RETRIES + '), giving up until next trigger');
+      retryCount = 0;
+      return;
+    }
+
+    const delay = Math.min(BASE_RETRY_MS * Math.pow(2, retryCount), MAX_RETRY_MS);
+    retryCount++;
+    console.log('[Sync] Scheduling retry ' + retryCount + '/' + MAX_RETRIES + ' in ' + delay + 'ms');
+
+    clearRetryTimer();
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      syncCycle();
+    }, delay);
+  }
+
   // Full sync cycle: push then pull
   async function syncCycle() {
     if (!syncEnabled) return;
@@ -200,6 +234,10 @@
       await pushEvents();
       await pullEvents();
 
+      // Success - reset retry state
+      retryCount = 0;
+      clearRetryTimer();
+
       // Compact event log if all events are synced
       if (window.EventLog) {
         const unpushed = EventLog.getUnpushedEvents();
@@ -209,6 +247,7 @@
       }
     } catch (err) {
       console.error('[Sync] Sync failed:', err);
+      scheduleRetry();
     } finally {
       isSyncing = false;
 
@@ -224,6 +263,10 @@
     if (serverSyncTimer) {
       clearTimeout(serverSyncTimer);
     }
+
+    // A new mutation supersedes any pending retry
+    clearRetryTimer();
+    retryCount = 0;
 
     serverSyncTimer = setTimeout(() => {
       serverSyncTimer = null;
@@ -362,6 +405,8 @@
 
   function disableSync() {
     syncEnabled = false;
+    clearRetryTimer();
+    retryCount = 0;
     unsubscribeFromRealtime();
     console.log('[Sync] Disabled');
   }
@@ -441,6 +486,12 @@
       pullEvents: pullEvents,
       PULL_PAGE_SIZE: PULL_PAGE_SIZE,
       MAX_PULL_PAGES: MAX_PULL_PAGES,
+      retryCount: () => retryCount,
+      retryTimer: () => retryTimer,
+      clearRetryTimer: clearRetryTimer,
+      MAX_RETRIES: MAX_RETRIES,
+      BASE_RETRY_MS: BASE_RETRY_MS,
+      MAX_RETRY_MS: MAX_RETRY_MS,
     };
   }
 
