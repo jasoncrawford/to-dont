@@ -495,6 +495,126 @@ test.describe('Sync Layer', () => {
     // Should stop at MAX_PULL_PAGES
     expect(result.fetchCallCount).toBe(result.MAX_PAGES);
   });
+
+  test('sync failure schedules a retry timer', async ({ page }) => {
+    await setupPage(page);
+
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Server error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+
+    const retryState = await page.evaluate(() => ({
+      retryCount: window.ToDoSync._test!.retryCount(),
+      hasRetryTimer: window.ToDoSync._test!.retryTimer() !== null,
+    }));
+
+    expect(retryState.retryCount).toBe(1);
+    expect(retryState.hasRetryTimer).toBe(true);
+
+    await page.evaluate(() => window.ToDoSync._test!.clearRetryTimer());
+  });
+
+  test('retry count resets on successful sync', async ({ page }) => {
+    await setupPage(page);
+
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+    const afterFail = await page.evaluate(() => window.ToDoSync._test!.retryCount());
+    expect(afterFail).toBe(1);
+
+    await page.evaluate(() => {
+      window.ToDoSync._test!.clearRetryTimer();
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ events: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+    const afterSuccess = await page.evaluate(() => window.ToDoSync._test!.retryCount());
+    expect(afterSuccess).toBe(0);
+  });
+
+  test('disableSync clears retry timer', async ({ page }) => {
+    await setupPage(page);
+
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+    const hasTimer = await page.evaluate(() => window.ToDoSync._test!.retryTimer() !== null);
+    expect(hasTimer).toBe(true);
+
+    await page.evaluate(() => window.ToDoSync.disable());
+
+    const afterDisable = await page.evaluate(() => ({
+      retryCount: window.ToDoSync._test!.retryCount(),
+      hasRetryTimer: window.ToDoSync._test!.retryTimer() !== null,
+    }));
+    expect(afterDisable.retryCount).toBe(0);
+    expect(afterDisable.hasRetryTimer).toBe(false);
+  });
+
+  test('queueServerSync clears pending retry', async ({ page }) => {
+    await setupPage(page);
+
+    await page.evaluate(() => {
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+    const hasTimer = await page.evaluate(() => window.ToDoSync._test!.retryTimer() !== null);
+    expect(hasTimer).toBe(true);
+
+    await page.evaluate(() => {
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ events: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+      window.ToDoSync.onSave([]);
+    });
+
+    const afterQueue = await page.evaluate(() => ({
+      retryCount: window.ToDoSync._test!.retryCount(),
+      hasRetryTimer: window.ToDoSync._test!.retryTimer() !== null,
+    }));
+    expect(afterQueue.retryCount).toBe(0);
+    expect(afterQueue.hasRetryTimer).toBe(false);
+  });
 });
 
 // Type declarations for test
@@ -517,6 +637,12 @@ declare global {
         pullEvents: () => Promise<void>;
         PULL_PAGE_SIZE: number;
         MAX_PULL_PAGES: number;
+        retryCount: () => number;
+        retryTimer: () => ReturnType<typeof setTimeout> | null;
+        clearRetryTimer: () => void;
+        MAX_RETRIES: number;
+        BASE_RETRY_MS: number;
+        MAX_RETRY_MS: number;
       };
     };
     saveTodos: (todos: unknown[]) => void;
