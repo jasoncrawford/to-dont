@@ -1,11 +1,11 @@
 import { defineConfig } from '@playwright/test';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 const VITE_PORT = 5173;
 const SYNC_TEST_PORT = 3001;
 
-// Load .env.test for sync-e2e tests (cloud Supabase credentials)
+// Load .env.local for sync-e2e tests (local Supabase)
 function loadEnvFile(filename: string): Record<string, string> {
   try {
     const content = readFileSync(resolve(__dirname, filename), 'utf-8');
@@ -22,7 +22,17 @@ function loadEnvFile(filename: string): Record<string, string> {
   }
 }
 
-const testEnv = loadEnvFile('.env.test');
+const testEnv = loadEnvFile('.env.local');
+
+// Generate sync-config.js so the browser connects to the same local Supabase as the API
+writeFileSync(
+  resolve(__dirname, 'sync-config.js'),
+  `window.SYNC_CONFIG = ${JSON.stringify({
+    supabaseUrl: testEnv.SUPABASE_URL || '',
+    supabaseAnonKey: testEnv.SUPABASE_ANON_KEY || '',
+    bearerToken: testEnv.SYNC_BEARER_TOKEN || '',
+  }, null, 2)};`
+);
 
 export default defineConfig({
   testDir: './tests',
