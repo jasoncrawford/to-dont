@@ -12,6 +12,32 @@ const APP_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
 
+/**
+ * Wait for specific console messages to appear on a page.
+ * Attach BEFORE triggering the action that produces the messages (e.g. reload).
+ * Rejects with an error (not a silent resolve) so real failures surface.
+ */
+function waitForConsoleMessages(page: Page, messages: string[], timeout: number): Promise<void> {
+  const remaining = new Set(messages);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(
+      `Timed out waiting for console messages: ${[...remaining].join(', ')}`
+    )), timeout);
+    const handler = (msg: { text: () => string }) => {
+      const text = msg.text();
+      for (const m of remaining) {
+        if (text.includes(m)) remaining.delete(m);
+      }
+      if (remaining.size === 0) {
+        clearTimeout(timer);
+        page.off('console', handler);
+        resolve();
+      }
+    };
+    page.on('console', handler);
+  });
+}
+
 // Helper to call API directly
 async function apiGet(endpoint: string) {
   const response = await fetch(`${API_URL}${endpoint}`, {
@@ -66,7 +92,7 @@ async function apiPatch(endpoint: string, body: Record<string, unknown>) {
 async function waitForDbCondition(
   condition: (items: any[]) => boolean,
   description: string,
-  { interval = 300, timeout = 12000 } = {}
+  { interval = 300, timeout = 20000 } = {}
 ): Promise<any[]> {
   const start = Date.now();
   let lastItems: any[] = [];
@@ -99,6 +125,7 @@ async function clearDatabase() {
 test.describe('E2E Sync Diagnostic', () => {
   // Run sync tests serially - they share a database and can't run in parallel
   test.describe.configure({ mode: 'serial' });
+  test.setTimeout(60000);
 
   let browser: Browser;
   let page: Page;
@@ -134,23 +161,16 @@ test.describe('E2E Sync Diagnostic', () => {
     // Clear localStorage and load app
     await page.goto(APP_URL);
     await page.evaluate(() => localStorage.clear());
+
+    // Attach listeners BEFORE reload so we can't miss the messages
+    const syncReady = waitForConsoleMessages(page, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-
-    // Wait for sync to fully initialize (including fetchAndMergeTodos)
-    const syncEnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          page.off('console', handler);
-          resolve();
-        }
-      };
-      page.on('console', handler);
-    });
-
-    // Also handle case where sync might fail or not be configured
-    const timeout = new Promise<void>(resolve => setTimeout(resolve, 5000));
-    await Promise.race([syncEnabledPromise, timeout]);
+    await syncReady;
   });
 
   test.afterEach(async () => {
@@ -255,20 +275,15 @@ test.describe('E2E Sync Diagnostic', () => {
       // Load and clear page 2
       await page2.goto(APP_URL);
       await page2.evaluate(() => localStorage.clear());
+
+      const page2SyncReady = waitForConsoleMessages(page2, [
+        '[Sync] ✓ Enabled',
+        '[Sync] Realtime connected',
+      ], 15000);
+
       await page2.reload();
       await page2.waitForLoadState('domcontentloaded');
-
-      // Wait for sync to initialize on page2
-      const page2SyncPromise = new Promise<void>(resolve => {
-        const handler = (msg: { text: () => string }) => {
-          if (msg.text().includes('[Sync] ✓ Enabled')) {
-            page2.off('console', handler);
-            resolve();
-          }
-        };
-        page2.on('console', handler);
-      });
-      await Promise.race([page2SyncPromise, new Promise<void>(r => setTimeout(r, 10000))]);
+      await page2SyncReady;
 
       // Create item on page 1
       await page.waitForSelector('.new-item', { state: 'visible' });
@@ -445,8 +460,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Reorder synced to database');
   });
 
-  test('reorder after page refresh syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('reorder after page refresh syncs to database', async () => {
+
     // This tests reordering items that were loaded from server (not created fresh)
     // Log console messages for debugging
     page.on('console', msg => {
@@ -488,22 +503,15 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // REFRESH THE PAGE to simulate loading from server
     console.log('Refreshing page...');
-    await page.reload();
 
-    // Wait for sync to initialize after refresh
-    const syncEnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          page.off('console', handler);
-          resolve();
-        }
-      };
-      page.on('console', handler);
-    });
-    await Promise.race([
-      syncEnabledPromise,
-      new Promise<void>(r => setTimeout(r, 10000))
-    ]);
+    const refreshSyncReady = waitForConsoleMessages(page, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await refreshSyncReady;
 
     // Wait for items to render
     await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
@@ -541,8 +549,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Reorder after refresh synced to database');
   });
 
-  test('drag-and-drop reorder syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('drag-and-drop reorder syncs to database', async () => {
+
 
     // Log console messages for debugging
     page.on('console', msg => {
@@ -638,21 +646,12 @@ test.describe('E2E Sync Diagnostic', () => {
     });
 
     // Load app in browser1 and wait for full sync initialization
+    const browser1SyncReady = waitForConsoleMessages(browser1, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
     await browser1.goto(APP_URL);
-
-    // Create a promise that resolves when we see the "✓ Enabled" message
-    const browser1EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser1.off('console', handler);
-          resolve();
-        }
-      };
-      browser1.on('console', handler);
-    });
-
-    // Wait for the actual "Enabled" message which means fetchAndMergeTodos completed
-    await browser1EnabledPromise;
+    await browser1SyncReady;
     console.log('Browser1 sync enabled');
 
     // Add Item 1
@@ -684,19 +683,12 @@ test.describe('E2E Sync Diagnostic', () => {
     );
 
     // Browser2 loads and should see all items
+    const browser2SyncReady = waitForConsoleMessages(browser2, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
     await browser2.goto(APP_URL);
-
-    // Wait for full sync initialization in browser2
-    const browser2EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser2.off('console', handler);
-          resolve();
-        }
-      };
-      browser2.on('console', handler);
-    });
-    await browser2EnabledPromise;
+    await browser2SyncReady;
     await browser2.waitForSelector('.todo-item .text:text-is("Item 3")', { timeout: 5000 });
 
     let browser2Texts = await browser2.locator('.todo-item .text').allTextContents();
@@ -740,8 +732,8 @@ test.describe('E2E Sync Diagnostic', () => {
   // Section Sync Tests
   // ============================================
 
-  test('creating a section syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('creating a section syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -787,8 +779,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Section synced to database');
   });
 
-  test('promoting section to level 1 syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('promoting section to level 1 syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -841,8 +833,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Section promotion synced to database');
   });
 
-  test('demoting section to level 2 syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('demoting section to level 2 syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -895,8 +887,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Section demotion synced to database');
   });
 
-  test('reordering section with children syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('reordering section with children syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -1111,18 +1103,14 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load and init browser1
     await browser1.goto(APP_URL);
     await browser1.evaluate(() => localStorage.clear());
-    await browser1.reload();
 
-    const browser1EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser1.off('console', handler);
-          resolve();
-        }
-      };
-      browser1.on('console', handler);
-    });
-    await Promise.race([browser1EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
+    const browser1SyncReady = waitForConsoleMessages(browser1, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+    await browser1.reload();
+    await browser1.waitForLoadState('domcontentloaded');
+    await browser1SyncReady;
     console.log('Browser1 sync enabled');
 
     // Create a section in browser1
@@ -1152,18 +1140,14 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load browser2
     await browser2.goto(APP_URL);
     await browser2.evaluate(() => localStorage.clear());
-    await browser2.reload();
 
-    const browser2EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser2.off('console', handler);
-          resolve();
-        }
-      };
-      browser2.on('console', handler);
-    });
-    await Promise.race([browser2EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
+    const browser2SyncReady = waitForConsoleMessages(browser2, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+    await browser2.reload();
+    await browser2.waitForLoadState('domcontentloaded');
+    await browser2SyncReady;
 
     // Browser2 should see the section
     await browser2.waitForSelector('.section-header .text:text-is("Shared Section")', { timeout: 5000 });
@@ -1190,8 +1174,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await context2.close();
   });
 
-  test('drag section header syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('drag section header syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -1486,8 +1470,8 @@ test.describe('E2E Sync Diagnostic', () => {
   // Indentation Sync Tests
   // ============================================
 
-  test('indenting a todo syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('indenting a todo syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -1537,8 +1521,8 @@ test.describe('E2E Sync Diagnostic', () => {
     console.log('✓ Indent synced to database');
   });
 
-  test('unindenting a todo syncs to database', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('unindenting a todo syncs to database', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -1597,8 +1581,8 @@ test.describe('E2E Sync Diagnostic', () => {
   // CRDT Conflict Resolution Tests
   // ============================================
 
-  test('sync applies server merge when server wins CRDT conflict', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('sync applies server merge when server wins CRDT conflict', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
@@ -1720,18 +1704,14 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load and init browser1
     await browser1.goto(APP_URL);
     await browser1.evaluate(() => localStorage.clear());
-    await browser1.reload();
 
-    const browser1EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser1.off('console', handler);
-          resolve();
-        }
-      };
-      browser1.on('console', handler);
-    });
-    await Promise.race([browser1EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
+    const browser1SyncReady = waitForConsoleMessages(browser1, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+    await browser1.reload();
+    await browser1.waitForLoadState('domcontentloaded');
+    await browser1SyncReady;
     console.log('Browser1 sync enabled');
 
     // Create a todo in browser1
@@ -1752,18 +1732,14 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load browser2
     await browser2.goto(APP_URL);
     await browser2.evaluate(() => localStorage.clear());
-    await browser2.reload();
 
-    const browser2EnabledPromise = new Promise<void>(resolve => {
-      const handler = (msg: { text: () => string }) => {
-        if (msg.text().includes('[Sync] ✓ Enabled')) {
-          browser2.off('console', handler);
-          resolve();
-        }
-      };
-      browser2.on('console', handler);
-    });
-    await Promise.race([browser2EnabledPromise, new Promise<void>(r => setTimeout(r, 10000))]);
+    const browser2SyncReady = waitForConsoleMessages(browser2, [
+      '[Sync] ✓ Enabled',
+      '[Sync] Realtime connected',
+    ], 15000);
+    await browser2.reload();
+    await browser2.waitForLoadState('domcontentloaded');
+    await browser2SyncReady;
 
     // Browser2 should see the todo (not indented)
     await browser2.waitForSelector(`.todo-item .text:text-is("${todoText}")`, { timeout: 5000 });
@@ -1791,8 +1767,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await context2.close();
   });
 
-  test('offline changes sync when connectivity returns', async ({ }, testInfo) => {
-    testInfo.setTimeout(60000);
+  test('offline changes sync when connectivity returns', async () => {
+
 
     page.on('console', msg => {
       if (msg.text().includes('[Sync]')) {
