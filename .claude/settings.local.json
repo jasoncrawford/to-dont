@@ -33,7 +33,11 @@
       "Bash(npx:*)",
       "Bash(ps:*)",
       "Bash(supabase:*)",
-      "Bash(vercel whoami:*)"
+      "Bash(vercel whoami:*)",
+      "WebSearch",
+      "Bash(docker exec:*)",
+      "Bash(docker ps:*)",
+      "Bash(git check-ignore:*)"
     ]
   }
 }
