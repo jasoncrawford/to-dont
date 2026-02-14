@@ -2,12 +2,12 @@ import { test, expect, chromium, Browser, Page } from '@playwright/test';
 
 /**
  * End-to-end sync test - verifies data syncs to database.
- * Playwright starts its own vercel dev on port 3001 (see playwright.config.ts).
+ * Playwright starts its own vercel dev on port 8174 (see playwright.config.ts).
  *
  * Run with: npx playwright test --project=sync-e2e --headed
  */
 
-const SYNC_TEST_PORT = 3001;
+const SYNC_TEST_PORT = 8174;
 const APP_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';

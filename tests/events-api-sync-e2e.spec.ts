@@ -3,12 +3,12 @@ import { randomUUID } from 'crypto';
 
 /**
  * Events API tests - verifies the event sourcing endpoints.
- * Uses the sync-e2e project (starts vercel dev on port 3001).
+ * Uses the sync-e2e project (starts vercel dev on port 8174).
  *
  * Run with: npx playwright test --project=sync-e2e tests/events-api-sync-e2e.spec.ts
  */
 
-const SYNC_TEST_PORT = 3001;
+const SYNC_TEST_PORT = 8174;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
 

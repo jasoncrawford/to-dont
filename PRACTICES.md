@@ -74,7 +74,7 @@ Tests run with `?test-mode=1` which enables virtual time manipulation for testin
 npm run dev
 
 # Full stack (two terminals)
-npm run dev        # Vite dev server on :5173
+npm run dev        # Vite dev server on :3000
 npm run dev:api    # Vercel dev on :3001 (proxied via Vite)
 
 # Build for production

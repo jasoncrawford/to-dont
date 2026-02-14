@@ -63,7 +63,7 @@ Each item tracks per-field timestamps for conflict resolution:
 npm run dev
 
 # Start Vite + API server (full stack with sync)
-npm run dev        # Terminal 1: Vite on :5173
+npm run dev        # Terminal 1: Vite on :3000
 npm run dev:api    # Terminal 2: Vercel dev on :3001 (proxied via Vite)
 
 # Build for production
