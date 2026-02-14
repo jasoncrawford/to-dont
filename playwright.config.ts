@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'fs';
 import { resolve } from 'path';
 
 const VITE_PORT = 5173;
@@ -24,18 +24,27 @@ function loadEnvFile(filename: string): Record<string, string> {
 
 const testEnv = loadEnvFile('.env.local');
 
-// Generate sync-config.js so the browser connects to the same local Supabase as the API
-writeFileSync(
-  resolve(__dirname, 'sync-config.js'),
-  `window.SYNC_CONFIG = ${JSON.stringify({
-    supabaseUrl: testEnv.SUPABASE_URL || '',
-    supabaseAnonKey: testEnv.SUPABASE_ANON_KEY || '',
-    bearerToken: testEnv.SYNC_BEARER_TOKEN || '',
-  }, null, 2)};`
-);
+// Tests use the 'test' schema so dev data in 'public' survives test runs
+testEnv.SUPABASE_SCHEMA = 'test';
+
+// vercel dev only reads .env (ignores .env.local and process env for serverless
+// functions), so we must write our test env vars there. Back up any existing
+// .env first so it can be restored after the test run.
+const dotenvPath = resolve(__dirname, '.env');
+const dotenvBackup = resolve(__dirname, '.env.pre-test');
+// Only create backup if one doesn't already exist (avoids poisoning the backup
+// when a previous test run failed before teardown could restore)
+if (existsSync(dotenvPath) && !existsSync(dotenvBackup)) {
+  copyFileSync(dotenvPath, dotenvBackup);
+}
+const dotenvContent = Object.entries(testEnv)
+  .map(([k, v]) => `${k}=${v}`)
+  .join('\n') + '\n';
+writeFileSync(dotenvPath, dotenvContent);
 
 export default defineConfig({
   testDir: './tests',
+  globalTeardown: './tests/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -77,6 +86,7 @@ export default defineConfig({
       command: `npx vite --port ${VITE_PORT}`,
       port: VITE_PORT,
       reuseExistingServer: false,
+      env: testEnv,
     },
     {
       command: `npx vercel dev --listen ${SYNC_TEST_PORT} --yes`,

@@ -12,6 +12,7 @@
       supabaseAnonKey: window.SYNC_SUPABASE_ANON_KEY || '',
       bearerToken: window.SYNC_BEARER_TOKEN || '',
       apiUrl: window.SYNC_API_URL || '',
+      schema: window.SYNC_SUPABASE_SCHEMA || 'public',
     };
   }
 
@@ -75,7 +76,9 @@
       return null;
     }
     const config = getConfig();
-    return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      db: { schema: config.schema },
+    });
   }
 
   // Make API request with auth
@@ -342,11 +345,12 @@
   function subscribeToRealtime() {
     if (!supabaseClient || !syncEnabled) return;
 
+    const config = getConfig();
     realtimeChannel = supabaseClient
       .channel('events-changes')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'events' },
+        { event: 'INSERT', schema: config.schema, table: 'events' },
         handleRealtimeEvent
       )
       .subscribe((status) => {

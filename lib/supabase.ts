@@ -16,7 +16,8 @@ export function getSupabase(): SupabaseClient {
     throw new Error('Missing SUPABASE_SERVICE_KEY environment variable');
   }
 
-  _supabase = createClient(url, key);
+  const schema = process.env.SUPABASE_SCHEMA || 'public';
+  _supabase = createClient(url, key, { db: { schema } });
   return _supabase;
 }
 
