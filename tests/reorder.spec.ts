@@ -112,17 +112,18 @@ test.describe('Reordering', () => {
       await page.mouse.move(taskB1Box.x + taskB1Box.width / 2, taskB1Box.y + taskB1Box.height + 10, { steps: 10 });
       await page.mouse.up();
 
-      // Wait for reorder
-      await page.waitForTimeout(100);
+      // Wait for reorder to be reflected in DOM
+      await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
 
-      const stored = await getStoredTodos(page);
-      // Section B and Task B1 should now be first
-      expect(stored[0].text).toBe('Section B');
-      expect(stored[1].text).toBe('Task B1');
-      // Then Section A with its children
-      expect(stored[2].text).toBe('Section A');
-      expect(stored[3].text).toBe('Task A1');
-      expect(stored[4].text).toBe('Task A2');
+      // Verify localStorage order
+      await expect(async () => {
+        const stored = await getStoredTodos(page);
+        expect(stored[0].text).toBe('Section B');
+        expect(stored[1].text).toBe('Task B1');
+        expect(stored[2].text).toBe('Section A');
+        expect(stored[3].text).toBe('Task A1');
+        expect(stored[4].text).toBe('Task A2');
+      }).toPass({ timeout: 5000 });
     });
   });
 
@@ -172,8 +173,10 @@ test.describe('Reordering', () => {
       await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y - 5, { steps: 10 });
       await page.mouse.up();
 
-      const texts = await getTodoTexts(page);
-      expect(texts).toEqual(['First', 'Fourth', 'Second', 'Third']);
+      await expect(page.locator('.todo-item .text').first()).toHaveText('First');
+      await expect(page.locator('.todo-item .text').nth(1)).toHaveText('Fourth');
+      await expect(page.locator('.todo-item .text').nth(2)).toHaveText('Second');
+      await expect(page.locator('.todo-item .text').nth(3)).toHaveText('Third');
     });
 
     test('should insert at top when dragging above first item', async ({ page }) => {

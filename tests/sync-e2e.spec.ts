@@ -113,11 +113,9 @@ async function clearDatabase() {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${BEARER_TOKEN}` },
   });
-  // Also clear items table (used by server API tests)
+  // Clear items table in a single batch (used by server API tests)
   const items = await apiGet('/api/items');
-  for (const item of items) {
-    await apiDelete(`/api/items/${item.id}`);
-  }
+  await Promise.all(items.map((item: { id: string }) => apiDelete(`/api/items/${item.id}`)));
   const remaining = await apiGet('/api/state');
   console.log(`Database cleared (${remaining.length} items in event projection)`);
 }
@@ -125,7 +123,7 @@ async function clearDatabase() {
 test.describe('E2E Sync Diagnostic', () => {
   // Run sync tests serially - they share a database and can't run in parallel
   test.describe.configure({ mode: 'serial' });
-  test.setTimeout(60000);
+  test.setTimeout(90000);
 
   let browser: Browser;
   let page: Page;
@@ -159,6 +157,9 @@ test.describe('E2E Sync Diagnostic', () => {
     });
 
     // Clear localStorage and load app
+    // Navigate to about:blank first to avoid triggering sync on initial load
+    // (prevents ERR_ABORTED when reload cancels in-flight sync requests)
+    await page.goto('about:blank');
     await page.goto(APP_URL);
     await page.evaluate(() => localStorage.clear());
 
@@ -166,7 +167,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const syncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
@@ -272,14 +273,15 @@ test.describe('E2E Sync Diagnostic', () => {
     });
 
     try {
-      // Load and clear page 2
+      // Load and clear page 2 (about:blank first to avoid sync abort on reload)
+      await page2.goto('about:blank');
       await page2.goto(APP_URL);
       await page2.evaluate(() => localStorage.clear());
 
       const page2SyncReady = waitForConsoleMessages(page2, [
         '[Sync] ✓ Enabled',
         '[Sync] Realtime connected',
-      ], 15000);
+      ], 30000);
 
       await page2.reload();
       await page2.waitForLoadState('domcontentloaded');
@@ -507,7 +509,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const refreshSyncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
@@ -597,11 +599,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.mouse.move(item1Box!.x + item1Box!.width / 2, item1Box!.y);
     await page.mouse.up();
 
-    // Verify UI order changed
-    await page.waitForTimeout(500);
+    // Verify UI order changed (auto-retrying)
+    await expect(page.locator('.todo-item .text').first()).toHaveText(item2Text);
     const texts = await page.locator('.todo-item .text').allTextContents();
     console.log('After drag UI order:', texts);
-    expect(texts[0]).toBe(item2Text);
 
     // Wait for reorder to sync
     dbItems = await waitForDbCondition(
@@ -649,7 +650,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser1.goto(APP_URL);
     await browser1SyncReady;
     console.log('Browser1 sync enabled');
@@ -686,7 +687,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser2.goto(APP_URL);
     await browser2SyncReady;
     await browser2.waitForSelector('.todo-item .text:text-is("Item 3")', { timeout: 5000 });
@@ -957,11 +958,10 @@ test.describe('E2E Sync Diagnostic', () => {
     await sectionText.click();
     await page.keyboard.press('Meta+Shift+ArrowUp');
 
-    // Verify UI order changed
-    await page.waitForTimeout(500);
+    // Verify UI order changed (auto-retrying)
+    await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
     const allTexts = await page.locator('.section-header .text, .todo-item .text').allTextContents();
     console.log('UI order after reorder:', allTexts);
-    expect(allTexts[0]).toBe('Section B');
 
     // Wait for reorder to sync
     dbItems = await waitForDbCondition(
@@ -1051,13 +1051,11 @@ test.describe('E2E Sync Diagnostic', () => {
     const sectionB = page.locator('.section-header .text:text-is("Section B")');
     await sectionB.click();
     await page.keyboard.press('Meta+Shift+ArrowUp');
-    await page.waitForTimeout(500);
 
+    // Wait for reorder to be reflected in DOM (auto-retrying)
+    await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
     const afterTexts = await page.locator('.section-header .text, .todo-item .text').allTextContents();
     console.log('UI after reorder:', afterTexts);
-
-    // Section B should be first
-    expect(afterTexts[0]).toBe('Section B');
 
     // Wait for reorder to sync
     dbItems = await waitForDbCondition(
@@ -1100,14 +1098,15 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Load and init browser1
+    // Load and init browser1 (about:blank first to avoid sync abort on reload)
+    await browser1.goto('about:blank');
     await browser1.goto(APP_URL);
     await browser1.evaluate(() => localStorage.clear());
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
     await browser1SyncReady;
@@ -1124,7 +1123,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await todoText.click();
     await todoText.press('Meta+a');
     await todoText.press('Backspace');
-    await browser1.waitForTimeout(50);
+    await expect(todoText).toHaveText('', { timeout: 2000 });
     await todoText.press('Enter');
     const sectionText = browser1.locator('.section-header .text').first();
     await sectionText.click();
@@ -1137,14 +1136,15 @@ test.describe('E2E Sync Diagnostic', () => {
       'section "Shared Section" to appear in database'
     );
 
-    // Load browser2
+    // Load browser2 (about:blank first to avoid sync abort on reload)
+    await browser2.goto('about:blank');
     await browser2.goto(APP_URL);
     await browser2.evaluate(() => localStorage.clear());
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
     await browser2SyncReady;
@@ -1238,10 +1238,9 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.mouse.move(sectionABox!.x + sectionABox!.width / 2, sectionABox!.y);
     await page.mouse.up();
 
-    await page.waitForTimeout(500);
+    await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
     const uiOrder = await page.locator('.section-header .text, .todo-item .text').allTextContents();
     console.log('UI after drag:', uiOrder);
-    expect(uiOrder[0]).toBe('Section B');
 
     // Wait for drag reorder to sync
     dbItems = await waitForDbCondition(
@@ -1701,14 +1700,15 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Load and init browser1
+    // Load and init browser1 (about:blank first to avoid sync abort on reload)
+    await browser1.goto('about:blank');
     await browser1.goto(APP_URL);
     await browser1.evaluate(() => localStorage.clear());
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
     await browser1SyncReady;
@@ -1729,14 +1729,15 @@ test.describe('E2E Sync Diagnostic', () => {
       `item "${todoText}" to appear in database`
     );
 
-    // Load browser2
+    // Load browser2 (about:blank first to avoid sync abort on reload)
+    await browser2.goto('about:blank');
     await browser2.goto(APP_URL);
     await browser2.evaluate(() => localStorage.clear());
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
       '[Sync] Realtime connected',
-    ], 15000);
+    ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
     await browser2SyncReady;

@@ -54,6 +54,7 @@ async function clearEvents() {
 
 test.describe('Events API', () => {
   test.describe.configure({ mode: 'serial' });
+  test.setTimeout(60000);
 
   const testClientId = 'test-client-' + Date.now();
 

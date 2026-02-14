@@ -469,9 +469,9 @@ test.describe('Keyboard Navigation', () => {
       // Move up immediately (before blur saves)
       await page.keyboard.press('Meta+Shift+ArrowUp');
 
-      // Text should be preserved
-      const texts = await getTodoTexts(page);
-      expect(texts).toEqual(['Second modified', 'First']);
+      // Text should be preserved (use auto-retrying assertions)
+      await expect(page.locator('.todo-item .text').first()).toHaveText('Second modified');
+      await expect(page.locator('.todo-item .text').nth(1)).toHaveText('First');
     });
 
     test('should preserve unsaved text when moving down', async ({ page }) => {
@@ -487,9 +487,9 @@ test.describe('Keyboard Navigation', () => {
       // Move down immediately (before blur saves)
       await page.keyboard.press('Meta+Shift+ArrowDown');
 
-      // Text should be preserved
-      const texts = await getTodoTexts(page);
-      expect(texts).toEqual(['Second', 'First modified']);
+      // Text should be preserved (use auto-retrying assertions)
+      await expect(page.locator('.todo-item .text').first()).toHaveText('Second');
+      await expect(page.locator('.todo-item .text').nth(1)).toHaveText('First modified');
     });
   });
 

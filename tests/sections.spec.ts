@@ -26,8 +26,8 @@ test.describe('Sections and Hierarchy', () => {
       await todoText.press('Meta+a');
       await todoText.press('Backspace');
 
-      // Wait a bit for the text to be cleared
-      await page.waitForTimeout(50);
+      // Wait for the text to be cleared
+      await expect(todoText).toHaveText('', { timeout: 2000 });
 
       // Press Enter to convert to section
       await todoText.press('Enter');
@@ -180,16 +180,18 @@ test.describe('Sections and Hierarchy', () => {
       await page.keyboard.up('Shift');
       await page.keyboard.up('Meta');
 
-      // Wait for reorder
-      await page.waitForTimeout(100);
+      // Wait for reorder to be reflected in DOM
+      await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
 
-      // Section B and Task B1 should now be first
-      stored = await getStoredTodos(page);
-      expect(stored[0].text).toBe('Section B');
-      expect(stored[1].text).toBe('Task B1');
-      expect(stored[2].text).toBe('Section A');
-      expect(stored[3].text).toBe('Task A1');
-      expect(stored[4].text).toBe('Task A2');
+      // Verify localStorage order
+      await expect(async () => {
+        stored = await getStoredTodos(page);
+        expect(stored[0].text).toBe('Section B');
+        expect(stored[1].text).toBe('Task B1');
+        expect(stored[2].text).toBe('Section A');
+        expect(stored[3].text).toBe('Task A1');
+        expect(stored[4].text).toBe('Task A2');
+      }).toPass({ timeout: 5000 });
     });
 
     test('should move section down with children using keyboard', async ({ page }) => {
@@ -221,16 +223,18 @@ test.describe('Sections and Hierarchy', () => {
       await page.keyboard.up('Shift');
       await page.keyboard.up('Meta');
 
-      // Wait for reorder
-      await page.waitForTimeout(100);
+      // Wait for reorder to be reflected in DOM
+      await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
 
-      // Section B and Task B1 should now be first, then Section A with its children
-      stored = await getStoredTodos(page);
-      expect(stored[0].text).toBe('Section B');
-      expect(stored[1].text).toBe('Task B1');
-      expect(stored[2].text).toBe('Section A');
-      expect(stored[3].text).toBe('Task A1');
-      expect(stored[4].text).toBe('Task A2');
+      // Verify localStorage order
+      await expect(async () => {
+        stored = await getStoredTodos(page);
+        expect(stored[0].text).toBe('Section B');
+        expect(stored[1].text).toBe('Task B1');
+        expect(stored[2].text).toBe('Section A');
+        expect(stored[3].text).toBe('Task A1');
+        expect(stored[4].text).toBe('Task A2');
+      }).toPass({ timeout: 5000 });
     });
 
     test('should move section with children using drag-drop', async ({ page }) => {
@@ -262,16 +266,18 @@ test.describe('Sections and Hierarchy', () => {
       await page.mouse.move(taskB1Box.x + taskB1Box.width / 2, taskB1Box.y + taskB1Box.height + 10, { steps: 10 });
       await page.mouse.up();
 
-      // Wait for reorder
-      await page.waitForTimeout(100);
+      // Wait for reorder to be reflected in DOM
+      await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
 
-      // Section B and Task B1 should now be first
-      const stored = await getStoredTodos(page);
-      expect(stored[0].text).toBe('Section B');
-      expect(stored[1].text).toBe('Task B1');
-      expect(stored[2].text).toBe('Section A');
-      expect(stored[3].text).toBe('Task A1');
-      expect(stored[4].text).toBe('Task A2');
+      // Verify localStorage order
+      await expect(async () => {
+        const stored = await getStoredTodos(page);
+        expect(stored[0].text).toBe('Section B');
+        expect(stored[1].text).toBe('Task B1');
+        expect(stored[2].text).toBe('Section A');
+        expect(stored[3].text).toBe('Task A1');
+        expect(stored[4].text).toBe('Task A2');
+      }).toPass({ timeout: 5000 });
     });
 
     test('should not allow dropping section into middle of another section', async ({ page }) => {
@@ -313,8 +319,11 @@ test.describe('Sections and Hierarchy', () => {
       await page.mouse.move(taskA2Box.x + taskA2Box.width / 2, taskA2Box.y + taskA2Box.height / 2, { steps: 10 });
       await page.mouse.up();
 
-      // Wait for any reorder
-      await page.waitForTimeout(100);
+      // Wait for any reorder to settle
+      await expect(async () => {
+        const stored = await getStoredTodos(page);
+        expect(stored.length).toBe(6);
+      }).toPass({ timeout: 5000 });
 
       // Section B should NOT be in the middle of Section A
       // It should either stay at original position or move to a valid section boundary

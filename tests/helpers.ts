@@ -35,7 +35,14 @@ export async function addTodo(page: Page, text: string) {
     await lastText.press('Enter');
 
     // Wait for the new todo to be created and focused
-    await page.waitForTimeout(100);
+    await page.waitForFunction(
+      (expected) => {
+        const count = document.querySelectorAll('.todo-item').length + document.querySelectorAll('.section-header').length;
+        const hasFocus = document.querySelector('.todo-item .text:focus') !== null;
+        return count >= expected && hasFocus;
+      },
+      totalCount + 1
+    );
 
     // Find the focused element (should be the new empty todo)
     const focusedText = page.locator('.todo-item .text:focus');
@@ -43,7 +50,6 @@ export async function addTodo(page: Page, text: string) {
 
     // Click elsewhere to blur and save the text
     await page.locator('body').click({ position: { x: 10, y: 10 } });
-    await page.waitForTimeout(50);
   }
   // Wait for the new item to appear
   await page.waitForSelector(`.todo-item .text:text-is("${text}")`);
@@ -124,8 +130,8 @@ export async function createSection(page: Page, title: string = '') {
   await todoText.press('Meta+a');
   await todoText.press('Backspace');
 
-  // Wait a bit for the text to be cleared
-  await page.waitForTimeout(50);
+  // Wait for the text to be cleared
+  await expect(todoText).toHaveText('', { timeout: 2000 });
 
   // Press Enter to convert to section
   await todoText.press('Enter');
@@ -141,6 +147,6 @@ export async function createSection(page: Page, title: string = '') {
 
     // Blur to save
     await page.locator('body').click({ position: { x: 10, y: 10 } });
-    await page.waitForTimeout(100);
+    await expect(page.locator('.section-header .text').last()).toHaveText(title);
   }
 }

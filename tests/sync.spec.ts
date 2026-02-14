@@ -303,8 +303,12 @@ test.describe('Sync Layer', () => {
       window.ToDoSync._test!.handleOnline();
     });
 
-    // Wait for debounce
-    await page.waitForTimeout(3000);
+    // Wait for fetch to /api/events (replaces hardcoded debounce wait)
+    await page.waitForFunction(
+      () => (window as any)._fetchUrls?.some((url: string) => url.includes('/api/events')),
+      null,
+      { timeout: 10000 }
+    );
 
     const fetchUrls = await page.evaluate(() => {
       return (window as Window & { _fetchUrls: string[] })._fetchUrls;
