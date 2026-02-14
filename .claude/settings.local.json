@@ -37,7 +37,13 @@
       "WebSearch",
       "Bash(docker exec:*)",
       "Bash(docker ps:*)",
-      "Bash(git check-ignore:*)"
+      "Bash(git check-ignore:*)",
+      "Bash(vercel ls:*)",
+      "Bash(openssl rand:*)",
+      "Bash(vercel env add:*)",
+      "Bash(vercel env ls:*)",
+      "Bash(vercel:*)",
+      "Bash(printf:*)"
     ]
   }
 }

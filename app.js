@@ -2,6 +2,13 @@ const FADE_DURATION_DAYS = 14;
 const IMPORTANT_ESCALATION_DAYS = 14;
 const UPDATE_INTERVAL = 60000;
 
+// Check for reset via URL parameter — clears all app data and reloads
+if (new URLSearchParams(window.location.search).get('reset') === '1') {
+  ['decay-todos', 'decay-events', 'decay-client-id', 'decay-event-cursor',
+   'decay-todos-time-offset', 'decay-todos-view-mode'].forEach(k => localStorage.removeItem(k));
+  window.location.replace(window.location.pathname);
+}
+
 // Check for test mode via URL parameter
 const isTestMode = new URLSearchParams(window.location.search).get('test-mode') === '1';
 
