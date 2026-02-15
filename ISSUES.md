@@ -34,10 +34,7 @@ The `SYNC_BEARER_TOKEN` is baked into the JS bundle at build time (via Vite `def
 
 ## ~~#14 - No CI/CD — deploying manually from desktop~~ FIXED (d36a9b2)
 
-## #15 - No PWA support for mobile
-**Severity: Low-Medium**
-
-The app is used on iPhone/iPad but lacks a service worker and web app manifest. Adding these would provide an app icon on the home screen, offline capability, and remove Safari browser chrome.
+## ~~#15 - No PWA support for mobile~~ FIXED (0f5bf20)
 
 ## #16 - `?reset=1` is a footgun
 **Severity: Low**
