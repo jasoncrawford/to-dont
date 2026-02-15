@@ -1,0 +1,82 @@
+import { useSyncExternalStore } from 'react';
+import type { TodoItem, ViewMode } from './types';
+
+// In-memory cache for parsed todos (same pattern as old app.js)
+let _todosCacheJson: string | null = null;
+
+let _listeners: Set<() => void> = new Set();
+let _stateVersion = 0;
+
+export function loadTodos(): TodoItem[] {
+  const data = localStorage.getItem('decay-todos');
+  if (!data) {
+    _todosCacheJson = null;
+    return [];
+  }
+  if (_todosCacheJson !== null && data === _todosCacheJson) {
+    return JSON.parse(_todosCacheJson);
+  }
+  _todosCacheJson = data;
+  return JSON.parse(data);
+}
+
+export function saveTodos(todos: TodoItem[]): void {
+  const json = JSON.stringify(todos);
+  localStorage.setItem('decay-todos', json);
+  _todosCacheJson = json;
+  if (window.ToDoSync && window.ToDoSync.onSave) {
+    window.ToDoSync.onSave(todos);
+  }
+}
+
+export function invalidateTodoCache(): void {
+  _todosCacheJson = null;
+}
+
+export function notifyStateChange(): void {
+  _stateVersion++;
+  _listeners.forEach(cb => cb());
+}
+
+function subscribe(callback: () => void): () => void {
+  _listeners.add(callback);
+  return () => { _listeners.delete(callback); };
+}
+
+function getSnapshot(): number {
+  return _stateVersion;
+}
+
+export function useStateVersion(): number {
+  return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+// View mode store
+let _viewMode: ViewMode = (localStorage.getItem('decay-todos-view-mode') as ViewMode) || 'active';
+// Migration
+if (_viewMode === 'custom' as string || _viewMode === 'auto' as string) {
+  _viewMode = 'active';
+  localStorage.setItem('decay-todos-view-mode', _viewMode);
+}
+
+let _viewListeners: Set<() => void> = new Set();
+let _viewVersion = 0;
+
+export function getViewMode(): ViewMode {
+  return _viewMode;
+}
+
+export function setViewMode(mode: ViewMode): void {
+  _viewMode = mode;
+  localStorage.setItem('decay-todos-view-mode', mode);
+  _viewVersion++;
+  _viewListeners.forEach(cb => cb());
+}
+
+export function useViewMode(): ViewMode {
+  useSyncExternalStore(
+    (cb) => { _viewListeners.add(cb); return () => { _viewListeners.delete(cb); }; },
+    () => _viewVersion,
+  );
+  return _viewMode;
+}

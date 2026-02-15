@@ -17,11 +17,11 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 ## Architecture
 
 ### Frontend
-- **Single-page vanilla JS app** - Non-module scripts served by Vite
-- **Core logic in app.js** - Renders DOM directly, event handlers inline
-- **Sync layer in sync.js** - Optional cloud sync, loaded separately
-- **Vite dev server** - Serves frontend, generates `sync-config.js` from env vars, proxies `/api/*` to Vercel dev
-- Uses `contenteditable` divs for text editing with Selection/Range API
+- **React 19 SPA** - ES module entry point (`src/main.tsx`), components in `src/components/`
+- **Legacy scripts** - `sync.js`, `event-log.js`, `fractional-index.js`, `sync-config.js` loaded as non-module `<script>` tags before React
+- **State via `useSyncExternalStore`** - React reads from localStorage via `loadTodos()`, notified via `window.render()` / `notifyStateChange()`
+- **Uncontrolled contenteditable** - Text set via `useLayoutEffect` ref, never as React children. Preserves cursor/focus during re-renders
+- **Vite dev server** with `@vitejs/plugin-react` - Serves frontend, generates `sync-config.js` from env vars, proxies `/api/*` to Vercel dev
 
 ### Data & Sync
 - **localStorage** for immediate persistence
@@ -31,8 +31,8 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 - Realtime updates via Supabase subscriptions
 
 ### API (Vercel serverless)
-- `api/sync/` - Main sync endpoint with LWW merge
-- `api/items/` - CRUD operations
+- `api/events/` - Event push/pull endpoint
+- `api/state/` - Materialized state endpoint
 - `lib/` - Shared utilities (auth, Supabase client, fractional indexing)
 
 ### Testing
@@ -77,5 +77,7 @@ npm test
 
 1. `PRODUCT_SPEC.md` - Full product specification
 2. `PRACTICES.md` - Development workflow and patterns
-3. `app.js` - Frontend application logic
-4. `sync.js` - Sync layer implementation
+3. `src/App.tsx` - React app shell, state management, component composition
+4. `src/hooks/useTodoActions.ts` - All mutation functions (add, delete, toggle, merge, split, reorder, etc.)
+5. `sync.js` - Sync layer implementation
+6. `event-log.js` - Event sourcing layer

@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
-import { readFileSync, copyFileSync, mkdirSync } from 'fs';
+import react from '@vitejs/plugin-react';
+import { copyFileSync } from 'fs';
 import { resolve } from 'path';
 
-const legacyScripts = ['app.js', 'sync.js', 'event-log.js', 'fractional-index.js', 'styles.css'];
+const legacyScripts = ['sync.js', 'event-log.js', 'fractional-index.js', 'styles.css'];
 
 function syncConfigPlugin() {
   const generateSyncConfig = () => {
@@ -68,7 +69,7 @@ function copyLegacyScripts() {
 }
 
 export default defineConfig({
-  plugins: [syncConfigPlugin(), copyLegacyScripts()],
+  plugins: [react(), syncConfigPlugin(), copyLegacyScripts()],
   server: {
     port: 3000,
     proxy: {

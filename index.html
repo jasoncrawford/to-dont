@@ -7,41 +7,19 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="viewToggle" class="view-tabs">
-    <button id="activeViewBtn" class="view-tab active">Active</button>
-    <button id="doneViewBtn" class="view-tab">Done</button>
-  </div>
-  <div id="archiveCompletedContainer" style="margin-bottom: 20px; display: none;">
-    <button id="archiveCompletedBtn" style="padding: 6px 12px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px; color: #666;">Archive completed</button>
-  </div>
-  <div id="todoList"></div>
-
-  <div class="new-item">
-    <div class="checkbox"></div>
-    <div class="text" contenteditable="true" id="newItemInput"></div>
-  </div>
-
-  <div id="testMode" style="display: none; position: fixed; top: 20px; right: 20px; font-size: 13px; color: #999;">
-    <span id="timeDisplay">Day 0</span>
-    <button id="advanceDay" style="margin-left: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px;">+1 day</button>
-    <button id="resetTime" style="margin-left: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 4px;">reset</button>
-  </div>
-
-  <div id="archiveSection" style="display: none;">
-    <div class="archive-header" id="archiveToggle">Faded away ▸</div>
-    <div class="archive-list" id="archiveList"></div>
-  </div>
+  <div id="root"></div>
 
   <!-- Supabase client for realtime sync -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- Sync config (credentials) - must load before sync.js -->
   <script src="sync-config.js"></script>
-  <!-- Fractional indexing (shared by sync.js and app.js) -->
+  <!-- Fractional indexing (shared by sync.js and app) -->
   <script src="fractional-index.js"></script>
-  <!-- Event log (event sourcing layer, must load before sync.js and app.js) -->
+  <!-- Event log (event sourcing layer, must load before sync.js and app) -->
   <script src="event-log.js"></script>
-  <!-- Sync layer (must load before app.js) -->
+  <!-- Sync layer (must load before app) -->
   <script src="sync.js"></script>
-  <script src="app.js"></script>
+  <!-- React app (ES module) -->
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
