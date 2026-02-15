@@ -51,6 +51,8 @@ declare global {
       getConfig: () => Record<string, string>;
       onSave: (todos: TodoItem[]) => void;
       onEventsAppended: (events: unknown[]) => void;
+      getStatus: () => { state: string; retryCount?: number; maxRetries?: number; nextRetryMs?: number };
+      onStatusChange: (cb: (status: any) => void) => void;
       generatePositionBetween: (before: string | null, after: string | null) => string;
       generateInitialPositions: (count: number) => string[];
       _test?: Record<string, unknown>;

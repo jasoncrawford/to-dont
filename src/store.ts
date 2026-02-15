@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, useEffect, useState } from 'react';
 import type { TodoItem, ViewMode } from './types';
 
 // In-memory cache for parsed todos (same pattern as old app.js)
@@ -79,4 +79,40 @@ export function useViewMode(): ViewMode {
     () => _viewVersion,
   );
   return _viewMode;
+}
+
+// Sync status store
+export type SyncState = 'synced' | 'syncing' | 'error' | 'reconnecting' | 'offline' | 'disabled';
+
+export interface SyncStatus {
+  state: SyncState;
+  retryCount?: number;
+  maxRetries?: number;
+  nextRetryMs?: number;
+}
+
+let _syncStatus: SyncStatus = { state: 'disabled' };
+let _syncListeners: Set<() => void> = new Set();
+let _syncVersion = 0;
+
+export function initSyncStatusListener(): void {
+  if (window.ToDoSync && window.ToDoSync.onStatusChange) {
+    window.ToDoSync.onStatusChange((status: SyncStatus) => {
+      _syncStatus = status;
+      _syncVersion++;
+      _syncListeners.forEach(cb => cb());
+    });
+    // Read initial status
+    if (window.ToDoSync.getStatus) {
+      _syncStatus = window.ToDoSync.getStatus() as SyncStatus;
+    }
+  }
+}
+
+export function useSyncStatus(): SyncStatus {
+  useSyncExternalStore(
+    (cb) => { _syncListeners.add(cb); return () => { _syncListeners.delete(cb); }; },
+    () => _syncVersion,
+  );
+  return _syncStatus;
 }

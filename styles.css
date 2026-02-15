@@ -15,9 +15,15 @@ body {
 /* View tabs */
 .view-tabs {
   display: flex;
-  gap: 0;
+  justify-content: space-between;
+  align-items: stretch;
   margin-bottom: 24px;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.view-tabs-left {
+  display: flex;
+  gap: 0;
 }
 
 .view-tab {
@@ -342,4 +348,56 @@ body {
 
 .done-view .todo-item .text {
   color: #666;
+}
+
+/* Sync status indicator */
+.sync-status {
+  position: relative;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  margin-bottom: -1px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color 0.25s;
+}
+
+.sync-label {
+  font-size: 12px;
+  color: #bbb;
+  opacity: 1;
+  transition: color 0.25s, opacity 1s;
+}
+
+.sync-label.faded {
+  opacity: 0;
+}
+
+.sync-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.sync-status:hover .sync-tooltip {
+  opacity: 1;
 }

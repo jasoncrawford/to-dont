@@ -54,6 +54,27 @@ const MAX_RETRY_MS = 60000;
 // Pending remote events (queued while user is editing)
 let pendingRemoteEvents = [];
 
+// Status notification callback
+let _statusCallback = null;
+let realtimeConnected = false;
+
+function notifyStatus() {
+  if (!_statusCallback) return;
+  _statusCallback(getSyncStatus());
+}
+
+function getSyncStatus() {
+  if (!isSyncConfigured()) return { state: 'disabled' };
+  if (!navigator.onLine) return { state: 'offline' };
+  if (retryCount > 0 && !isSyncing) {
+    const delay = Math.min(BASE_RETRY_MS * Math.pow(2, retryCount - 1), MAX_RETRY_MS);
+    return { state: 'error', retryCount, maxRetries: MAX_RETRIES, nextRetryMs: delay };
+  }
+  if (syncEnabled && !realtimeConnected) return { state: 'reconnecting' };
+  if (isSyncing || syncPending) return { state: 'syncing' };
+  return { state: 'synced' };
+}
+
 // Check if sync is properly configured
 function isSyncConfigured() {
   const config = getConfig();
@@ -190,7 +211,6 @@ function clearRetryTimer() {
 function scheduleRetry() {
   if (retryCount >= MAX_RETRIES) {
     console.warn('[Sync] Max retries reached (' + MAX_RETRIES + '), giving up until next trigger');
-    retryCount = 0;
     return;
   }
 
@@ -215,6 +235,7 @@ async function syncCycle() {
   }
 
   isSyncing = true;
+  notifyStatus();
   try {
     await pushEvents();
     await pullEvents();
@@ -233,6 +254,7 @@ async function syncCycle() {
     scheduleRetry();
   } finally {
     isSyncing = false;
+    notifyStatus();
 
     if (syncPending) {
       syncPending = false;
@@ -248,12 +270,12 @@ function queueServerSync() {
   }
 
   clearRetryTimer();
-  retryCount = 0;
 
   serverSyncTimer = setTimeout(() => {
     serverSyncTimer = null;
     syncCycle();
   }, SERVER_SYNC_DEBOUNCE_MS);
+  notifyStatus();
 }
 
 // Handle realtime INSERT on events table
@@ -318,6 +340,24 @@ function applyPendingEvents() {
 function subscribeToRealtime() {
   if (!supabaseClient || !syncEnabled) return;
 
+  // Listen for socket-level disconnect/reconnect
+  const rt = supabaseClient.realtime;
+  if (rt && !rt._syncStatusHooked) {
+    rt._syncStatusHooked = true;
+    const origOnOpen = rt.onOpen;
+    const origOnClose = rt.onClose;
+    const origOnError = rt.onError;
+    if (typeof rt.onOpen === 'function') {
+      rt.onOpen(() => { realtimeConnected = true; notifyStatus(); });
+    }
+    if (typeof rt.onClose === 'function') {
+      rt.onClose(() => { realtimeConnected = false; notifyStatus(); });
+    }
+    if (typeof rt.onError === 'function') {
+      rt.onError(() => { realtimeConnected = false; notifyStatus(); });
+    }
+  }
+
   const config = getConfig();
   realtimeChannel = supabaseClient
     .channel('events-changes')
@@ -327,9 +367,10 @@ function subscribeToRealtime() {
       handleRealtimeEvent
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('[Sync] Realtime connected');
-      }
+      console.log('[Sync] Realtime status:', status);
+      const wasConnected = realtimeConnected;
+      realtimeConnected = (status === 'SUBSCRIBED');
+      if (realtimeConnected !== wasConnected) notifyStatus();
     });
 }
 
@@ -363,6 +404,7 @@ async function enableSync() {
     }
 
     syncEnabled = true;
+    notifyStatus();
     subscribeToRealtime();
     await syncCycle();
 
@@ -372,15 +414,18 @@ async function enableSync() {
   } catch (err) {
     console.error('[Sync] Enable failed:', err);
     syncEnabled = false;
+    notifyStatus();
     return false;
   }
 }
 
 function disableSync() {
   syncEnabled = false;
+  realtimeConnected = false;
   clearRetryTimer();
   retryCount = 0;
   unsubscribeFromRealtime();
+  notifyStatus();
   console.log('[Sync] Disabled');
 }
 
@@ -410,7 +455,8 @@ function init() {
   }
 
   setupBlurHandler();
-  window.addEventListener('online', handleOnline);
+  window.addEventListener('online', () => { handleOnline(); notifyStatus(); });
+  window.addEventListener('offline', notifyStatus);
 
   if (isSyncConfigured()) {
     setTimeout(() => {
@@ -441,6 +487,8 @@ const ToDoSync = {
       queueServerSync();
     }
   },
+  getStatus: getSyncStatus,
+  onStatusChange: function(cb) { _statusCallback = cb; },
   generatePositionBetween,
   generateInitialPositions,
 };
@@ -449,6 +497,10 @@ const ToDoSync = {
 if (isTestMode) {
   ToDoSync._test = {
     setSyncEnabled: (val) => { syncEnabled = val; },
+    setIsSyncing: (val) => { isSyncing = val; },
+    setRetryCount: (val) => { retryCount = val; },
+    setRealtimeConnected: (val) => { realtimeConnected = val; },
+    notifyStatus: notifyStatus,
     triggerEventSync: () => syncCycle(),
     handleOnline: handleOnline,
     isSyncing: () => isSyncing,

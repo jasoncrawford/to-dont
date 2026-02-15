@@ -616,7 +616,8 @@ test.describe('Sync Layer', () => {
       retryCount: window.ToDoSync._test!.retryCount(),
       hasRetryTimer: window.ToDoSync._test!.retryTimer() !== null,
     }));
-    expect(afterQueue.retryCount).toBe(0);
+    // retryCount persists until sync actually succeeds (not reset by queueServerSync)
+    expect(afterQueue.retryCount).toBe(1);
     expect(afterQueue.hasRetryTimer).toBe(false);
   });
 });
