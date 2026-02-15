@@ -1,7 +1,6 @@
 {
   "framework": "vite",
   "routes": [
-    { "src": "/api/items/([^/]+)", "dest": "/api/items/[id].ts?id=$1" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "handle": "filesystem" }
   ]

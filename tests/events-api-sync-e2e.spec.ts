@@ -227,10 +227,4 @@ test.describe('Events API', () => {
     });
     expect(response.status).toBe(401);
   });
-
-  test('old API endpoints still work', async () => {
-    // GET /api/items should still work
-    const items = await apiGet('/api/items');
-    expect(Array.isArray(items)).toBe(true);
-  });
 });
