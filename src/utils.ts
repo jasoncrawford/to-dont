@@ -1,4 +1,5 @@
 import type { TodoItem } from './types';
+import { generatePositionBetween as _generatePositionBetween } from './lib/fractional-index.js';
 
 export const FADE_DURATION_DAYS = 14;
 export const IMPORTANT_ESCALATION_DAYS = 14;
@@ -79,7 +80,7 @@ export function generateId(): string {
 }
 
 export function generatePositionBetween(before: string | null, after: string | null): string {
-  return window.FractionalIndex.generatePositionBetween(before, after);
+  return _generatePositionBetween(before, after);
 }
 
 export function getItemPosition(todos: TodoItem[], index: number): string | null {

@@ -4,5 +4,4 @@ test-results/
 playwright-report/
 .env.local
 .vercel
-sync-config.js
 supabase/.temp/

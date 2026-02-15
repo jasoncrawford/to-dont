@@ -18,10 +18,11 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 
 ### Frontend
 - **React 19 SPA** - ES module entry point (`src/main.tsx`), components in `src/components/`
-- **Legacy scripts** - `sync.js`, `event-log.js`, `fractional-index.js`, `sync-config.js` loaded as non-module `<script>` tags before React
+- **All scripts are ES modules** - `src/lib/fractional-index.js`, `src/lib/event-log.js`, `src/lib/sync.js` imported in `main.tsx`
 - **State via `useSyncExternalStore`** - React reads from localStorage via `loadTodos()`, notified via `window.render()` / `notifyStateChange()`
 - **Uncontrolled contenteditable** - Text set via `useLayoutEffect` ref, never as React children. Preserves cursor/focus during re-renders
-- **Vite dev server** with `@vitejs/plugin-react` - Serves frontend, generates `sync-config.js` from env vars, proxies `/api/*` to Vercel dev
+- **Vite dev server** with `@vitejs/plugin-react` - Serves frontend, injects sync config via `define`, proxies `/api/*` to Vercel dev
+- **Supabase client** imported from npm (`@supabase/supabase-js`), no CDN script tag
 
 ### Data & Sync
 - **localStorage** for immediate persistence
@@ -79,5 +80,5 @@ npm test
 2. `PRACTICES.md` - Development workflow and patterns
 3. `src/App.tsx` - React app shell, state management, component composition
 4. `src/hooks/useTodoActions.ts` - All mutation functions (add, delete, toggle, merge, split, reorder, etc.)
-5. `sync.js` - Sync layer implementation
-6. `event-log.js` - Event sourcing layer
+5. `src/lib/sync.js` - Sync layer implementation
+6. `src/lib/event-log.js` - Event sourcing layer
