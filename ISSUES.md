@@ -22,10 +22,7 @@
 
 ## ~~#11 - Old API endpoints and items table are dead weight~~ FIXED (d9a5cef)
 
-## #12 - No sync status indicator in the UI
-**Severity: Medium**
-
-Users have no visibility into whether their data is synced or stuck. If sync silently fails (bad network, server down), there's no indication. A subtle status indicator (e.g., a dot or icon showing synced/syncing/error) would build trust for multi-device users.
+## ~~#12 - No sync status indicator in the UI~~ FIXED (71b735c)
 
 ## #13 - Bearer token visible in page source
 **Severity: Medium**
