@@ -141,10 +141,12 @@ Fixed in fd9ddbb: changed to `String(!todo.archived)` in `createTodoElement` and
 
 ## Medium: Performance
 
-### 17. Full DOM teardown/rebuild on every change
+### ~~17. Full DOM teardown/rebuild on every change~~ FIXED (15b2f20)
 **File:** `app.js:857`
 
-`render()` does `todoList.innerHTML = ''` and recreates every element. Destroys focus, selection, scroll position, and CSS transitions. The codebase is filled with `setTimeout(() => el.focus(), 0)` workarounds.
+~~`render()` does `todoList.innerHTML = ''` and recreates every element. Destroys focus, selection, scroll position, and CSS transitions. The codebase is filled with `setTimeout(() => el.focus(), 0)` workarounds.~~
+
+Fixed: Migrated frontend from vanilla JS (app.js) to React 19. React's reconciliation updates only changed DOM nodes, preserving focus, selection, and scroll position. All setTimeout focus hacks eliminated.
 
 ### ~~18. `loadTodos()` parses JSON from localStorage on every call~~ FIXED
 **File:** `app.js:44-47`
@@ -153,10 +155,12 @@ Fixed in fd9ddbb: changed to `String(!todo.archived)` in `createTodoElement` and
 
 Fixed: Added in-memory JSON string cache. `loadTodos()` uses `===` comparison to detect changes, avoiding redundant parsing. `saveTodos()` updates the cache. New `invalidateTodoCache()` called by sync.js wherever it writes localStorage directly.
 
-### 19. No pagination — all items fetched always
+### ~~19. No pagination — all items fetched always~~ RESOLVED (d9a5cef)
 **Files:** `api/items/index.ts:20-23`, `api/sync/index.ts`
 
-Both GET and POST endpoints fetch the entire items table. Since items are never hard-deleted server-side, this grows unboundedly.
+~~Both GET and POST endpoints fetch the entire items table. Since items are never hard-deleted server-side, this grows unboundedly.~~
+
+Resolved: Both `api/items` and `api/sync` endpoints were deleted (ISSUES.md #11). The replacement events API (`api/events`) has pagination (PULL_PAGE_SIZE=500, MAX_PULL_PAGES=50), and log compaction bounds event growth.
 
 ---
 
