@@ -344,9 +344,6 @@ function subscribeToRealtime() {
   const rt = supabaseClient.realtime;
   if (rt && !rt._syncStatusHooked) {
     rt._syncStatusHooked = true;
-    const origOnOpen = rt.onOpen;
-    const origOnClose = rt.onClose;
-    const origOnError = rt.onError;
     if (typeof rt.onOpen === 'function') {
       rt.onOpen(() => { realtimeConnected = true; notifyStatus(); });
     }

@@ -5,10 +5,3 @@ export function validateAuth(req: VercelRequest): boolean {
   if (!auth) return false;
   return auth === `Bearer ${process.env.SYNC_BEARER_TOKEN}`;
 }
-
-export function unauthorizedResponse() {
-  return {
-    statusCode: 401,
-    body: JSON.stringify({ error: 'Unauthorized' }),
-  };
-}

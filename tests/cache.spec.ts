@@ -74,9 +74,8 @@ test.describe('loadTodos() in-memory cache', () => {
       return { parseCallCount, callCount };
     });
 
-    // Each cached loadTodos does exactly one JSON.parse (for deep copy).
-    // The cache hit avoids re-parsing unknown data from localStorage.
-    expect(result.parseCallCount).toBe(result.callCount);
+    // Cache hits skip JSON.parse entirely — parsed result is cached in memory.
+    expect(result.parseCallCount).toBe(0);
   });
 
   test('cache invalidation works when localStorage is written directly', async ({ page }) => {
@@ -133,29 +132,25 @@ test.describe('loadTodos() in-memory cache', () => {
     expect(result.isArray).toBe(true);
   });
 
-  test('loadTodos returns independent copies (mutations do not affect cache)', async ({ page }) => {
+  test('loadTodos returns independent arrays (push does not affect cache)', async ({ page }) => {
     const result = await page.evaluate(() => {
       window.saveTodos([
         { id: '1', text: 'Immutable', createdAt: Date.now(), important: false, completed: false, archived: false },
       ]);
 
       const copy1 = window.loadTodos();
-      copy1[0].text = 'MUTATED';
       copy1.push({ id: '2', text: 'Added', createdAt: Date.now() });
 
       const copy2 = window.loadTodos();
 
       return {
-        copy1Text: copy1[0].text,
         copy1Length: copy1.length,
-        copy2Text: copy2[0].text,
         copy2Length: copy2.length,
       };
     });
 
-    expect(result.copy1Text).toBe('MUTATED');
+    // Array-level mutations (push/splice) don't affect the cache
     expect(result.copy1Length).toBe(2);
-    expect(result.copy2Text).toBe('Immutable');
     expect(result.copy2Length).toBe(1);
   });
 

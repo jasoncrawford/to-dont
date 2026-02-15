@@ -51,7 +51,7 @@ export default function App() {
   }, []);
 
   // Compute derived data
-  const activeItems = todos.filter(t => !t.archived && !(t.completed && t.archived));
+  const activeItems = todos.filter(t => !t.archived);
   const fadedAway = todos.filter(t => t.archived && !t.completed);
   const hasCompletedItems = todos.some(t => t.completed && !t.archived);
 

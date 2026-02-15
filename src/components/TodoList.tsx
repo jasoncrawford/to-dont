@@ -62,7 +62,7 @@ export function TodoList({
   }
 
   // Active view
-  const activeItems = todos.filter(t => !t.archived && !(t.completed && t.archived));
+  const activeItems = todos.filter(t => !t.archived);
 
   return (
     <div id="todoList">

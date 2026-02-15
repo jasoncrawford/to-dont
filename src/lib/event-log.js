@@ -94,8 +94,8 @@ function projectState(events) {
         archived: val.archived || false,
         archivedAt: val.archivedAt || undefined,
         position: val.position || 'n',
-        type: val.type || undefined,
-        level: val.level || undefined,
+        type: val.type || 'todo',
+        level: val.level || null,
         indented: val.indented || false,
         // Track per-field timestamps for LWW
         textUpdatedAt: val.textUpdatedAt || event.timestamp,

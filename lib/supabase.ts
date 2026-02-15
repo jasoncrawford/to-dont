@@ -20,30 +20,3 @@ export function getSupabase(): SupabaseClient<any, any, any> {
   _supabase = createClient(url, key, { db: { schema } });
   return _supabase;
 }
-
-// For backwards compatibility
-export const supabase = {
-  from: (table: string) => getSupabase().from(table),
-};
-
-export interface DbItem {
-  id: string;
-  parent_id: string | null;
-  type: string;
-  text: string;
-  important: boolean;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-  level: number | null;
-  indented: boolean;
-  // CRDT fields
-  position: string;
-  text_updated_at: string;
-  important_updated_at: string;
-  completed_updated_at: string;
-  position_updated_at: string;
-  type_updated_at: string;
-  level_updated_at: string;
-  indented_updated_at: string;
-}

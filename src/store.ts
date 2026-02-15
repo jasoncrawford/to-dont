@@ -1,8 +1,9 @@
 import { useSyncExternalStore, useEffect, useState } from 'react';
 import type { TodoItem, ViewMode } from './types';
 
-// In-memory cache for parsed todos (same pattern as old app.js)
+// In-memory cache for parsed todos
 let _todosCacheJson: string | null = null;
+let _todosCacheParsed: TodoItem[] | null = null;
 
 let _listeners: Set<() => void> = new Set();
 let _stateVersion = 0;
@@ -11,19 +12,22 @@ export function loadTodos(): TodoItem[] {
   const data = localStorage.getItem('decay-todos');
   if (!data) {
     _todosCacheJson = null;
+    _todosCacheParsed = null;
     return [];
   }
-  if (_todosCacheJson !== null && data === _todosCacheJson) {
-    return JSON.parse(_todosCacheJson);
+  if (_todosCacheJson !== null && data === _todosCacheJson && _todosCacheParsed !== null) {
+    return _todosCacheParsed.slice();
   }
   _todosCacheJson = data;
-  return JSON.parse(data);
+  _todosCacheParsed = JSON.parse(data);
+  return _todosCacheParsed!.slice();
 }
 
 export function saveTodos(todos: TodoItem[]): void {
   const json = JSON.stringify(todos);
   localStorage.setItem('decay-todos', json);
   _todosCacheJson = json;
+  _todosCacheParsed = todos;
   if (window.ToDoSync && window.ToDoSync.onSave) {
     window.ToDoSync.onSave(todos);
   }
@@ -31,6 +35,7 @@ export function saveTodos(todos: TodoItem[]): void {
 
 export function invalidateTodoCache(): void {
   _todosCacheJson = null;
+  _todosCacheParsed = null;
 }
 
 export function notifyStateChange(): void {

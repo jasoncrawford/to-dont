@@ -56,7 +56,7 @@ export function SyncStatus() {
         clearTimeout(syncingTimer.current);
       }
     };
-  }, [status.state]);
+  }, [status.state, displayState]);
 
   useEffect(() => {
     if (displayState === 'synced') {

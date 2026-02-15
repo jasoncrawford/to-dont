@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import { setCursorPosition } from '../utils';
 
 export interface PendingFocus {
@@ -26,9 +26,5 @@ export function useFocusManager() {
     }
   });
 
-  const requestFocus = useCallback((itemId: string, cursorPos?: number, atEnd?: boolean) => {
-    pendingFocusRef.current = { itemId, cursorPos, atEnd };
-  }, []);
-
-  return { requestFocus, pendingFocusRef };
+  return { pendingFocusRef };
 }

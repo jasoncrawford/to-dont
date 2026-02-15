@@ -4,8 +4,6 @@ import { generatePositionBetween as _generatePositionBetween } from './lib/fract
 export const FADE_DURATION_DAYS = 14;
 export const IMPORTANT_ESCALATION_DAYS = 14;
 export const UPDATE_INTERVAL = 60000;
-export const SAVE_DEBOUNCE_MS = 300;
-
 // Match arrow patterns: ->, -->, --->, or Unicode arrows like →, ➔, ⟶, etc.
 const ARROW_PATTERN = /-+>|[→➔➜➝➞⟶⇒⇨]/;
 
