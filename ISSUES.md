@@ -32,10 +32,7 @@ Users have no visibility into whether their data is synced or stuck. If sync sil
 
 The `SYNC_BEARER_TOKEN` is baked into the JS bundle at build time (via Vite `define`) and visible to anyone who views page source. Anyone who discovers the URL has full read/write/delete access to all data. Consider per-user auth (e.g., Supabase Auth) or at minimum a less exposed auth mechanism.
 
-## #14 - No CI/CD — deploying manually from desktop
-**Severity: Low**
-
-Vercel deployments are done via `vercel --prod` from a local machine. Connect the GitHub repo to Vercel for automatic deploys on push to main.
+## ~~#14 - No CI/CD — deploying manually from desktop~~ FIXED (d36a9b2)
 
 ## #15 - No PWA support for mobile
 **Severity: Low-Medium**
