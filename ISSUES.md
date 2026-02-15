@@ -30,7 +30,7 @@ Users have no visibility into whether their data is synced or stuck. If sync sil
 ## #13 - Bearer token visible in page source
 **Severity: Medium**
 
-The `SYNC_BEARER_TOKEN` is baked into `sync-config.js` at build time and visible to anyone who views page source. Anyone who discovers the URL has full read/write/delete access to all data. Consider per-user auth (e.g., Supabase Auth) or at minimum a less exposed auth mechanism.
+The `SYNC_BEARER_TOKEN` is baked into the JS bundle at build time (via Vite `define`) and visible to anyone who views page source. Anyone who discovers the URL has full read/write/delete access to all data. Consider per-user auth (e.g., Supabase Auth) or at minimum a less exposed auth mechanism.
 
 ## #14 - No CI/CD — deploying manually from desktop
 **Severity: Low**
@@ -47,7 +47,5 @@ The app is used on iPhone/iPad but lacks a service worker and web app manifest. 
 
 The `?reset=1` URL parameter was added for data migration and clears all localStorage without confirmation. Now that migration is complete, it should be removed or guarded (e.g., require a confirmation prompt).
 
-## #17 - Non-module script loading
-**Severity: Low**
+## ~~#17 - Non-module script loading~~ FIXED (130c6f0)
 
-Frontend JS files are loaded as non-module `<script>` tags via a `copyLegacyScripts` Vite plugin. This is unconventional and prevents using ES module features. Modernizing to module scripts would simplify the build.
