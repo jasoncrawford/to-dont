@@ -55,6 +55,19 @@ export function shouldArchive(todo: TodoItem, now: number): boolean {
   return getDaysSince(todo.createdAt, now) >= FADE_DURATION_DAYS;
 }
 
+// Get the character offset of the cursor within a contenteditable element.
+// Works cross-browser (Chromium, WebKit/Safari, Firefox) by measuring
+// the text length from the start of the element to the cursor position.
+export function getCursorOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  const preRange = document.createRange();
+  preRange.selectNodeContents(el);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  return preRange.toString().length;
+}
+
 export function setCursorPosition(el: HTMLElement, pos: number): void {
   const textNode = el.firstChild;
   if (!textNode) {

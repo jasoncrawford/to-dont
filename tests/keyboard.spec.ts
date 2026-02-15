@@ -279,6 +279,28 @@ test.describe('Keyboard Navigation', () => {
       expect(texts[1]).toBe('');
     });
 
+    test('should insert todo at bottom when Enter at end of last item with multiple items', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+      await addTodo(page, 'Third');
+
+      // Focus last item and move cursor to end
+      const lastText = page.locator('.todo-item .text').last();
+      await lastText.click();
+      await lastText.press('End');
+
+      // Press Enter to create new item
+      await lastText.press('Enter');
+
+      // New empty item should be at the bottom (4th position)
+      const texts = await getTodoTexts(page);
+      expect(texts).toEqual(['First', 'Second', 'Third', '']);
+
+      // The new empty item should be focused
+      const newText = page.locator('.todo-item .text').last();
+      await expect(newText).toBeFocused();
+    });
+
     test('should insert todo above when cursor at start, keeping focus on current', async ({ page }) => {
       await addTodo(page, 'First');
 

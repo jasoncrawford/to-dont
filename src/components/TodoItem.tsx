@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import type { TodoItem as TodoItemType, ViewMode } from '../types';
-import { formatDate, getFadeOpacity, getImportanceLevel } from '../utils';
+import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import type { TodoActions } from '../hooks/useTodoActions';
 
@@ -108,10 +108,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
       if (!range.collapsed) return; // Let default behavior delete selection
 
-      const cursorPos = range.startOffset;
-      const atStart = cursorPos === 0 && (range.startContainer === textEl.firstChild || range.startContainer === textEl);
-
-      if (atStart) {
+      if (getCursorOffset(textEl) === 0) {
         const todoList = document.getElementById('todoList');
         if (!todoList) return;
         const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
@@ -139,29 +136,18 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         return;
       }
 
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      const cursorPos = range.startOffset;
+      e.preventDefault();
+      const offset = getCursorOffset(textEl);
 
-      const atStart = (cursorPos === 0 && range.startContainer === textEl.firstChild) ||
-                     (range.startContainer === textEl && cursorPos === 0);
-      const atEnd = (range.startContainer === textEl.lastChild && cursorPos === (textEl.lastChild as Text).length) ||
-                   (range.startContainer === textEl && cursorPos === textEl.childNodes.length) ||
-                   (range.startContainer.nodeType === 3 && cursorPos === (range.startContainer as Text).length && !range.startContainer.nextSibling);
-
-      if (atStart) {
-        e.preventDefault();
+      if (offset === 0) {
         textEl.blur();
         actions.insertTodoBefore(todo.id);
-      } else if (atEnd) {
-        e.preventDefault();
+      } else if (offset >= content.length) {
         textEl.blur();
         actions.insertTodoAfter(todo.id);
       } else {
-        e.preventDefault();
-        const textBefore = content.substring(0, cursorPos);
-        const textAfter = content.substring(cursorPos);
+        const textBefore = content.substring(0, offset);
+        const textAfter = content.substring(offset);
         textEl.blur();
         actions.splitTodoAt(todo.id, textBefore, textAfter);
       }

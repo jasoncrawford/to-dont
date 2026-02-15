@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { setCursorPosition } from '../utils';
+import { setCursorPosition, getCursorOffset } from '../utils';
 import type { TodoActions } from './useTodoActions';
 
 // Shared keyboard navigation handlers for both todos and sections
@@ -60,10 +60,8 @@ export function useCommonKeydown(actions: TodoActions) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return false;
       const range = sel.getRangeAt(0);
-      const atEnd = range.collapsed &&
-        ((range.startContainer === textEl.lastChild && range.startOffset === (textEl.lastChild as Text).length) ||
-         (range.startContainer === textEl && range.startOffset === textEl.childNodes.length) ||
-         (!textEl.firstChild && range.startOffset === 0));
+      const content = textEl.textContent || '';
+      const atEnd = range.collapsed && getCursorOffset(textEl) >= content.length;
       if (atEnd) {
         e.preventDefault();
         textEl.blur();
@@ -81,8 +79,7 @@ export function useCommonKeydown(actions: TodoActions) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return false;
       const range = sel.getRangeAt(0);
-      const atStart = range.collapsed && range.startOffset === 0 &&
-        (range.startContainer === textEl.firstChild || range.startContainer === textEl || !textEl.firstChild);
+      const atStart = range.collapsed && getCursorOffset(textEl) === 0;
       if (atStart) {
         e.preventDefault();
         textEl.blur();
