@@ -209,6 +209,7 @@ body {
 .todo-item .text {
   outline: none;
   min-height: 1.6em;
+  min-width: 1px;
 }
 
 .todo-item .date {
