@@ -254,6 +254,16 @@ test.describe('Done View', () => {
       const archiveContainer = page.locator('#archiveCompletedContainer');
       await expect(archiveContainer).not.toBeVisible();
     });
+
+    test('should not show Archive Completed button in Faded view', async ({ page }) => {
+      await addTodo(page, 'Task');
+      await completeTodo(page, 'Task');
+
+      await page.locator('#fadedViewBtn').click();
+
+      const archiveContainer = page.locator('#archiveCompletedContainer');
+      await expect(archiveContainer).not.toBeVisible();
+    });
   });
 
   test.describe('Archived Items in Done View', () => {

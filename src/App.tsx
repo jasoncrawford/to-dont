@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { loadTodos, useStateVersion, useViewMode } from './store';
 import { UPDATE_INTERVAL } from './utils';
 import { useFocusManager } from './hooks/useFocusManager';
@@ -9,7 +9,6 @@ import { ViewToggle } from './components/ViewToggle';
 import { TestModePanel } from './components/TestModePanel';
 import { NewItemInput } from './components/NewItemInput';
 import { TodoList } from './components/TodoList';
-import { TodoItemComponent } from './components/TodoItem';
 
 export default function App() {
   useStateVersion(); // subscribe to state changes
@@ -38,27 +37,14 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Archive toggle handler
-  const handleArchiveToggle = useCallback(() => {
-    const list = document.getElementById('archiveList');
-    const toggle = document.getElementById('archiveToggle');
-    if (list && toggle) {
-      list.classList.toggle('expanded');
-      toggle.textContent = list.classList.contains('expanded')
-        ? 'Faded away ▾'
-        : 'Faded away ▸';
-    }
-  }, []);
-
   // Compute derived data
   const activeItems = todos.filter(t => !t.archived);
-  const fadedAway = todos.filter(t => t.archived && !t.completed);
   const hasCompletedItems = todos.some(t => t.completed && !t.archived);
 
   return (
     <>
       <ViewToggle />
-      {viewMode !== 'done' && (
+      {viewMode === 'active' && (
         <div id="archiveCompletedContainer" style={{ marginBottom: 20, display: 'block' }}>
           <button
             id="archiveCompletedBtn"
@@ -88,35 +74,13 @@ export default function App() {
         onItemDragStart={startItemDrag}
         onSectionDragStart={startSectionDrag}
       />
-      {viewMode !== 'done' && (
+      {viewMode === 'active' && (
         <NewItemInput
           visible={activeItems.length === 0}
           onAdd={actions.addTodo}
         />
       )}
       <TestModePanel />
-      {viewMode !== 'done' && (
-        <div id="archiveSection" style={{ display: fadedAway.length > 0 ? 'block' : 'none' }}>
-          <div className="archive-header" id="archiveToggle" onClick={handleArchiveToggle}>
-            Faded away ▸
-          </div>
-          <div className="archive-list" id="archiveList">
-            {[...fadedAway]
-              .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0))
-              .map(todo => (
-                <TodoItemComponent
-                  key={todo.id}
-                  todo={todo}
-                  viewMode={viewMode}
-                  now={now}
-                  actions={actions}
-                  onKeyDown={handleCommonKeydown}
-                  onDragStart={startItemDrag}
-                />
-              ))}
-          </div>
-        </div>
-      )}
     </>
   );
 }

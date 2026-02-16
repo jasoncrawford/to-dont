@@ -24,6 +24,29 @@ export function TodoList({
   onItemDragStart,
   onSectionDragStart,
 }: TodoListProps) {
+  if (viewMode === 'faded') {
+    // Faded view: archived but not completed items, sorted by archivedAt descending
+    const fadedItems = todos
+      .filter(t => t.archived && !t.completed)
+      .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
+    return (
+      <div id="todoList" className="faded-view">
+        {fadedItems.map(item => (
+          <TodoItemComponent
+            key={item.id}
+            todo={item}
+            viewMode={viewMode}
+            now={now}
+            actions={actions}
+            onKeyDown={onKeyDown}
+            onDragStart={onItemDragStart}
+          />
+        ))}
+      </div>
+    );
+  }
+
   if (viewMode === 'done') {
     // Done view: completed items grouped by day
     const completedItems = todos

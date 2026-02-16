@@ -9,7 +9,7 @@ To-Don't is a minimalist todo application where items naturally fade away over t
 ### Decay and Fading
 - Items fade in opacity over 14 days from creation
 - After 14 days, items are automatically archived (hidden from Active view)
-- Archived items appear in the "Faded away" section at the bottom
+- Archived items appear in the "Faded" view tab
 - This creates gentle pressure to act on items while they're visible
 
 ### Importance
@@ -21,6 +21,7 @@ To-Don't is a minimalist todo application where items naturally fade away over t
 
 ### Views
 - **Active view**: Shows incomplete items in user-defined order, with completed items shown but struck through
+- **Faded view**: Shows archived (faded away) items that were never completed, sorted by archive date
 - **Done view**: Shows completed items grouped by completion date (Today, Yesterday, or date), in reverse chronological order
 
 ### Sections
@@ -42,11 +43,10 @@ To-Don't is a minimalist todo application where items naturally fade away over t
 ## User Interface
 
 ### Layout
-- Tab bar at top: Active | Done
+- Tab bar at top: Active | Faded | Done
 - Todo list in the middle
 - New item input at bottom (Active view only)
 - "Archive completed" button (Active view only, when completed items exist)
-- "Faded away" expandable section at bottom (when archived items exist)
 
 ### Item Display
 - Checkbox on left
@@ -106,7 +106,7 @@ Note: Sections move with all their children when reordered.
 ### Local Storage
 - Primary storage in localStorage for offline-first experience
 - Key: `decay-todos` (array of todo objects)
-- Key: `decay-todos-view-mode` (string: 'active' or 'done')
+- Key: `decay-todos-view-mode` (string: 'active', 'faded', or 'done')
 - Text auto-saves 300ms after typing stops (debounced)
 - Also saves on blur as fallback
 

@@ -288,37 +288,16 @@ body {
   content: "";
 }
 
-/* Archive section */
-.archive-header {
-  margin-top: 50px;
-  padding-top: 20px;
-  font-size: 13px;
-  color: #999;
-  cursor: pointer;
-}
-
-.archive-header:hover {
-  color: #666;
-}
-
-.archive-list {
-  display: none;
-  margin-top: 10px;
-}
-
-.archive-list.expanded {
-  display: block;
-}
-
-.archive-list .todo-item {
+/* Faded view */
+.faded-view .todo-item {
   opacity: 0.4;
 }
 
-.archive-list .todo-item .actions {
+.faded-view .todo-item .actions {
   opacity: 0;
 }
 
-.archive-list .todo-item:hover .actions {
+.faded-view .todo-item:hover .actions {
   opacity: 1;
 }
 

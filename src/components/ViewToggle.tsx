@@ -16,6 +16,13 @@ export function ViewToggle() {
           Active
         </button>
         <button
+          id="fadedViewBtn"
+          className={`view-tab${viewMode === 'faded' ? ' active' : ''}`}
+          onClick={() => setViewMode('faded')}
+        >
+          Faded
+        </button>
+        <button
           id="doneViewBtn"
           className={`view-tab${viewMode === 'done' ? ' active' : ''}`}
           onClick={() => setViewMode('done')}

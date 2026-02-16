@@ -157,22 +157,16 @@ test.describe('Core Todo Functionality', () => {
         await page.locator('#advanceDay').click();
       }
 
-      // Check it's in the archive section
-      const archiveSection = page.locator('#archiveSection');
-      await expect(archiveSection).toBeVisible();
-
-      // Expand archive to see items
-      await page.locator('#archiveToggle').click();
-      const archiveList = page.locator('#archiveList');
-      await expect(archiveList).toHaveClass(/expanded/);
-
-      const archivedTodo = archiveList.locator('.todo-item:has(.text:text("Old task"))');
-      await expect(archivedTodo).toBeVisible();
-
       // Check it's not in main list
       const mainList = page.locator('#todoList');
       const mainTodo = mainList.locator('.todo-item:has(.text:text("Old task"))');
       await expect(mainTodo).toHaveCount(0);
+
+      // Click the Faded tab and check the item appears there
+      await page.locator('#fadedViewBtn').click();
+      const fadedList = page.locator('#todoList');
+      const fadedTodo = fadedList.locator('.todo-item:has(.text:text("Old task"))');
+      await expect(fadedTodo).toBeVisible();
     });
 
     test('should set archived flag in localStorage after 14 days', async ({ page }) => {
