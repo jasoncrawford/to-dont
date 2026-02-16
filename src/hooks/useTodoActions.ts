@@ -5,6 +5,7 @@ import {
   createNewItem, getItemPosition, generatePositionBetween,
   getItemGroup, splitOnArrow,
 } from '../utils';
+import { sanitizeHTML, textLengthOfHTML } from '../lib/sanitize';
 import type { TodoItem } from '../types';
 import type { PendingFocus } from './useFocusManager';
 
@@ -20,12 +21,12 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     }
     timers.set(id, setTimeout(() => {
       timers.delete(id);
-      window.EventLog.emitFieldChanged(id, 'text', text.trim());
+      window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(text).trim());
     }, SAVE_DEBOUNCE_MS));
   }, []);
 
   const updateTodoText = useCallback((id: string, newText: string) => {
-    window.EventLog.emitFieldChanged(id, 'text', newText.trim());
+    window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(newText).trim());
     const timers = saveTimersRef.current;
     if (timers.has(id)) {
       clearTimeout(timers.get(id));
@@ -59,7 +60,10 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     ];
 
     if (newCompleted) {
-      const split = splitOnArrow(todo.text);
+      // Extract plain text for arrow detection (links are lost on arrow-split)
+      const plainDiv = document.createElement('div');
+      plainDiv.innerHTML = todo.text;
+      const split = splitOnArrow(plainDiv.textContent || '');
       if (split) {
         batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
         const todoIndex = todos.indexOf(todo);
@@ -141,8 +145,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
     const currentTodo = todos[currentIndex];
     const prevTodo = todos[prevIndex];
-    const cursorPos = prevTodo.text.length;
-    const mergedText = prevTodo.text + currentTodo.text;
+    const cursorPos = textLengthOfHTML(prevTodo.text);
+    const mergedText = sanitizeHTML(prevTodo.text + currentTodo.text);
 
     window.EventLog.emitBatch([
       { type: 'field_changed', itemId: prevId, field: 'text', value: mergedText },

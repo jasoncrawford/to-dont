@@ -210,6 +210,7 @@ body {
   outline: none;
   min-height: 1.6em;
   min-width: 1px;
+  cursor: text;
 }
 
 .todo-item .date {
@@ -380,4 +381,58 @@ body {
 
 .sync-status:hover .sync-tooltip {
   opacity: 1;
+}
+
+/* Hyperlinks in todo items */
+.todo-item .text a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.todo-item .text a:hover {
+  text-decoration-color: currentColor;
+}
+
+.todo-item .text[contenteditable="false"] a {
+  cursor: pointer;
+  color: #1a73e8;
+}
+
+/* Link editor dialog */
+.link-editor {
+  position: fixed;
+  z-index: 100;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 6px 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.link-editor input {
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  outline: none;
+  min-width: 260px;
+}
+
+.link-editor input:focus {
+  border-color: #999;
+}
+
+.link-editor .remove-link {
+  font-size: 12px;
+  color: #e53935;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
 }

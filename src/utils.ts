@@ -1,5 +1,6 @@
 import type { TodoItem } from './types';
 import { generatePositionBetween as _generatePositionBetween } from './lib/fractional-index.js';
+import { sanitizeHTML } from './lib/sanitize';
 
 export const FADE_DURATION_DAYS = 14;
 export const IMPORTANT_ESCALATION_DAYS = 14;
@@ -69,21 +70,61 @@ export function getCursorOffset(el: HTMLElement): number {
 }
 
 export function setCursorPosition(el: HTMLElement, pos: number): void {
-  const textNode = el.firstChild;
-  if (!textNode) {
+  if (!el.firstChild) {
     el.focus();
     return;
   }
-  const maxPos = (textNode as Text).length || 0;
-  const targetPos = Math.min(pos, maxPos);
-  const range = document.createRange();
-  range.setStart(textNode, targetPos);
-  range.collapse(true);
-  const sel = window.getSelection();
-  if (sel) {
-    sel.removeAllRanges();
-    sel.addRange(range);
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = pos;
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    if (remaining <= node.length) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      const sel = window.getSelection();
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      return;
+    }
+    remaining -= node.length;
   }
+  // Beyond end: place cursor at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+}
+
+export function splitHTMLAtCursor(el: HTMLElement): { before: string; after: string } {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) {
+    return { before: el.innerHTML, after: '' };
+  }
+  const cursorRange = sel.getRangeAt(0);
+
+  // Clone content from start of el to cursor
+  const beforeRange = document.createRange();
+  beforeRange.selectNodeContents(el);
+  beforeRange.setEnd(cursorRange.startContainer, cursorRange.startOffset);
+  const beforeFrag = beforeRange.cloneContents();
+
+  // Clone content from cursor to end of el
+  const afterRange = document.createRange();
+  afterRange.selectNodeContents(el);
+  afterRange.setStart(cursorRange.startContainer, cursorRange.startOffset);
+  const afterFrag = afterRange.cloneContents();
+
+  // Serialize fragments via temp divs
+  const beforeDiv = document.createElement('div');
+  beforeDiv.appendChild(beforeFrag);
+  const afterDiv = document.createElement('div');
+  afterDiv.appendChild(afterFrag);
+
+  return {
+    before: sanitizeHTML(beforeDiv.innerHTML),
+    after: sanitizeHTML(afterDiv.innerHTML),
+  };
 }
 
 export function generateId(): string {

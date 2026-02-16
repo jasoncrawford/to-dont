@@ -1,7 +1,9 @@
-import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import type { TodoItem as TodoItemType, ViewMode } from '../types';
-import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset } from '../utils';
+import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
+import { sanitizeHTML } from '../lib/sanitize';
+import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
 
 interface TodoItemProps {
@@ -13,19 +15,23 @@ interface TodoItemProps {
   onDragStart: (e: React.MouseEvent, itemId: string, div: HTMLElement) => void;
 }
 
+interface LinkEditorState {
+  savedRange: Range | null;
+  existingAnchor: HTMLAnchorElement | null;
+  rect: DOMRect;
+}
+
 export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onDragStart }: TodoItemProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
+  const [linkEditorState, setLinkEditorState] = useState<LinkEditorState | null>(null);
 
   // Sync text from props to DOM on every render when not focused.
-  // Runs synchronously before paint (useLayoutEffect) so that
-  // window.render() callers see the DOM updated immediately (via flushSync).
-  // No deps array — must run every render to catch cases where todo.text
-  // hasn't changed but the DOM was modified by user typing.
   useLayoutEffect(() => {
     const el = textRef.current;
-    if (el && document.activeElement !== el && el.textContent !== todo.text) {
-      el.textContent = todo.text;
+    const sanitized = sanitizeHTML(todo.text);
+    if (el && document.activeElement !== el && el.innerHTML !== sanitized) {
+      el.innerHTML = sanitized;
     }
   });
 
@@ -62,6 +68,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
   const handleDivClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target === textRef.current || target.closest('.actions')) return;
+
     const el = textRef.current;
     if (el) {
       el.focus();
@@ -76,15 +83,106 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     }
   }, []);
 
+  const handleTextMouseDown = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a');
+    if (anchor) {
+      e.preventDefault();
+      window.open(anchor.href, '_blank');
+    }
+  }, []);
+
   const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     actions.toggleComplete(todo.id);
   }, [todo.id, actions]);
 
+  const handleLinkSubmit = useCallback((url: string) => {
+    const textEl = textRef.current;
+    if (!textEl || !linkEditorState) return;
+
+    textEl.focus();
+    if (linkEditorState.savedRange) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(linkEditorState.savedRange);
+      }
+    }
+
+    if (linkEditorState.existingAnchor) {
+      // Update existing link
+      linkEditorState.existingAnchor.href = url;
+      linkEditorState.existingAnchor.target = '_blank';
+      linkEditorState.existingAnchor.rel = 'noopener';
+    } else {
+      // Create new link from selection
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) {
+        document.execCommand('createLink', false, url);
+        // Find the new anchor and set attributes
+        const newAnchor = sel.anchorNode instanceof HTMLElement
+          ? sel.anchorNode.querySelector('a[href]')
+          : sel.anchorNode?.parentElement?.closest('a');
+        if (newAnchor) {
+          newAnchor.setAttribute('target', '_blank');
+          newAnchor.setAttribute('rel', 'noopener');
+        }
+      }
+    }
+
+    actions.updateTodoText(todo.id, textEl.innerHTML || '');
+    setLinkEditorState(null);
+  }, [linkEditorState, todo.id, actions]);
+
+  const handleLinkRemove = useCallback(() => {
+    const textEl = textRef.current;
+    if (!textEl || !linkEditorState?.existingAnchor) return;
+
+    const anchor = linkEditorState.existingAnchor;
+    const parent = anchor.parentNode;
+    if (parent) {
+      while (anchor.firstChild) {
+        parent.insertBefore(anchor.firstChild, anchor);
+      }
+      anchor.remove();
+    }
+
+    textEl.focus();
+    actions.updateTodoText(todo.id, textEl.innerHTML || '');
+    setLinkEditorState(null);
+  }, [linkEditorState, todo.id, actions]);
+
+  const handleLinkClose = useCallback(() => {
+    setLinkEditorState(null);
+    textRef.current?.focus();
+  }, []);
+
   const handleTextKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const div = divRef.current;
     const textEl = textRef.current;
     if (!div || !textEl) return;
+
+    // Cmd+K: open link editor
+    if (e.key === 'k' && e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      // Flush pending text changes
+      actions.updateTodoText(todo.id, textEl.innerHTML || '');
+      // Save selection state
+      const sel = window.getSelection();
+      const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+      // Check if cursor is inside an existing <a>
+      const anchorNode = sel?.anchorNode;
+      const existingAnchor = anchorNode instanceof HTMLElement
+        ? anchorNode.closest('a') as HTMLAnchorElement | null
+        : (anchorNode?.parentElement?.closest('a') as HTMLAnchorElement | null);
+      // Get position for dialog
+      const rect = savedRange
+        ? savedRange.getBoundingClientRect()
+        : textEl.getBoundingClientRect();
+      setLinkEditorState({ savedRange, existingAnchor, rect });
+      return;
+    }
 
     // Tab: indent todo
     if (e.key === 'Tab' && !e.shiftKey) {
@@ -146,10 +244,9 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         textEl.blur();
         actions.insertTodoAfter(todo.id);
       } else {
-        const textBefore = content.substring(0, offset);
-        const textAfter = content.substring(offset);
+        const { before, after } = splitHTMLAtCursor(textEl);
         textEl.blur();
-        actions.splitTodoAt(todo.id, textBefore, textAfter);
+        actions.splitTodoAt(todo.id, before, after);
       }
       return;
     }
@@ -195,6 +292,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         onInput={handleInput}
         onPaste={handlePaste}
         onKeyDown={handleTextKeyDown}
+        onMouseDown={handleTextMouseDown}
       />
       <span className="date">{formatDate(todo.createdAt, now)}</span>
       <div className="actions">
@@ -214,6 +312,16 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
           ×
         </button>
       </div>
+      {linkEditorState && (
+        <LinkEditor
+          rect={linkEditorState.rect}
+          initialUrl={linkEditorState.existingAnchor?.href || ''}
+          isEditing={!!linkEditorState.existingAnchor}
+          onSubmit={handleLinkSubmit}
+          onRemove={handleLinkRemove}
+          onClose={handleLinkClose}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useCallback, useLayoutEffect } from 'react';
 import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { useContentEditable } from '../hooks/useContentEditable';
+import { sanitizeHTML } from '../lib/sanitize';
 import type { TodoActions } from '../hooks/useTodoActions';
 
 interface SectionItemProps {
@@ -18,8 +19,9 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
   // Sync text from props to DOM on every render when not focused.
   useLayoutEffect(() => {
     const el = textRef.current;
-    if (el && document.activeElement !== el && el.textContent !== section.text) {
-      el.textContent = section.text;
+    const sanitized = sanitizeHTML(section.text);
+    if (el && document.activeElement !== el && el.innerHTML !== sanitized) {
+      el.innerHTML = sanitized;
     }
   });
 
@@ -55,7 +57,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     // Tab: demote to level 2
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(section.id, textEl.textContent || '');
+      actions.updateTodoText(section.id, textEl.innerHTML || '');
       actions.setSectionLevel(section.id, 2);
       return;
     }
@@ -63,7 +65,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     // Shift-Tab: promote to level 1
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(section.id, textEl.textContent || '');
+      actions.updateTodoText(section.id, textEl.innerHTML || '');
       actions.setSectionLevel(section.id, 1);
       return;
     }

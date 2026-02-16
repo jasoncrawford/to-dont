@@ -13,7 +13,7 @@ export function useCommonKeydown(actions: TodoActions) {
     // Cmd+Shift+Up: move item up
     if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
-      actions.updateTodoText(itemId, textEl.textContent || '');
+      actions.updateTodoText(itemId, textEl.innerHTML || '');
       actions.moveItemUp(itemId);
       return true;
     }
@@ -21,7 +21,7 @@ export function useCommonKeydown(actions: TodoActions) {
     // Cmd+Shift+Down: move item down
     if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
-      actions.updateTodoText(itemId, textEl.textContent || '');
+      actions.updateTodoText(itemId, textEl.innerHTML || '');
       actions.moveItemDown(itemId);
       return true;
     }

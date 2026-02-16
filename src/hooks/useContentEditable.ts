@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import { isURL } from '../lib/sanitize';
 
 interface UseContentEditableOptions {
   itemId: string;
@@ -18,15 +19,16 @@ export function useContentEditable({
   const prevExclamationCountRef = useRef<number | null>(null);
 
   const handleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
-    onSave(itemId, e.currentTarget.textContent || '');
+    onSave(itemId, e.currentTarget.innerHTML || '');
   }, [itemId, onSave]);
 
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    const text = el.textContent || '';
-    onDebouncedSave(itemId, text);
+    const html = el.innerHTML || '';
+    onDebouncedSave(itemId, html);
 
-    // Track exclamation marks for importance toggling
+    // Track exclamation marks for importance toggling (use textContent)
+    const text = el.textContent || '';
     if (onImportantChange) {
       const currentCount = (text.match(/!/g) || []).length;
       const prevCount = prevExclamationCountRef.current;
@@ -48,13 +50,56 @@ export function useContentEditable({
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
     const plainText = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, plainText);
-  }, []);
+    const sel = window.getSelection();
+    const hasSelection = sel && !sel.isCollapsed;
+
+    if (isURL(plainText)) {
+      if (hasSelection) {
+        // Wrap selected text with the pasted URL
+        document.execCommand('createLink', false, plainText);
+        // Set attributes on newly created anchor
+        const anchor = sel!.anchorNode instanceof HTMLElement
+          ? sel!.anchorNode.querySelector('a[href]')
+          : sel!.anchorNode?.parentElement?.closest('a');
+        if (anchor) {
+          anchor.setAttribute('target', '_blank');
+          anchor.setAttribute('rel', 'noopener');
+        }
+      } else {
+        // Insert a linked URL
+        const anchor = document.createElement('a');
+        anchor.href = plainText;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener';
+        anchor.textContent = plainText;
+        const range = sel?.getRangeAt(0);
+        if (range) {
+          range.deleteContents();
+          range.insertNode(anchor);
+          // Move cursor after the anchor
+          range.setStartAfter(anchor);
+          range.collapse(true);
+          sel!.removeAllRanges();
+          sel!.addRange(range);
+        }
+      }
+    } else {
+      document.execCommand('insertText', false, plainText);
+    }
+
+    // Trigger save after paste
+    const el = e.currentTarget;
+    onDebouncedSave(itemId, el.innerHTML || '');
+  }, [itemId, onDebouncedSave]);
 
   // Initialize exclamation count on first render
   const initExclamationCount = useCallback((text: string) => {
     if (prevExclamationCountRef.current === null) {
-      prevExclamationCountRef.current = (text.match(/!/g) || []).length;
+      // Strip HTML for counting
+      const div = document.createElement('div');
+      div.innerHTML = text;
+      const plain = div.textContent || '';
+      prevExclamationCountRef.current = (plain.match(/!/g) || []).length;
     }
   }, []);
 
