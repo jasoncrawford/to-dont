@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { validateAuth } from '../../lib/auth';
+import { getAuthResult } from '../../lib/auth';
 import { getSupabase } from '../../lib/supabase';
 import { DbEvent, fromDbEvent } from '../../lib/events';
 import { withLogging } from '../../lib/log';
@@ -9,7 +9,8 @@ import { withLogging } from '../../lib/log';
  * Used by tests as a replacement for GET /api/items.
  */
 export default withLogging(async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!validateAuth(req)) {
+  const auth = await getAuthResult(req);
+  if (!auth.authenticated) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -19,10 +20,17 @@ export default withLogging(async function handler(req: VercelRequest, res: Verce
 
   const supabase = getSupabase();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('events')
     .select('*')
     .order('seq', { ascending: true });
+
+  // JWT users: filter to their own events
+  if (auth.userId) {
+    query = query.eq('user_id', auth.userId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching events:', error);

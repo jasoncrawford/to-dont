@@ -1,11 +1,11 @@
 import { flushSync } from 'react-dom';
 import { loadTodos, saveTodos, invalidateTodoCache, notifyStateChange } from './store';
 import { generatePositionBetween } from './utils';
+import { getSupabaseClient } from './lib/supabase-client';
 
 // Vite compile-time constants (replaces sync-config.js)
 declare const __SUPABASE_URL__: string;
 declare const __SUPABASE_ANON_KEY__: string;
-declare const __SYNC_BEARER_TOKEN__: string;
 declare const __SUPABASE_SCHEMA__: string;
 
 // Check for test mode via URL parameter
@@ -16,7 +16,6 @@ const isTestMode = new URLSearchParams(window.location.search).get('test-mode') 
 if (!isTestMode) {
   window.SYNC_SUPABASE_URL = __SUPABASE_URL__;
   window.SYNC_SUPABASE_ANON_KEY = __SUPABASE_ANON_KEY__;
-  window.SYNC_BEARER_TOKEN = __SYNC_BEARER_TOKEN__;
   window.SYNC_SUPABASE_SCHEMA = __SUPABASE_SCHEMA__;
   window.SYNC_API_URL = window.location.origin;
   if (window.SYNC_SUPABASE_URL) {
@@ -64,3 +63,5 @@ window.render = () => {
   });
 };
 (window as any).generatePositionBetween = generatePositionBetween;
+// Expose Supabase client for test access (e.g. signInWithPassword in sync-e2e tests)
+(window as any).getSupabaseClient = getSupabaseClient;

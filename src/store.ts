@@ -1,5 +1,6 @@
 import { useSyncExternalStore, useEffect, useState } from 'react';
 import type { TodoItem, ViewMode } from './types';
+import { getSupabaseClient } from './lib/supabase-client';
 
 // In-memory cache for parsed todos
 let _todosCacheJson: string | null = null;
@@ -120,4 +121,83 @@ export function useSyncStatus(): SyncStatus {
     () => _syncVersion,
   );
   return _syncStatus;
+}
+
+// Auth state store
+export type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
+
+let _authState: AuthState = 'loading';
+let _authEmail: string | null = null;
+let _authListeners: Set<() => void> = new Set();
+let _authVersion = 0;
+
+function setAuthState(state: AuthState, email?: string | null): void {
+  _authState = state;
+  _authEmail = email ?? null;
+  _authVersion++;
+  _authListeners.forEach(cb => cb());
+}
+
+export function getAuthState(): AuthState {
+  return _authState;
+}
+
+export function useAuthState(): AuthState {
+  useSyncExternalStore(
+    (cb) => { _authListeners.add(cb); return () => { _authListeners.delete(cb); }; },
+    () => _authVersion,
+  );
+  return _authState;
+}
+
+export function useAuthEmail(): string | null {
+  useSyncExternalStore(
+    (cb) => { _authListeners.add(cb); return () => { _authListeners.delete(cb); }; },
+    () => _authVersion,
+  );
+  return _authEmail;
+}
+
+/**
+ * Initialize auth listener. Checks existing session and listens for changes.
+ * On auth change: enable/disable sync via window.ToDoSync.
+ */
+export async function initAuthListener(): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) {
+    // Sync not configured — no auth needed
+    setAuthState('unauthenticated');
+    return;
+  }
+
+  // Check existing session
+  try {
+    const { data: { session } } = await client.auth.getSession();
+    if (session) {
+      setAuthState('authenticated', session.user?.email);
+      if (window.ToDoSync && !window.ToDoSync.isEnabled()) {
+        window.ToDoSync.enable();
+      }
+    } else {
+      setAuthState('unauthenticated');
+    }
+  } catch (err) {
+    console.error('[Auth] getSession failed:', err);
+    setAuthState('unauthenticated');
+  }
+
+  // Listen for auth changes
+  client.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      setAuthState('authenticated', session.user?.email);
+      if (window.ToDoSync && !window.ToDoSync.isEnabled()) {
+        window.ToDoSync.enable();
+      }
+    } else {
+      setAuthState('unauthenticated');
+      if (window.ToDoSync && window.ToDoSync.isEnabled()) {
+        window.ToDoSync.disable();
+      }
+    }
+  });
 }

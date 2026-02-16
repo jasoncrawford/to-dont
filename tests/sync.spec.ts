@@ -185,8 +185,9 @@ test.describe('Sync Layer', () => {
   test('online event triggers re-sync when sync is enabled', async ({ page }) => {
     await setupPage(page);
 
-    // Enable sync via _test helper
+    // Enable sync via _test helper + set fake auth token
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
     });
 
@@ -281,8 +282,9 @@ test.describe('Sync Layer', () => {
   test('handleOnline triggers event-based sync', async ({ page }) => {
     await setupPage(page);
 
-    // Enable sync
+    // Enable sync + set fake auth token
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
     });
 
@@ -398,7 +400,7 @@ test.describe('Sync Layer', () => {
       };
 
       (window as any).SYNC_API_URL = '';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
 
       await window.ToDoSync._test!.pullEvents();
 
@@ -440,7 +442,7 @@ test.describe('Sync Layer', () => {
       };
 
       (window as any).SYNC_API_URL = '';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
 
       await window.ToDoSync._test!.pullEvents();
 
@@ -489,7 +491,7 @@ test.describe('Sync Layer', () => {
       };
 
       (window as any).SYNC_API_URL = '';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
 
       await window.ToDoSync._test!.pullEvents();
 
@@ -504,6 +506,7 @@ test.describe('Sync Layer', () => {
     await setupPage(page);
 
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
       window.fetch = function() {
         return Promise.resolve(new Response(JSON.stringify({ error: 'Server error' }), {
@@ -530,6 +533,7 @@ test.describe('Sync Layer', () => {
     await setupPage(page);
 
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
       window.fetch = function() {
         return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
@@ -562,6 +566,7 @@ test.describe('Sync Layer', () => {
     await setupPage(page);
 
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
       window.fetch = function() {
         return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
@@ -589,6 +594,7 @@ test.describe('Sync Layer', () => {
     await setupPage(page);
 
     await page.evaluate(() => {
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
       window.ToDoSync._test!.setSyncEnabled(true);
       window.fetch = function() {
         return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
@@ -635,6 +641,7 @@ declare global {
       onSave: (todos: unknown[]) => void;
       _test?: {
         setSyncEnabled: (val: boolean) => void;
+        setAccessTokenOverride: (token: string | null) => void;
         triggerEventSync: () => Promise<void>;
         handleOnline: () => void;
         isSyncing: () => boolean;

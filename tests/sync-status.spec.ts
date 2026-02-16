@@ -36,7 +36,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     await setSyncState(page, { enabled: true, realtimeConnected: true });
@@ -49,7 +49,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     await setSyncState(page, { enabled: true, syncing: true, realtimeConnected: true });
@@ -62,7 +62,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     await setSyncState(page, { enabled: true, retryCount: 2, realtimeConnected: true });
@@ -77,7 +77,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     await setSyncState(page, { enabled: true, realtimeConnected: false });
@@ -90,7 +90,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     // Simulate going offline
@@ -106,7 +106,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     // Both retryCount > 0 and realtime disconnected
@@ -120,7 +120,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     await page.context().setOffline(true);
@@ -135,7 +135,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     // Put into error state
@@ -157,7 +157,7 @@ test.describe('Sync Status - State Machine', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
     // Error with retryCount > 0, then isSyncing = true
@@ -174,7 +174,7 @@ test.describe('Sync Status - UI Indicator', () => {
     await page.evaluate(() => {
       (window as any).SYNC_SUPABASE_URL = 'http://test';
       (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-      (window as any).SYNC_BEARER_TOKEN = 'test';
+
       (window as any).SYNC_API_URL = 'http://test';
     });
   }
