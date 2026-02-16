@@ -5,6 +5,7 @@ import {
   getTodoTexts,
   getStoredTodos,
   createSection,
+  CMD,
 } from './helpers';
 
 test.describe('Keyboard Navigation', () => {
@@ -236,7 +237,7 @@ test.describe('Keyboard Navigation', () => {
       await lastText.click();
 
       // Jump to first
-      await lastText.press('Meta+ArrowUp');
+      await lastText.press(`${CMD}+ArrowUp`);
 
       const firstText = page.locator('.todo-item .text').first();
       await expect(firstText).toBeFocused();
@@ -252,7 +253,7 @@ test.describe('Keyboard Navigation', () => {
       await firstText.click();
 
       // Jump to last
-      await firstText.press('Meta+ArrowDown');
+      await firstText.press(`${CMD}+ArrowDown`);
 
       const lastText = page.locator('.todo-item .text').last();
       await expect(lastText).toBeFocused();
@@ -430,7 +431,7 @@ test.describe('Keyboard Navigation', () => {
       await secondText.click();
 
       // Move up
-      await secondText.press('Meta+Shift+ArrowUp');
+      await secondText.press(`${CMD}+Shift+ArrowUp`);
 
       const texts = await getTodoTexts(page);
       expect(texts).toEqual(['Second', 'First', 'Third']);
@@ -446,7 +447,7 @@ test.describe('Keyboard Navigation', () => {
       await firstText.click();
 
       // Move down
-      await firstText.press('Meta+Shift+ArrowDown');
+      await firstText.press(`${CMD}+Shift+ArrowDown`);
 
       const texts = await getTodoTexts(page);
       expect(texts).toEqual(['Second', 'First', 'Third']);
@@ -459,7 +460,7 @@ test.describe('Keyboard Navigation', () => {
       const firstText = page.locator('.todo-item .text').first();
       await firstText.click();
 
-      await firstText.press('Meta+Shift+ArrowUp');
+      await firstText.press(`${CMD}+Shift+ArrowUp`);
 
       const texts = await getTodoTexts(page);
       expect(texts).toEqual(['First', 'Second']);
@@ -472,7 +473,7 @@ test.describe('Keyboard Navigation', () => {
       const lastText = page.locator('.todo-item .text').last();
       await lastText.click();
 
-      await lastText.press('Meta+Shift+ArrowDown');
+      await lastText.press(`${CMD}+Shift+ArrowDown`);
 
       const texts = await getTodoTexts(page);
       expect(texts).toEqual(['First', 'Second']);
@@ -489,7 +490,7 @@ test.describe('Keyboard Navigation', () => {
       await page.keyboard.type(' modified');
 
       // Move up immediately (before blur saves)
-      await page.keyboard.press('Meta+Shift+ArrowUp');
+      await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
 
       // Text should be preserved (use auto-retrying assertions)
       await expect(page.locator('.todo-item .text').first()).toHaveText('Second modified');
@@ -507,7 +508,7 @@ test.describe('Keyboard Navigation', () => {
       await page.keyboard.type(' modified');
 
       // Move down immediately (before blur saves)
-      await page.keyboard.press('Meta+Shift+ArrowDown');
+      await page.keyboard.press(`${CMD}+Shift+ArrowDown`);
 
       // Text should be preserved (use auto-retrying assertions)
       await expect(page.locator('.todo-item .text').first()).toHaveText('Second');

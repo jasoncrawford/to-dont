@@ -1,5 +1,8 @@
 import { Page, expect } from '@playwright/test';
 
+// Meta on macOS, Control on Linux/Windows
+export const CMD = process.platform === 'darwin' ? 'Meta' : 'Control';
+
 export const APP_URL = 'http://localhost:8173/?test-mode=1';
 
 export async function setupPage(page: Page) {
@@ -127,7 +130,7 @@ export async function createSection(page: Page, title: string = '') {
   await todoText.click();
 
   // Select all and delete to clear the text
-  await todoText.press('Meta+a');
+  await todoText.press(`${CMD}+a`);
   await todoText.press('Backspace');
 
   // Wait for the text to be cleared

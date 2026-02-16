@@ -6,6 +6,7 @@ import {
   getSectionTexts,
   getStoredTodos,
   createSection,
+  CMD,
 } from './helpers';
 
 test.describe('Sections and Hierarchy', () => {
@@ -23,7 +24,7 @@ test.describe('Sections and Hierarchy', () => {
       await todoText.click();
 
       // Clear the text using keyboard
-      await todoText.press('Meta+a');
+      await todoText.press(`${CMD}+a`);
       await todoText.press('Backspace');
 
       // Wait for the text to be cleared
@@ -174,11 +175,11 @@ test.describe('Sections and Hierarchy', () => {
       await sectionBText.click();
 
       // Use explicit key sequence for Meta+Shift+ArrowUp
-      await page.keyboard.down('Meta');
+      await page.keyboard.down(CMD);
       await page.keyboard.down('Shift');
       await page.keyboard.press('ArrowUp');
       await page.keyboard.up('Shift');
-      await page.keyboard.up('Meta');
+      await page.keyboard.up(CMD);
 
       // Wait for reorder to be reflected in DOM
       await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
@@ -217,11 +218,11 @@ test.describe('Sections and Hierarchy', () => {
       await sectionAText.click();
 
       // Use explicit key sequence for Meta+Shift+ArrowDown
-      await page.keyboard.down('Meta');
+      await page.keyboard.down(CMD);
       await page.keyboard.down('Shift');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.up('Shift');
-      await page.keyboard.up('Meta');
+      await page.keyboard.up(CMD);
 
       // Wait for reorder to be reflected in DOM
       await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');

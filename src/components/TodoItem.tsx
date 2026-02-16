@@ -164,7 +164,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     if (!div || !textEl) return;
 
     // Cmd+K: open link editor
-    if (e.key === 'k' && e.metaKey && !e.shiftKey) {
+    if (e.key === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
       e.preventDefault();
       // Flush pending text changes
       actions.updateTodoText(todo.id, textEl.innerHTML || '');

@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { setupPage, addTodo, getTodoTexts, getStoredTodos, completeTodo, deleteTodo, toggleImportant } from './helpers';
+import { setupPage, addTodo, getTodoTexts, getStoredTodos, completeTodo, deleteTodo, toggleImportant, CMD } from './helpers';
 
 /**
  * Event Log tests - verifies that mutations create events and
@@ -55,7 +55,7 @@ test.describe('Event Log', () => {
     // Edit the text
     const textEl = page.locator('.todo-item .text').first();
     await textEl.click();
-    await textEl.press('Meta+a');
+    await textEl.press(`${CMD}+a`);
     await textEl.pressSequentially('Updated');
     await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForTimeout(100);

@@ -11,7 +11,7 @@ export function useCommonKeydown(actions: TodoActions) {
     itemId: string,
   ): boolean => {
     // Cmd+Shift+Up: move item up
-    if (e.key === 'ArrowUp' && e.metaKey && e.shiftKey && !e.ctrlKey) {
+    if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
       e.preventDefault();
       actions.updateTodoText(itemId, textEl.innerHTML || '');
       actions.moveItemUp(itemId);
@@ -19,7 +19,7 @@ export function useCommonKeydown(actions: TodoActions) {
     }
 
     // Cmd+Shift+Down: move item down
-    if (e.key === 'ArrowDown' && e.metaKey && e.shiftKey && !e.ctrlKey) {
+    if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
       e.preventDefault();
       actions.updateTodoText(itemId, textEl.innerHTML || '');
       actions.moveItemDown(itemId);
@@ -32,7 +32,7 @@ export function useCommonKeydown(actions: TodoActions) {
     const currentIndex = items.indexOf(div);
 
     // Cmd+Up: jump to first item
-    if (e.key === 'ArrowUp' && e.metaKey && !e.ctrlKey) {
+    if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       textEl.blur();
       const firstText = items[0]?.querySelector('.text') as HTMLElement | null;
@@ -44,7 +44,7 @@ export function useCommonKeydown(actions: TodoActions) {
     }
 
     // Cmd+Down: jump to last item
-    if (e.key === 'ArrowDown' && e.metaKey && !e.ctrlKey) {
+    if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       textEl.blur();
       const lastText = items[items.length - 1]?.querySelector('.text') as HTMLElement | null;

@@ -1,4 +1,5 @@
 import { test, expect, chromium, Browser, Page } from '@playwright/test';
+import { CMD } from './helpers';
 
 /**
  * End-to-end sync test - verifies data syncs to database.
@@ -140,7 +141,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Attach listeners BEFORE reload so we can't miss the messages
     const syncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
 
     await page.reload();
@@ -254,7 +255,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
       const page2SyncReady = waitForConsoleMessages(page2, [
         '[Sync] ✓ Enabled',
-        '[Sync] Realtime connected',
+        '[Sync] Realtime status: SUBSCRIBED',
       ], 30000);
 
       await page2.reload();
@@ -410,7 +411,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Reorder: move item2 up using keyboard
     await page.locator(`.todo-item .text:text-is("${item2Text}")`).click();
-    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
     await page.waitForTimeout(100);
 
     // Verify UI order changed
@@ -482,7 +483,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const refreshSyncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
 
     await page.reload();
@@ -499,7 +500,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // NOW reorder: move item2 up
     await page.locator(`.todo-item .text:text-is("${item2Text}")`).click();
-    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
     await page.waitForTimeout(100);
 
     // Verify UI order changed
@@ -623,7 +624,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load app in browser1 and wait for full sync initialization
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.goto(APP_URL);
     await browser1SyncReady;
@@ -660,7 +661,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Browser2 loads and should see all items
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.goto(APP_URL);
     await browser2SyncReady;
@@ -672,7 +673,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     // Browser2 reorders: move Item 3 above Item 2
     await browser2.locator('.todo-item .text:text-is("Item 3")').click();
-    await browser2.keyboard.press('Meta+Shift+ArrowUp');
+    await browser2.keyboard.press(`${CMD}+Shift+ArrowUp`);
     await browser2.waitForTimeout(100);
 
     browser2Texts = await browser2.locator('.todo-item .text').allTextContents();
@@ -733,7 +734,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Clear the text and press Enter to convert to section
     const todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -773,7 +774,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -827,7 +828,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -883,7 +884,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector('.todo-item');
     let todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -930,7 +931,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Move Section B up (should move with Item B1)
     sectionText = page.locator('.section-header .text:text-is("Section B")');
     await sectionText.click();
-    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
 
     // Verify UI order changed (auto-retrying)
     await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
@@ -979,7 +980,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector('.todo-item');
     let todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -1024,7 +1025,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Move Section B up
     const sectionB = page.locator('.section-header .text:text-is("Section B")');
     await sectionB.click();
-    await page.keyboard.press('Meta+Shift+ArrowUp');
+    await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
 
     // Wait for reorder to be reflected in DOM (auto-retrying)
     await expect(page.locator('.section-header .text, .todo-item .text').first()).toHaveText('Section B');
@@ -1079,7 +1080,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1095,7 +1096,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await browser1.waitForSelector('.todo-item');
     const todoText = browser1.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await expect(todoText).toHaveText('', { timeout: 2000 });
     await todoText.press('Enter');
@@ -1117,7 +1118,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
@@ -1168,7 +1169,7 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.waitForSelector('.todo-item');
     let todoText = page.locator('.todo-item .text').first();
     await todoText.click();
-    await todoText.press('Meta+a');
+    await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
     await page.waitForTimeout(50);
     await todoText.press('Enter');
@@ -1422,7 +1423,7 @@ test.describe('E2E Sync Diagnostic', () => {
     const browserText = `Browser Loses ${Date.now()}`;
     const todoTextEl = page.locator(`.todo-item .text:text-is("${serverText}")`);
     await todoTextEl.click();
-    await page.keyboard.press('Meta+a');
+    await page.keyboard.press(`${CMD}+a`);
     await page.keyboard.type(browserText);
 
     // Click elsewhere to blur and trigger save
@@ -1477,7 +1478,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1506,7 +1507,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
