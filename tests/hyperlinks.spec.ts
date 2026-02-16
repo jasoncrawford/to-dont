@@ -3,6 +3,7 @@ import {
   setupPage,
   addTodo,
   getStoredTodos,
+  CMD,
 } from './helpers';
 
 test.describe('Hyperlink Support', () => {
@@ -24,7 +25,7 @@ test.describe('Hyperlink Support', () => {
       }
 
       // Open link editor
-      await page.keyboard.press('Meta+k');
+      await page.keyboard.press(`${CMD}+k`);
 
       // Wait for link editor dialog
       await page.waitForSelector('.link-editor');
@@ -62,7 +63,7 @@ test.describe('Hyperlink Support', () => {
       await textEl.press('ArrowLeft');
 
       // Open link editor
-      await page.keyboard.press('Meta+k');
+      await page.keyboard.press(`${CMD}+k`);
       await page.waitForSelector('.link-editor');
 
       // Should show existing URL
@@ -94,7 +95,7 @@ test.describe('Hyperlink Support', () => {
       await textEl.press('ArrowLeft');
       await textEl.press('ArrowLeft');
 
-      await page.keyboard.press('Meta+k');
+      await page.keyboard.press(`${CMD}+k`);
       await page.waitForSelector('.link-editor');
 
       // Click Remove
@@ -112,8 +113,8 @@ test.describe('Hyperlink Support', () => {
       await textEl.click();
 
       // Select text
-      await page.keyboard.press('Meta+a');
-      await page.keyboard.press('Meta+k');
+      await page.keyboard.press(`${CMD}+a`);
+      await page.keyboard.press(`${CMD}+k`);
       await page.waitForSelector('.link-editor');
 
       // Press Escape

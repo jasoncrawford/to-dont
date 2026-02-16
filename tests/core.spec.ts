@@ -9,6 +9,7 @@ import {
   deleteTodo,
   getStoredTodos,
   setVirtualTime,
+  CMD,
 } from './helpers';
 
 test.describe('Core Todo Functionality', () => {
@@ -258,7 +259,7 @@ test.describe('Core Todo Functionality', () => {
       await textEl.click();
 
       // Clear text
-      await textEl.press('Meta+a');
+      await textEl.press(`${CMD}+a`);
       await textEl.press('Backspace');
 
       // Blur
