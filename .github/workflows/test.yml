@@ -48,7 +48,7 @@ jobs:
         if: failure()
         with:
           name: test-results
-          path: test-results/
+          path: /tmp/test-results/
           retention-days: 7
 
       - name: Stop Supabase

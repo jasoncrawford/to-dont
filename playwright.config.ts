@@ -6,6 +6,9 @@ const VERCEL_TOKEN_FLAG = process.env.VERCEL_TOKEN ? ` --token=${process.env.VER
 
 export default defineConfig({
   testDir: './tests',
+  // In CI, put test artifacts outside the project dir so vercel dev's file
+  // watcher doesn't crash when Playwright cleans up temp directories.
+  ...(process.env.CI ? { outputDir: '/tmp/test-results' } : {}),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
