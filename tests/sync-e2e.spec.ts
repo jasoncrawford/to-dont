@@ -141,7 +141,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Attach listeners BEFORE reload so we can't miss the messages
     const syncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
 
     await page.reload();
@@ -255,7 +255,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
       const page2SyncReady = waitForConsoleMessages(page2, [
         '[Sync] ✓ Enabled',
-        '[Sync] Realtime connected',
+        '[Sync] Realtime status: SUBSCRIBED',
       ], 30000);
 
       await page2.reload();
@@ -483,7 +483,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const refreshSyncReady = waitForConsoleMessages(page, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
 
     await page.reload();
@@ -624,7 +624,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load app in browser1 and wait for full sync initialization
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.goto(APP_URL);
     await browser1SyncReady;
@@ -661,7 +661,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Browser2 loads and should see all items
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.goto(APP_URL);
     await browser2SyncReady;
@@ -1080,7 +1080,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1118,7 +1118,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
@@ -1478,7 +1478,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser1SyncReady = waitForConsoleMessages(browser1, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1507,7 +1507,7 @@ test.describe('E2E Sync Diagnostic', () => {
 
     const browser2SyncReady = waitForConsoleMessages(browser2, [
       '[Sync] ✓ Enabled',
-      '[Sync] Realtime connected',
+      '[Sync] Realtime status: SUBSCRIBED',
     ], 30000);
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
