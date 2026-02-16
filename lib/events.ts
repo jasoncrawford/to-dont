@@ -18,6 +18,7 @@ export interface DbEvent {
   value: any;
   timestamp: number;
   client_id: string;
+  user_id?: string | null;
   seq: number;
   created_at: string;
 }

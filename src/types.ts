@@ -68,7 +68,6 @@ declare global {
     render: () => void;
     SYNC_SUPABASE_URL?: string;
     SYNC_SUPABASE_ANON_KEY?: string;
-    SYNC_BEARER_TOKEN?: string;
     SYNC_SUPABASE_SCHEMA?: string;
     SYNC_API_URL?: string;
   }

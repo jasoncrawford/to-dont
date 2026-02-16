@@ -436,3 +436,143 @@ body {
   cursor: pointer;
   padding: 4px 6px;
 }
+
+/* View tabs right side (sync status + sign out) */
+.view-tabs-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Account menu */
+.account-menu {
+  position: relative;
+}
+
+.account-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 50%;
+}
+
+.account-icon-btn:hover {
+  color: #666;
+  background: #f0f0f0;
+}
+
+.account-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.account-email {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #666;
+  border-bottom: 1px solid #eee;
+  word-break: break-all;
+}
+
+.account-sign-out {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #333;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.account-sign-out:hover {
+  background: #f5f5f5;
+}
+
+/* Login form */
+.login-container {
+  display: flex;
+  justify-content: center;
+  padding-top: 80px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+}
+
+.login-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.login-input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  outline: none;
+}
+
+.login-input:focus {
+  border-color: #999;
+}
+
+.login-button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  color: #333;
+}
+
+.login-button:hover {
+  background: #f5f5f5;
+}
+
+.login-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.login-toggle {
+  font-family: inherit;
+  font-size: 12px;
+  color: #999;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.login-toggle:hover {
+  color: #666;
+}
+
+.login-error {
+  font-size: 13px;
+  color: #e53935;
+}

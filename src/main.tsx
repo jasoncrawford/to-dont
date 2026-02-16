@@ -7,9 +7,10 @@ import './lib/sync.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { initSyncStatusListener } from './store';
+import { initSyncStatusListener, initAuthListener } from './store';
 
 initSyncStatusListener();
+initAuthListener();
 
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);

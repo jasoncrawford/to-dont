@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { loadTodos, useStateVersion, useViewMode } from './store';
+import { loadTodos, useStateVersion, useViewMode, useAuthState } from './store';
 import { UPDATE_INTERVAL } from './utils';
 import { useFocusManager } from './hooks/useFocusManager';
 import { useTodoActions } from './hooks/useTodoActions';
@@ -9,21 +9,17 @@ import { ViewToggle } from './components/ViewToggle';
 import { TestModePanel } from './components/TestModePanel';
 import { NewItemInput } from './components/NewItemInput';
 import { TodoList } from './components/TodoList';
+import { Login } from './components/Login';
+import { getSupabaseClient } from './lib/supabase-client';
 
 export default function App() {
   useStateVersion(); // subscribe to state changes
   const viewMode = useViewMode();
+  const authState = useAuthState();
   const { pendingFocusRef } = useFocusManager();
   const actions = useTodoActions(pendingFocusRef);
   const handleCommonKeydown = useCommonKeydown(actions);
   const { startItemDrag, startSectionDrag } = useDragAndDrop();
-
-  // Read state
-  let todos = loadTodos();
-  const now = window.getVirtualNow();
-
-  // Archive old items (side effect on every render, same as old app.js)
-  todos = actions.archiveOldItems(todos);
 
   // Periodic re-render when not editing
   useEffect(() => {
@@ -36,6 +32,22 @@ export default function App() {
     }, UPDATE_INTERVAL);
     return () => clearInterval(interval);
   }, []);
+
+  // Auth gate: if sync is configured and user not authenticated, show login
+  const syncConfigured = !!getSupabaseClient();
+  if (syncConfigured && authState === 'loading') {
+    return null; // Brief flash while checking session
+  }
+  if (syncConfigured && authState === 'unauthenticated') {
+    return <Login />;
+  }
+
+  // Read state
+  let todos = loadTodos();
+  const now = window.getVirtualNow();
+
+  // Archive old items (side effect on every render, same as old app.js)
+  todos = actions.archiveOldItems(todos);
 
   // Compute derived data
   const activeItems = todos.filter(t => !t.archived);

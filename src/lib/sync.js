@@ -1,7 +1,7 @@
 // Sync layer for To-Don't
 // Event-based sync: pushes local events to server, pulls remote events.
 
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient, getAccessToken } from './supabase-client.ts';
 import { generatePositionBetween, generateInitialPositions } from './fractional-index.js';
 
 // Configuration - reads from window.SYNC_* variables set by compat.ts
@@ -9,7 +9,6 @@ function getConfig() {
   return {
     supabaseUrl: window.SYNC_SUPABASE_URL || '',
     supabaseAnonKey: window.SYNC_SUPABASE_ANON_KEY || '',
-    bearerToken: window.SYNC_BEARER_TOKEN || '',
     apiUrl: window.SYNC_API_URL || '',
     schema: window.SYNC_SUPABASE_SCHEMA || 'public',
   };
@@ -54,6 +53,9 @@ const MAX_RETRY_MS = 60000;
 // Pending remote events (queued while user is editing)
 let pendingRemoteEvents = [];
 
+// Test override for access token (set via _test.setAccessTokenOverride)
+let _testAccessToken = null;
+
 // Status notification callback
 let _statusCallback = null;
 let realtimeConnected = false;
@@ -75,31 +77,34 @@ function getSyncStatus() {
   return { state: 'synced' };
 }
 
-// Check if sync is properly configured
+// Check if sync is properly configured (no longer requires bearer token)
 function isSyncConfigured() {
   const config = getConfig();
   return !!(config.supabaseUrl &&
             config.supabaseAnonKey &&
-            config.bearerToken &&
             config.apiUrl);
 }
 
-// Initialize Supabase client
+// Initialize Supabase client (use shared singleton)
 function initSupabase() {
   if (!isSyncConfigured()) return null;
-  const config = getConfig();
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    db: { schema: config.schema },
-  });
+  return getSupabaseClient();
 }
 
-// Make API request with auth
+// Make API request with auth (JWT from Supabase session)
 async function apiRequest(endpoint, options = {}) {
   const config = getConfig();
   const url = `${config.apiUrl}${endpoint}`;
+
+  // Get JWT from current auth session (or test override)
+  const token = _testAccessToken || await getAccessToken();
+  if (!token) {
+    throw new Error('No auth session — not signed in');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${config.bearerToken}`,
+    'Authorization': `Bearer ${token}`,
     ...options.headers,
   };
 
@@ -444,7 +449,7 @@ function handleOnline() {
   queueServerSync();
 }
 
-// Initialize
+// Initialize — no longer auto-enables (auth listener handles that)
 function init() {
   if (isTestMode) {
     console.log('[Sync] Test mode - disabled');
@@ -455,13 +460,8 @@ function init() {
   window.addEventListener('online', () => { handleOnline(); notifyStatus(); });
   window.addEventListener('offline', notifyStatus);
 
-  if (isSyncConfigured()) {
-    setTimeout(() => {
-      enableSync().catch(err => {
-        console.error('[Sync] Init failed:', err);
-      });
-    }, 100);
-  }
+  // Don't auto-enable here — initAuthListener() in store.ts handles
+  // enabling sync after authentication is confirmed.
 }
 
 // Public API
@@ -494,6 +494,7 @@ const ToDoSync = {
 if (isTestMode) {
   ToDoSync._test = {
     setSyncEnabled: (val) => { syncEnabled = val; },
+    setAccessTokenOverride: (token) => { _testAccessToken = token; },
     setIsSyncing: (val) => { isSyncing = val; },
     setRetryCount: (val) => { retryCount = val; },
     setRealtimeConnected: (val) => { realtimeConnected = val; },
