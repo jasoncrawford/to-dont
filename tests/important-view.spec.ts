@@ -64,7 +64,7 @@ test.describe('Important View', () => {
       expect(todoTexts).not.toContain('Normal task');
     });
 
-    test('should not show completed items even if important', async ({ page }) => {
+    test('should show completed items if important', async ({ page }) => {
       // Switch to active view to add items
       await page.locator('#activeViewBtn').click();
 
@@ -76,7 +76,7 @@ test.describe('Important View', () => {
       await page.locator('#importantViewBtn').click();
 
       const todoTexts = await getTodoTexts(page);
-      expect(todoTexts).not.toContain('Important completed');
+      expect(todoTexts).toContain('Important completed');
     });
 
     test('should only show sections that have important items under them', async ({ page }) => {
