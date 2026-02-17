@@ -1,3 +1,62 @@
+:root {
+  color-scheme: light dark;
+
+  /* Light mode colors (default) */
+  --bg-page: white;
+  --bg-hover: #f0f0f0;
+  --bg-surface: white;
+  --bg-surface-hover: #f5f5f5;
+  --bg-completed-checkbox: #e0e0e0;
+  --bg-tooltip: #f5f5f5;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-tertiary: #999;
+  --text-quaternary: #bbb;
+  --text-placeholder: #ccc;
+  --border-light: #eee;
+  --border-default: #ddd;
+  --border-medium: #e0e0e0;
+  --border-strong: #ccc;
+  --border-focus: #999;
+  --color-important-btn: #e53935;
+  --color-important-1: #c62828;
+  --color-important-2: #b71c1c;
+  --color-important-5: #d50000;
+  --color-error: #e53935;
+  --color-link: #1a73e8;
+  --link-underline: rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #121212;
+    --bg-hover: #2a2a2a;
+    --bg-surface: #1e1e1e;
+    --bg-surface-hover: #2a2a2a;
+    --bg-completed-checkbox: #3a3a3a;
+    --bg-tooltip: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #aaa;
+    --text-tertiary: #888;
+    --text-quaternary: #666;
+    --text-placeholder: #555;
+    --border-light: #2a2a2a;
+    --border-default: #333;
+    --border-medium: #333;
+    --border-strong: #444;
+    --border-focus: #666;
+    --color-important-btn: #ef5350;
+    --color-important-1: #ef5350;
+    --color-important-2: #f44336;
+    --color-important-5: #ff1744;
+    --color-error: #ef5350;
+    --color-link: #64b5f6;
+    --link-underline: rgba(255, 255, 255, 0.3);
+    --shadow-dropdown: rgba(0, 0, 0, 0.4);
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -7,7 +66,8 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   padding: 40px 60px;
-  background: white;
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.6;
 }
@@ -18,7 +78,7 @@ body {
   justify-content: space-between;
   align-items: stretch;
   margin-bottom: 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-medium);
 }
 
 .view-tabs-left {
@@ -30,7 +90,7 @@ body {
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -40,12 +100,12 @@ body {
 }
 
 .view-tab:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .view-tab.active {
-  color: #333;
-  border-bottom-color: #333;
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
 }
 
 .todo-item {
@@ -62,7 +122,7 @@ body {
   width: 16px;
   margin-top: 4px;
   cursor: grab;
-  color: #ccc;
+  color: var(--text-placeholder);
   opacity: 0;
   transition: opacity 0.15s;
   font-size: 12px;
@@ -77,7 +137,7 @@ body {
   position: fixed;
   pointer-events: none;
   z-index: 1000;
-  background: white;
+  background: var(--bg-page);
 }
 
 .todo-item.drag-clone .drag-handle {
@@ -106,7 +166,7 @@ body {
 .section-header.level-1 .text {
   font-weight: 700;
   font-size: 16px;
-  color: #333;
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   outline: none;
@@ -116,7 +176,7 @@ body {
 .section-header.level-2 .text {
   font-weight: 600;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   outline: none;
@@ -125,7 +185,7 @@ body {
 
 .section-header .text:empty:before {
   content: "Section name...";
-  color: #ccc;
+  color: var(--text-placeholder);
 }
 
 .todo-item.indented {
@@ -150,13 +210,13 @@ body {
   cursor: pointer;
   padding: 2px 6px;
   font-size: 14px;
-  color: #999;
+  color: var(--text-tertiary);
   border-radius: 3px;
 }
 
 .section-header .actions button:hover {
-  background: #f0f0f0;
-  color: #666;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .section-header .drag-handle {
@@ -165,7 +225,7 @@ body {
   width: 16px;
   margin-top: 2px;
   cursor: grab;
-  color: #ccc;
+  color: var(--text-placeholder);
   opacity: 0;
   transition: opacity 0.15s;
   font-size: 12px;
@@ -179,7 +239,7 @@ body {
 .todo-item .checkbox {
   width: 18px;
   height: 18px;
-  border: 1.5px solid #ccc;
+  border: 1.5px solid var(--border-strong);
   border-radius: 3px;
   margin-right: 10px;
   margin-top: 3px;
@@ -192,18 +252,18 @@ body {
 }
 
 .todo-item:hover .checkbox {
-  border-color: #999;
+  border-color: var(--border-focus);
 }
 
 .todo-item.completed .checkbox {
-  background: #e0e0e0;
-  border-color: #ccc;
-  color: #999;
+  background: var(--bg-completed-checkbox);
+  border-color: var(--border-strong);
+  color: var(--text-tertiary);
 }
 
 .todo-item.completed .text {
   text-decoration: line-through;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .todo-item .text {
@@ -215,7 +275,7 @@ body {
 
 .todo-item .date {
   font-size: 13px;
-  color: #bbb;
+  color: var(--text-quaternary);
   margin-left: 12px;
   margin-top: 3px;
   white-space: nowrap;
@@ -239,25 +299,25 @@ body {
   cursor: pointer;
   padding: 2px 6px;
   font-size: 14px;
-  color: #999;
+  color: var(--text-tertiary);
   border-radius: 3px;
 }
 
 .todo-item .actions button:hover {
-  background: #f0f0f0;
-  color: #666;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .todo-item .actions .important-btn.active {
-  color: #e53935;
+  color: var(--color-important-btn);
 }
 
 /* Important item escalation */
-.todo-item.important-level-1 .text { color: #c62828; }
-.todo-item.important-level-2 .text { color: #b71c1c; font-weight: 600; }
-.todo-item.important-level-3 .text { color: #b71c1c; font-weight: 700; }
-.todo-item.important-level-4 .text { color: #b71c1c; font-weight: 700; text-transform: uppercase; }
-.todo-item.important-level-5 .text { color: #d50000; font-weight: 800; text-transform: uppercase; }
+.todo-item.important-level-1 .text { color: var(--color-important-1); }
+.todo-item.important-level-2 .text { color: var(--color-important-2); font-weight: 600; }
+.todo-item.important-level-3 .text { color: var(--color-important-2); font-weight: 700; }
+.todo-item.important-level-4 .text { color: var(--color-important-2); font-weight: 700; text-transform: uppercase; }
+.todo-item.important-level-5 .text { color: var(--color-important-5); font-weight: 800; text-transform: uppercase; }
 
 .new-item {
   display: flex;
@@ -268,7 +328,7 @@ body {
 .new-item .checkbox {
   width: 18px;
   height: 18px;
-  border: 1.5px dashed #ddd;
+  border: 1.5px dashed var(--border-default);
   border-radius: 3px;
   margin-right: 10px;
   margin-top: 3px;
@@ -282,7 +342,7 @@ body {
 
 .new-item .text:empty:before {
   content: "New item...";
-  color: #ccc;
+  color: var(--text-placeholder);
 }
 
 .new-item .text:focus:empty:before {
@@ -306,7 +366,7 @@ body {
 .day-header {
   font-weight: 600;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   padding: 16px 0 8px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -322,13 +382,13 @@ body {
 }
 
 .done-view .todo-item .checkbox {
-  background: #e0e0e0;
-  border-color: #ccc;
-  color: #999;
+  background: var(--bg-completed-checkbox);
+  border-color: var(--border-strong);
+  color: var(--text-tertiary);
 }
 
 .done-view .todo-item .text {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* Sync status indicator */
@@ -354,7 +414,7 @@ body {
 
 .sync-label {
   font-size: 12px;
-  color: #bbb;
+  color: var(--text-quaternary);
   opacity: 1;
   transition: color 0.25s, opacity 1s;
 }
@@ -370,9 +430,9 @@ body {
   margin-top: 6px;
   padding: 4px 10px;
   font-size: 11px;
-  color: #666;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
+  color: var(--text-secondary);
+  background: var(--bg-tooltip);
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   opacity: 0;
   pointer-events: none;
@@ -388,7 +448,7 @@ body {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
-  text-decoration-color: rgba(0, 0, 0, 0.3);
+  text-decoration-color: var(--link-underline);
   cursor: pointer;
 }
 
@@ -398,17 +458,17 @@ body {
 
 .todo-item .text[contenteditable="false"] a {
   cursor: pointer;
-  color: #1a73e8;
+  color: var(--color-link);
 }
 
 /* Link editor dialog */
 .link-editor {
   position: fixed;
   z-index: 100;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px var(--shadow-dropdown);
   padding: 6px 8px;
   display: flex;
   gap: 6px;
@@ -418,19 +478,21 @@ body {
 .link-editor input {
   font-size: 13px;
   padding: 4px 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   outline: none;
   min-width: 260px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .link-editor input:focus {
-  border-color: #999;
+  border-color: var(--border-focus);
 }
 
 .link-editor .remove-link {
   font-size: 12px;
-  color: #e53935;
+  color: var(--color-error);
   background: none;
   border: none;
   cursor: pointer;
@@ -453,7 +515,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  color: #999;
+  color: var(--text-tertiary);
   padding: 4px;
   display: flex;
   align-items: center;
@@ -461,8 +523,8 @@ body {
 }
 
 .account-icon-btn:hover {
-  color: #666;
-  background: #f0f0f0;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
 }
 
 .account-dropdown {
@@ -470,10 +532,10 @@ body {
   top: 100%;
   right: 0;
   margin-top: 4px;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px var(--shadow-dropdown);
   min-width: 180px;
   z-index: 100;
   overflow: hidden;
@@ -482,8 +544,8 @@ body {
 .account-email {
   padding: 10px 14px;
   font-size: 12px;
-  color: #666;
-  border-bottom: 1px solid #eee;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
   word-break: break-all;
 }
 
@@ -493,14 +555,14 @@ body {
   text-align: left;
   padding: 10px 14px;
   font-size: 13px;
-  color: #333;
+  color: var(--text-primary);
   background: none;
   border: none;
   cursor: pointer;
 }
 
 .account-sign-out:hover {
-  background: #f5f5f5;
+  background: var(--bg-surface-hover);
 }
 
 /* Login form */
@@ -520,7 +582,7 @@ body {
 .login-title {
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -528,28 +590,30 @@ body {
   font-family: inherit;
   font-size: 14px;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   outline: none;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .login-input:focus {
-  border-color: #999;
+  border-color: var(--border-focus);
 }
 
 .login-button {
   font-family: inherit;
   font-size: 14px;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-default);
   border-radius: 4px;
-  background: white;
+  background: var(--bg-surface);
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .login-button:hover {
-  background: #f5f5f5;
+  background: var(--bg-surface-hover);
 }
 
 .login-button:disabled {
@@ -560,7 +624,7 @@ body {
 .login-toggle {
   font-family: inherit;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   background: none;
   border: none;
   cursor: pointer;
@@ -569,10 +633,45 @@ body {
 }
 
 .login-toggle:hover {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .login-error {
   font-size: 13px;
-  color: #e53935;
+  color: var(--color-error);
+}
+
+/* Archive completed button */
+.archive-completed-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.archive-completed-btn:disabled {
+  cursor: default;
+}
+
+/* Test mode panel */
+.test-mode-panel {
+  display: block;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.test-mode-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  border-radius: 4px;
+  color: var(--text-primary);
 }

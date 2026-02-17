@@ -71,7 +71,7 @@ export function useDragAndDrop() {
     cloneContainer.style.top = rect.top + 'px';
     cloneContainer.style.zIndex = '1000';
     cloneContainer.style.pointerEvents = 'none';
-    cloneContainer.style.background = 'white';
+    cloneContainer.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim();
 
     groupElements.forEach(el => {
       const clone = el.cloneNode(true) as HTMLElement;
