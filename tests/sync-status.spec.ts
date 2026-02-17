@@ -24,10 +24,11 @@ async function getStatus(page: any) {
 }
 
 test.describe('Sync Status - State Machine', () => {
-  test('returns disabled when sync is not configured', async ({ page }) => {
+  test('returns error when sync is not configured', async ({ page }) => {
     await setupPage(page);
     const status = await getStatus(page);
-    expect(status.state).toBe('disabled');
+    expect(status.state).toBe('error');
+    expect(status.message).toBe('Sync not configured');
   });
 
   test('returns synced when enabled with realtime connected', async ({ page }) => {
@@ -179,10 +180,31 @@ test.describe('Sync Status - UI Indicator', () => {
     });
   }
 
-  test('indicator is hidden when sync is disabled', async ({ page }) => {
+  test('shows red error indicator when sync is not configured', async ({ page }) => {
     await setupPage(page);
+    // Sync not configured (no SYNC_* globals set) → should show red error
     const indicator = page.locator('.sync-status');
-    await expect(indicator).toHaveCount(0);
+    await expect(indicator).toBeVisible();
+
+    const label = page.locator('.sync-label');
+    await expect(label).toHaveText('Sync error');
+
+    const dot = page.locator('.sync-dot');
+    const bgColor = await dot.evaluate((el: HTMLElement) => el.style.backgroundColor);
+    // #f44336 renders as rgb(244, 67, 54)
+    expect(bgColor).toContain('244, 67, 54');
+  });
+
+  test('shows "Sync not configured" tooltip on hover when sync is not configured', async ({ page }) => {
+    await setupPage(page);
+    // Sync not configured → error with message
+    const tooltip = page.locator('.sync-tooltip');
+    await expect(tooltip).toHaveText('Sync not configured');
+    // Hidden by default
+    await expect(tooltip).toHaveCSS('opacity', '0');
+    // Visible on hover
+    await page.locator('.sync-status').hover();
+    await expect(tooltip).toHaveCSS('opacity', '1');
   });
 
   test('shows green dot and "Synced" label', async ({ page }) => {

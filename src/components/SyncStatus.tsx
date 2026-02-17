@@ -80,10 +80,14 @@ export function SyncStatus() {
   const label = LABELS[displayState];
 
   let detail: string | null = null;
-  if (displayState === 'error' && status.retryCount != null) {
-    detail = status.retryCount >= (status.maxRetries || 5)
-      ? 'Retries exhausted'
-      : `Retry ${status.retryCount}/${status.maxRetries} in ${Math.round((status.nextRetryMs || 0) / 1000)}s`;
+  if (displayState === 'error') {
+    if (status.retryCount != null && status.retryCount > 0) {
+      detail = status.retryCount >= (status.maxRetries || 5)
+        ? 'Retries exhausted'
+        : `Retry ${status.retryCount}/${status.maxRetries} in ${Math.round((status.nextRetryMs || 0) / 1000)}s`;
+    } else if (status.message) {
+      detail = status.message;
+    }
   }
 
   return (
