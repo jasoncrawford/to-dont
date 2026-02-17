@@ -23,7 +23,7 @@ export interface TodoItem {
   archivedUpdatedAt?: number;
 }
 
-export type ViewMode = 'active' | 'faded' | 'done';
+export type ViewMode = 'important' | 'active' | 'faded' | 'done';
 
 declare global {
   interface Window {

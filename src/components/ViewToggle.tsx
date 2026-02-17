@@ -34,6 +34,13 @@ export function ViewToggle() {
     <div id="viewToggle" className="view-tabs">
       <div className="view-tabs-left">
         <button
+          id="importantViewBtn"
+          className={`view-tab${viewMode === 'important' ? ' active' : ''}`}
+          onClick={() => setViewMode('important')}
+        >
+          Important
+        </button>
+        <button
           id="activeViewBtn"
           className={`view-tab${viewMode === 'active' ? ' active' : ''}`}
           onClick={() => setViewMode('active')}

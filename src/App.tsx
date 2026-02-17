@@ -17,7 +17,7 @@ export default function App() {
   const viewMode = useViewMode();
   const authState = useAuthState();
   const { pendingFocusRef } = useFocusManager();
-  const actions = useTodoActions(pendingFocusRef);
+  const actions = useTodoActions(pendingFocusRef, viewMode);
   const handleCommonKeydown = useCommonKeydown(actions);
   const { startItemDrag, startSectionDrag } = useDragAndDrop();
 
@@ -51,6 +51,7 @@ export default function App() {
 
   // Compute derived data
   const activeItems = todos.filter(t => !t.archived);
+  const importantItems = todos.filter(t => !t.archived && !t.completed && t.important && t.type !== 'section');
   const hasCompletedItems = todos.some(t => t.completed && !t.archived);
 
   return (
@@ -86,6 +87,12 @@ export default function App() {
         onItemDragStart={startItemDrag}
         onSectionDragStart={startSectionDrag}
       />
+      {viewMode === 'important' && (
+        <NewItemInput
+          visible={importantItems.length === 0}
+          onAdd={actions.addTodo}
+        />
+      )}
       {viewMode === 'active' && (
         <NewItemInput
           visible={activeItems.length === 0}
