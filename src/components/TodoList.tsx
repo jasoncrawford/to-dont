@@ -101,7 +101,7 @@ export function TodoList({
         } else {
           pendingL2 = item;
         }
-      } else if (item.important && !item.completed) {
+      } else if (item.important) {
         if (pendingL1) { importantItems.push(pendingL1); pendingL1 = null; }
         if (pendingL2) { importantItems.push(pendingL2); pendingL2 = null; }
         importantItems.push(item);
