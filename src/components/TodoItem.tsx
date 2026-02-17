@@ -3,6 +3,7 @@ import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
+import { notifyStateChange } from '../store';
 import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
 
@@ -37,6 +38,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
   const onImportantChange = useCallback((id: string, newImportant: boolean) => {
     window.EventLog.emitFieldChanged(id, 'important', newImportant);
+    notifyStateChange();
   }, []);
 
   const { handleBlur, handleInput, handlePaste, initExclamationCount } = useContentEditable({

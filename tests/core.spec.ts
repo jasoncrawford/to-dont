@@ -308,12 +308,14 @@ test.describe('Core Todo Functionality', () => {
     test('should turn on important when typing !', async ({ page }) => {
       await addTodo(page, 'Task');
 
+      const todoItem = page.locator('.todo-item').first();
       const textEl = page.locator('.todo-item .text').first();
       await textEl.click();
       await textEl.press('End');
       await textEl.pressSequentially('!');
 
-      await page.waitForTimeout(100);
+      // Visual class should appear immediately (while still focused)
+      await expect(todoItem).toHaveClass(/important-level-/);
 
       const stored = await getStoredTodos(page);
       expect(stored[0].important).toBe(true);
@@ -323,16 +325,18 @@ test.describe('Core Todo Functionality', () => {
       await addTodo(page, 'Task!');
 
       // Make it important first
-      const todo = page.locator('.todo-item').first();
-      await todo.hover();
-      await todo.locator('.important-btn').click();
+      const todoItem = page.locator('.todo-item').first();
+      await todoItem.hover();
+      await todoItem.locator('.important-btn').click();
+      await expect(todoItem).toHaveClass(/important-level-/);
 
       const textEl = page.locator('.todo-item .text').first();
       await textEl.click();
       await textEl.press('End');
       await textEl.press('Backspace'); // Delete the !
 
-      await page.waitForTimeout(100);
+      // Visual class should be removed immediately (while still focused)
+      await expect(todoItem).not.toHaveClass(/important-level-/);
 
       const stored = await getStoredTodos(page);
       expect(stored[0].important).toBe(false);
