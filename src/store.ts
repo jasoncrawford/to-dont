@@ -95,9 +95,10 @@ export interface SyncStatus {
   retryCount?: number;
   maxRetries?: number;
   nextRetryMs?: number;
+  message?: string;
 }
 
-let _syncStatus: SyncStatus = { state: 'disabled' };
+let _syncStatus: SyncStatus = { state: 'error' };
 let _syncListeners: Set<() => void> = new Set();
 let _syncVersion = 0;
 

@@ -66,7 +66,7 @@ function notifyStatus() {
 }
 
 function getSyncStatus() {
-  if (!isSyncConfigured()) return { state: 'disabled' };
+  if (!isSyncConfigured()) return { state: 'error', message: 'Sync not configured' };
   if (!navigator.onLine) return { state: 'offline' };
   if (retryCount > 0 && !isSyncing) {
     const delay = Math.min(BASE_RETRY_MS * Math.pow(2, retryCount - 1), MAX_RETRY_MS);

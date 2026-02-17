@@ -201,7 +201,10 @@ test.describe('E2E Sync Diagnostic', () => {
     // (prevents ERR_ABORTED when reload cancels in-flight sync requests)
     await page.goto('about:blank');
     await page.goto(APP_URL);
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => {
+      localStorage.clear();
+      localStorage.setItem('decay-todos-view-mode', 'active');
+    });
 
     // Reload with clean localStorage, then sign in
     await page.reload();
@@ -320,11 +323,11 @@ test.describe('E2E Sync Diagnostic', () => {
       // Load and clear page 2 (about:blank first to avoid sync abort on reload)
       await page2.goto('about:blank');
       await page2.goto(APP_URL);
-      await page2.evaluate(() => localStorage.clear());
+      await page2.evaluate(() => { localStorage.clear(); localStorage.setItem('decay-todos-view-mode', 'active'); });
 
       await page2.goto('about:blank');
       await page2.goto(APP_URL);
-      await page2.evaluate(() => localStorage.clear());
+      await page2.evaluate(() => { localStorage.clear(); localStorage.setItem('decay-todos-view-mode', 'active'); });
       await page2.reload();
       await page2.waitForLoadState('domcontentloaded');
 
@@ -1172,7 +1175,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load and init browser1 (about:blank first to avoid sync abort on reload)
     await browser1.goto('about:blank');
     await browser1.goto(APP_URL);
-    await browser1.evaluate(() => localStorage.clear());
+    await browser1.evaluate(() => { localStorage.clear(); localStorage.setItem('decay-todos-view-mode', 'active'); });
 
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1214,7 +1217,10 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load browser2 (about:blank first to avoid sync abort on reload)
     await browser2.goto('about:blank');
     await browser2.goto(APP_URL);
-    await browser2.evaluate(() => localStorage.clear());
+    await browser2.evaluate(() => {
+      localStorage.clear();
+      localStorage.setItem('decay-todos-view-mode', 'active');
+    });
 
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
@@ -1580,7 +1586,7 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load and init browser1
     await browser1.goto('about:blank');
     await browser1.goto(APP_URL);
-    await browser1.evaluate(() => localStorage.clear());
+    await browser1.evaluate(() => { localStorage.clear(); localStorage.setItem('decay-todos-view-mode', 'active'); });
 
     await browser1.reload();
     await browser1.waitForLoadState('domcontentloaded');
@@ -1613,7 +1619,10 @@ test.describe('E2E Sync Diagnostic', () => {
     // Load browser2
     await browser2.goto('about:blank');
     await browser2.goto(APP_URL);
-    await browser2.evaluate(() => localStorage.clear());
+    await browser2.evaluate(() => {
+      localStorage.clear();
+      localStorage.setItem('decay-todos-view-mode', 'active');
+    });
 
     await browser2.reload();
     await browser2.waitForLoadState('domcontentloaded');
