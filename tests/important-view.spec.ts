@@ -3,10 +3,12 @@ import {
   setupPage,
   addTodo,
   getTodoTexts,
+  getSectionTexts,
   getTodoByText,
   completeTodo,
   toggleImportant,
   getStoredTodos,
+  createSection,
 } from './helpers';
 
 test.describe('Important View', () => {
@@ -77,31 +79,144 @@ test.describe('Important View', () => {
       expect(todoTexts).not.toContain('Important completed');
     });
 
-    test('should not show sections', async ({ page }) => {
+    test('should only show sections that have important items under them', async ({ page }) => {
       // Switch to active view to add items
       await page.locator('#activeViewBtn').click();
 
-      await addTodo(page, 'Important task');
-      await toggleImportant(page, 'Important task');
+      // Create section "Work" with one important and one normal item
+      await createSection(page, 'Work');
+      await addTodo(page, 'Important work task');
+      await toggleImportant(page, 'Important work task');
+      await addTodo(page, 'Normal work task');
 
-      // Create a section: add a todo, clear it, press Enter
-      await addTodo(page, 'x');
-      const todoText = page.locator('.todo-item .text').last();
-      await todoText.click();
-      await todoText.press('Meta+a');
-      await todoText.press('Backspace');
-      await expect(todoText).toHaveText('', { timeout: 2000 });
-      await todoText.press('Enter');
-      await page.waitForSelector('.section-header');
+      // Create section "Personal" with no important items
+      await createSection(page, 'Personal');
+      await addTodo(page, 'Normal personal task');
 
       // Switch to Important view
       await page.locator('#importantViewBtn').click();
 
-      const sectionCount = await page.locator('.section-header').count();
-      expect(sectionCount).toBe(0);
+      // Work section should be visible (it has an important item)
+      const sectionTexts = await getSectionTexts(page);
+      expect(sectionTexts).toContain('Work');
+
+      // Personal section should NOT be visible (no important items)
+      expect(sectionTexts).not.toContain('Personal');
+
+      // Only the important item should show
+      const todoTexts = await getTodoTexts(page);
+      expect(todoTexts).toContain('Important work task');
+      expect(todoTexts).not.toContain('Normal work task');
+      expect(todoTexts).not.toContain('Normal personal task');
+    });
+
+    test('should show section headers when they have important items under them', async ({ page }) => {
+      // Switch to active view to add items
+      await page.locator('#activeViewBtn').click();
+
+      await createSection(page, 'Work');
+      await addTodo(page, 'Urgent deadline');
+      await toggleImportant(page, 'Urgent deadline');
+
+      // Switch to Important view
+      await page.locator('#importantViewBtn').click();
+
+      const sectionTexts = await getSectionTexts(page);
+      expect(sectionTexts).toContain('Work');
 
       const todoTexts = await getTodoTexts(page);
-      expect(todoTexts).toContain('Important task');
+      expect(todoTexts).toContain('Urgent deadline');
+    });
+
+    test('should hide sections with no important items under them', async ({ page }) => {
+      // Switch to active view to add items
+      await page.locator('#activeViewBtn').click();
+
+      // Section with only normal items
+      await createSection(page, 'Work');
+      await addTodo(page, 'Normal work item');
+
+      // Section with an important item
+      await createSection(page, 'Personal');
+      await addTodo(page, 'Important personal item');
+      await toggleImportant(page, 'Important personal item');
+
+      // Switch to Important view
+      await page.locator('#importantViewBtn').click();
+
+      const sectionTexts = await getSectionTexts(page);
+      expect(sectionTexts).not.toContain('Work');
+      expect(sectionTexts).toContain('Personal');
+    });
+
+    test('should show level 1 section when a level 2 subsection has important items', async ({ page }) => {
+      // Switch to active view to add items
+      await page.locator('#activeViewBtn').click();
+
+      // Create L1 section
+      await createSection(page, 'Projects');
+      // Promote to level 1
+      const l1Text = page.locator('.section-header .text').last();
+      await l1Text.click();
+      await l1Text.press('Shift+Tab');
+      await expect(page.locator('.section-header').last()).toHaveClass(/level-1/);
+      // Blur to save
+      await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+      // Create L2 section under it
+      await createSection(page, 'Backend');
+
+      // Add important item under the L2 section
+      await addTodo(page, 'Fix critical bug');
+      await toggleImportant(page, 'Fix critical bug');
+
+      // Switch to Important view
+      await page.locator('#importantViewBtn').click();
+
+      const sectionTexts = await getSectionTexts(page);
+      // Both L1 and L2 sections should be visible
+      expect(sectionTexts).toContain('Projects');
+      expect(sectionTexts).toContain('Backend');
+
+      const todoTexts = await getTodoTexts(page);
+      expect(todoTexts).toContain('Fix critical bug');
+    });
+
+    test('should hide empty level 2 sections under a level 1 with important items elsewhere', async ({ page }) => {
+      // Switch to active view to add items
+      await page.locator('#activeViewBtn').click();
+
+      // Create L1 section "Projects"
+      await createSection(page, 'Projects');
+      const l1Text = page.locator('.section-header .text').last();
+      await l1Text.click();
+      await l1Text.press('Shift+Tab');
+      await expect(page.locator('.section-header').last()).toHaveClass(/level-1/);
+      await page.locator('body').click({ position: { x: 10, y: 10 } });
+
+      // Create L2 section "Backend" with no important items
+      await createSection(page, 'Backend');
+      await addTodo(page, 'Normal backend task');
+
+      // Create L2 section "Frontend" with an important item
+      await createSection(page, 'Frontend');
+      await addTodo(page, 'Important frontend task');
+      await toggleImportant(page, 'Important frontend task');
+
+      // Switch to Important view
+      await page.locator('#importantViewBtn').click();
+
+      const sectionTexts = await getSectionTexts(page);
+      // Projects (L1) should show because Frontend has important items
+      expect(sectionTexts).toContain('Projects');
+      // Frontend should show (has important item)
+      expect(sectionTexts).toContain('Frontend');
+      // Backend should NOT show (no important items)
+      expect(sectionTexts).not.toContain('Backend');
+
+      const todoTexts = await getTodoTexts(page);
+      expect(todoTexts).toContain('Important frontend task');
+      expect(todoTexts).not.toContain('Normal backend task');
     });
 
     test('should not show non-important items', async ({ page }) => {
