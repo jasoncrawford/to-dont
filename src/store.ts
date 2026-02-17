@@ -58,7 +58,7 @@ export function useStateVersion(): number {
 }
 
 // View mode store
-let _viewMode: ViewMode = (localStorage.getItem('decay-todos-view-mode') as ViewMode) || 'active';
+let _viewMode: ViewMode = (localStorage.getItem('decay-todos-view-mode') as ViewMode) || 'important';
 // Migration
 if (_viewMode === 'custom' as string || _viewMode === 'auto' as string) {
   _viewMode = 'active';

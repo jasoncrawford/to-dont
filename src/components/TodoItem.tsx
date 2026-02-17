@@ -271,7 +271,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     >
       <div
         className="drag-handle"
-        style={viewMode !== 'active' ? { display: 'none' } : undefined}
+        style={viewMode !== 'active' && viewMode !== 'important' ? { display: 'none' } : undefined}
         onMouseDown={handleDragMouseDown}
       >
         ⋮⋮

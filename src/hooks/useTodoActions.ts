@@ -6,12 +6,12 @@ import {
   getItemGroup, splitOnArrow,
 } from '../utils';
 import { sanitizeHTML, textLengthOfHTML } from '../lib/sanitize';
-import type { TodoItem } from '../types';
+import type { TodoItem, ViewMode } from '../types';
 import type { PendingFocus } from './useFocusManager';
 
 const SAVE_DEBOUNCE_MS = 300;
 
-export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | null>) {
+export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | null>, viewMode: ViewMode = 'active') {
   const saveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const debouncedSave = useCallback((id: string, text: string) => {
@@ -38,11 +38,15 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     if (!text.trim()) return;
     const todos = loadTodos();
     const newTodo = createNewItem(text, todos.length, todos);
-    window.EventLog.emitItemCreated(newTodo.id, {
+    const value: Record<string, unknown> = {
       text: newTodo.text, position: newTodo.position,
-    });
+    };
+    if (viewMode === 'important') {
+      value.important = true;
+    }
+    window.EventLog.emitItemCreated(newTodo.id, value);
     notifyStateChange();
-  }, []);
+  }, [viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
     window.EventLog.emitItemDeleted(id);
@@ -103,12 +107,16 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     if (index === -1) return;
 
     const newTodo = createNewItem('', index + 1, todos);
-    window.EventLog.emitItemCreated(newTodo.id, {
+    const value: Record<string, unknown> = {
       text: '', position: newTodo.position,
-    });
+    };
+    if (viewMode === 'important') {
+      value.important = true;
+    }
+    window.EventLog.emitItemCreated(newTodo.id, value);
     pendingFocusRef.current = { itemId: newTodo.id, cursorPos: 0 };
     notifyStateChange();
-  }, [pendingFocusRef]);
+  }, [pendingFocusRef, viewMode]);
 
   const insertTodoBefore = useCallback((beforeId: string) => {
     const todos = loadTodos();
@@ -116,12 +124,16 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     if (index === -1) return;
 
     const newTodo = createNewItem('', index, todos);
-    window.EventLog.emitItemCreated(newTodo.id, {
+    const value: Record<string, unknown> = {
       text: '', position: newTodo.position,
-    });
+    };
+    if (viewMode === 'important') {
+      value.important = true;
+    }
+    window.EventLog.emitItemCreated(newTodo.id, value);
     pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
     notifyStateChange();
-  }, [pendingFocusRef]);
+  }, [pendingFocusRef, viewMode]);
 
   const splitTodoAt = useCallback((id: string, textBefore: string, textAfter: string) => {
     const todos = loadTodos();
@@ -129,13 +141,17 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     if (index === -1) return;
 
     const newTodo = createNewItem(textAfter, index + 1, todos);
+    const newItemValue: Record<string, unknown> = { text: newTodo.text, position: newTodo.position };
+    if (viewMode === 'important') {
+      newItemValue.important = true;
+    }
     window.EventLog.emitBatch([
       { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-      { type: 'item_created', itemId: newTodo.id, value: { text: newTodo.text, position: newTodo.position } },
+      { type: 'item_created', itemId: newTodo.id, value: newItemValue },
     ]);
     pendingFocusRef.current = { itemId: newTodo.id, cursorPos: 0 };
     notifyStateChange();
-  }, [pendingFocusRef]);
+  }, [pendingFocusRef, viewMode]);
 
   const mergeWithPrevious = useCallback((currentId: string, prevId: string) => {
     const todos = loadTodos();

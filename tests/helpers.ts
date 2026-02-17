@@ -8,7 +8,11 @@ export const APP_URL = 'http://localhost:8173/?test-mode=1';
 export async function setupPage(page: Page) {
   // Clear localStorage before each test
   await page.goto(APP_URL);
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    // Set default view to active for existing tests (default is now 'important')
+    localStorage.setItem('decay-todos-view-mode', 'active');
+  });
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
 

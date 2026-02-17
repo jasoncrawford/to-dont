@@ -84,6 +84,29 @@ export function TodoList({
     );
   }
 
+  if (viewMode === 'important') {
+    // Important view: non-archived, non-completed, important items only (no sections)
+    const importantItems = todos.filter(
+      t => !t.archived && !t.completed && t.important && t.type !== 'section'
+    );
+
+    return (
+      <div id="todoList">
+        {importantItems.map(item => (
+          <TodoItemComponent
+            key={item.id}
+            todo={item}
+            viewMode={viewMode}
+            now={now}
+            actions={actions}
+            onKeyDown={onKeyDown}
+            onDragStart={onItemDragStart}
+          />
+        ))}
+      </div>
+    );
+  }
+
   // Active view
   const activeItems = todos.filter(t => !t.archived);
 
