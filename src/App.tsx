@@ -61,17 +61,9 @@ export default function App() {
         <div id="archiveCompletedContainer" style={{ marginBottom: 20, display: 'block' }}>
           <button
             id="archiveCompletedBtn"
+            className="archive-completed-btn"
             disabled={!hasCompletedItems}
-            style={{
-              padding: '6px 12px',
-              fontSize: 13,
-              cursor: hasCompletedItems ? 'pointer' : 'default',
-              border: '1px solid #ddd',
-              background: 'white',
-              borderRadius: 4,
-              color: '#666',
-              opacity: hasCompletedItems ? 1 : 0.4,
-            }}
+            style={{ opacity: hasCompletedItems ? 1 : 0.4 }}
             onClick={actions.archiveCompleted}
           >
             Archive completed
