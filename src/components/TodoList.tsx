@@ -85,24 +85,53 @@ export function TodoList({
   }
 
   if (viewMode === 'important') {
-    // Important view: non-archived, non-completed, important items only (no sections)
-    const importantItems = todos.filter(
-      t => !t.archived && !t.completed && t.important && t.type !== 'section'
-    );
+    // Important view: non-archived important items, with section headers shown
+    // only when they have important items under them
+    const nonArchived = todos.filter(t => !t.archived);
+    const importantItems: TodoItemType[] = [];
+    let pendingL1: TodoItemType | null = null;
+    let pendingL2: TodoItemType | null = null;
+
+    for (const item of nonArchived) {
+      if (item.type === 'section') {
+        const level = item.level || 2;
+        if (level === 1) {
+          pendingL1 = item;
+          pendingL2 = null;
+        } else {
+          pendingL2 = item;
+        }
+      } else if (item.important && !item.completed) {
+        if (pendingL1) { importantItems.push(pendingL1); pendingL1 = null; }
+        if (pendingL2) { importantItems.push(pendingL2); pendingL2 = null; }
+        importantItems.push(item);
+      }
+    }
 
     return (
       <div id="todoList">
-        {importantItems.map(item => (
-          <TodoItemComponent
-            key={item.id}
-            todo={item}
-            viewMode={viewMode}
-            now={now}
-            actions={actions}
-            onKeyDown={onKeyDown}
-            onDragStart={onItemDragStart}
-          />
-        ))}
+        {importantItems.map(item =>
+          item.type === 'section' ? (
+            <SectionItemComponent
+              key={item.id}
+              section={item}
+              viewMode={viewMode}
+              actions={actions}
+              onKeyDown={onKeyDown}
+              onDragStart={onSectionDragStart}
+            />
+          ) : (
+            <TodoItemComponent
+              key={item.id}
+              todo={item}
+              viewMode={viewMode}
+              now={now}
+              actions={actions}
+              onKeyDown={onKeyDown}
+              onDragStart={onItemDragStart}
+            />
+          )
+        )}
       </div>
     );
   }
