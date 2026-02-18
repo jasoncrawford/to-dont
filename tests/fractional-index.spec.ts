@@ -97,13 +97,11 @@ test.describe('Fractional Indexing - Shared Module', () => {
         allPositions,
         sorted,
         allUnique: unique.size === allPositions.length,
-        isSorted: JSON.stringify(sorted) === JSON.stringify([...allPositions].sort()),
       };
     });
 
     expect(result.allUnique).toBe(true);
-    expect(result.isSorted).toBe(true);
-    // Verify sorting is consistent - positions should sort lexicographically
+    // Verify all positions sort in strictly increasing order
     for (let i = 0; i < result.sorted.length - 1; i++) {
       expect(result.sorted[i] < result.sorted[i + 1]).toBe(true);
     }

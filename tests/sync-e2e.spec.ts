@@ -11,9 +11,9 @@ import { CMD } from './helpers';
 const SYNC_TEST_PORT = 8174;
 const APP_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
-const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
-const SUPABASE_URL = 'http://127.0.0.1:54321';
-const SUPABASE_SERVICE_KEY = 'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz';
+const BEARER_TOKEN = process.env.SYNC_BEARER_TOKEN || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 
 // Test user credentials
 const TEST_EMAIL = 'test@to-dont.local';
