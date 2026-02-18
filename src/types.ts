@@ -33,7 +33,6 @@ declare global {
       emitFieldsChanged: (changes: Array<{ itemId: string; field: string; value: unknown }>) => void;
       emitItemDeleted: (itemId: string) => void;
       emitBatch: (specs: Array<{ type: string; itemId: string; field?: string; value?: unknown }>) => void;
-      loadState: () => TodoItem[];
       projectState: (events: unknown[]) => TodoItem[];
       getClientId: () => string;
       loadEvents: () => unknown[];
@@ -49,7 +48,6 @@ declare global {
       isConfigured: () => boolean;
       refresh: () => Promise<void>;
       getConfig: () => Record<string, string>;
-      onSave: (todos: TodoItem[]) => void;
       onEventsAppended: (events: unknown[]) => void;
       getStatus: () => { state: string; retryCount?: number; maxRetries?: number; nextRetryMs?: number };
       onStatusChange: (cb: (status: any) => void) => void;
