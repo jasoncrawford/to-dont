@@ -45,8 +45,10 @@ export function getIsTestMode(): boolean {
 
 // Check for reset via URL parameter — clears all app data and reloads
 if (new URLSearchParams(window.location.search).get('reset') === '1') {
-  ['decay-todos', 'decay-events', 'decay-client-id', 'decay-event-cursor',
-   'decay-todos-time-offset', 'decay-todos-view-mode'].forEach(k => localStorage.removeItem(k));
+  if (confirm('This will delete all local data. Are you sure?')) {
+    ['decay-todos', 'decay-events', 'decay-client-id', 'decay-event-cursor',
+     'decay-todos-time-offset', 'decay-todos-view-mode'].forEach(k => localStorage.removeItem(k));
+  }
   window.location.replace(window.location.pathname);
 }
 
