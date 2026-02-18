@@ -68,10 +68,6 @@ if (_viewMode === 'custom' as string || _viewMode === 'auto' as string) {
 let _viewListeners: Set<() => void> = new Set();
 let _viewVersion = 0;
 
-export function getViewMode(): ViewMode {
-  return _viewMode;
-}
-
 export function setViewMode(mode: ViewMode): void {
   _viewMode = mode;
   localStorage.setItem('decay-todos-view-mode', mode);
@@ -137,10 +133,6 @@ function setAuthState(state: AuthState, email?: string | null): void {
   _authEmail = email ?? null;
   _authVersion++;
   _authListeners.forEach(cb => cb());
-}
-
-export function getAuthState(): AuthState {
-  return _authState;
 }
 
 export function useAuthState(): AuthState {

@@ -2,7 +2,6 @@
 // Event-based sync: pushes local events to server, pulls remote events.
 
 import { getSupabaseClient, getAccessToken } from './supabase-client.ts';
-import { generatePositionBetween, generateInitialPositions } from './fractional-index.js';
 
 // Configuration - reads from window.SYNC_* variables set by compat.ts
 function getConfig() {
@@ -486,8 +485,6 @@ const ToDoSync = {
   },
   getStatus: getSyncStatus,
   onStatusChange: function(cb) { _statusCallback = cb; },
-  generatePositionBetween,
-  generateInitialPositions,
 };
 
 // Expose internals for testing

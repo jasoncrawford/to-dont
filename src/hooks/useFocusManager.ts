@@ -4,7 +4,6 @@ import { setCursorPosition } from '../utils';
 export interface PendingFocus {
   itemId: string;
   cursorPos?: number;
-  atEnd?: boolean;
 }
 
 export function useFocusManager() {
@@ -19,9 +18,7 @@ export function useFocusManager() {
     if (!el) return;
 
     el.focus();
-    if (pending.atEnd) {
-      setCursorPosition(el, el.textContent?.length || 0);
-    } else if (pending.cursorPos !== undefined) {
+    if (pending.cursorPos !== undefined) {
       setCursorPosition(el, pending.cursorPos);
     }
   });
