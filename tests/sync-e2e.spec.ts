@@ -1607,6 +1607,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.pressSequentially(todoText);
     await input.press('Enter');
     await browser1.waitForSelector(`.todo-item .text:text-is("${todoText}")`);
+    // Blur so realtime events aren't queued by isUserEditing()
+    await browser1.locator('body').click({ position: { x: 10, y: 10 } });
 
     // Wait for sync
     await waitForDbCondition(
