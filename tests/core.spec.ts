@@ -51,6 +51,33 @@ test.describe('Core Todo Functionality', () => {
       expect(stored[0].createdAt).toBeGreaterThanOrEqual(beforeTime);
       expect(stored[0].createdAt).toBeLessThanOrEqual(afterTime);
     });
+
+    test('should focus first item after creating via NewItemInput', async ({ page }) => {
+      const input = page.locator('.new-item .text');
+      await input.click();
+      await input.pressSequentially('First item');
+      await input.press('Enter');
+
+      await page.waitForSelector('.todo-item');
+
+      // Focus should land on the newly created item
+      const focused = page.locator('.todo-item .text:focus');
+      await expect(focused).toBeVisible();
+      await expect(focused).toHaveText('First item');
+    });
+
+    test('should allow Enter on first item to create second item', async ({ page }) => {
+      const input = page.locator('.new-item .text');
+      await input.click();
+      await input.pressSequentially('First item');
+      await input.press('Enter');
+
+      await page.waitForSelector('.todo-item');
+
+      // Press Enter again — should create a second item since focus is on the first
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+    });
   });
 
   test.describe('Completing Todos', () => {
