@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 
 const SYNC_TEST_PORT = 8174;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
-const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
+const BEARER_TOKEN = process.env.SYNC_BEARER_TOKEN || '';
 
 function uuid() {
   return randomUUID();

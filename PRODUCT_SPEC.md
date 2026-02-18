@@ -110,8 +110,8 @@ Note: Sections move with all their children when reordered.
 - Text auto-saves 300ms after typing stops (debounced)
 - Also saves on blur as fallback
 
-### Cross-Device Sync (Optional)
-- Syncs to Supabase when configured
+### Cross-Device Sync
+- Syncs to Supabase
 - CRDT-inspired conflict resolution with per-field timestamps
 - Each field (text, important, completed, position) has its own timestamp
 - Conflicts resolved by Last-Write-Wins on a per-field basis

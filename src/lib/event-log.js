@@ -187,9 +187,6 @@ function appendEvents(newEvents) {
   materializeState(state);
 
   // Notify sync layer
-  if (window.ToDoSync && window.ToDoSync.onSave) {
-    window.ToDoSync.onSave(state);
-  }
   if (window.ToDoSync && window.ToDoSync.onEventsAppended) {
     window.ToDoSync.onEventsAppended(newEvents);
   }
@@ -436,10 +433,6 @@ const EventLog = {
   emitBatch,
 
   // State access
-  loadState: function() {
-    const data = localStorage.getItem(TODOS_KEY);
-    return data ? JSON.parse(data) : [];
-  },
   projectState,
 
   // Sync helpers

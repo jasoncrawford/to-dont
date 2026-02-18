@@ -96,8 +96,7 @@ export function useCommonKeydown(actions: TodoActions) {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (currentIndex > 0) {
-        const sel = window.getSelection();
-        const cursorPos = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).startOffset : 0;
+        const cursorPos = getCursorOffset(textEl);
         textEl.blur();
         const prevText = items[currentIndex - 1].querySelector('.text') as HTMLElement | null;
         if (prevText) {
@@ -114,8 +113,7 @@ export function useCommonKeydown(actions: TodoActions) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (currentIndex < items.length - 1) {
-        const sel = window.getSelection();
-        const cursorPos = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).startOffset : 0;
+        const cursorPos = getCursorOffset(textEl);
         textEl.blur();
         const nextText = items[currentIndex + 1].querySelector('.text') as HTMLElement | null;
         if (nextText) {

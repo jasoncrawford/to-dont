@@ -11,9 +11,9 @@ import { CMD } from './helpers';
 const SYNC_TEST_PORT = 8174;
 const APP_URL = `http://localhost:${SYNC_TEST_PORT}`;
 const API_URL = `http://localhost:${SYNC_TEST_PORT}`;
-const BEARER_TOKEN = '8f512bd8190c0501c6ec356f821fdd32eff914a7770bd9e13b96b10923bfdb65';
-const SUPABASE_URL = 'http://127.0.0.1:54321';
-const SUPABASE_SERVICE_KEY = 'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz';
+const BEARER_TOKEN = process.env.SYNC_BEARER_TOKEN || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 
 // Test user credentials
 const TEST_EMAIL = 'test@to-dont.local';
@@ -230,12 +230,11 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(items.length).toBe(0);
   });
 
-  test('sync auto-enables and saveTodos onSave hook works', async () => {
+  test('sync auto-enables', async () => {
     const state = await page.evaluate(() => {
       return {
         isConfigured: window.ToDoSync?.isConfigured() || false,
         isEnabled: window.ToDoSync?.isEnabled() || false,
-        hasOnSaveHook: typeof window.ToDoSync?.onSave === 'function',
         config: window.ToDoSync?.getConfig() || {},
       };
     });
@@ -244,7 +243,6 @@ test.describe('E2E Sync Diagnostic', () => {
 
     expect(state.isConfigured).toBe(true);
     expect(state.isEnabled).toBe(true);
-    expect(state.hasOnSaveHook).toBe(true);
   });
 
   test('creating an item syncs to database', async () => {

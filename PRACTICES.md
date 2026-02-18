@@ -4,7 +4,7 @@
 
 - **Frontend**: React 19 with TypeScript, built with Vite
 - **State**: `useSyncExternalStore` over localStorage (event-sourced)
-- **Storage**: Browser localStorage + optional Supabase sync
+- **Storage**: Browser localStorage + Supabase sync
 - **Backend**: Vercel serverless functions (TypeScript)
 - **Database**: Supabase (PostgreSQL) with event sourcing
 - **Testing**: Playwright (end-to-end browser tests)
@@ -92,7 +92,7 @@ Tests run with `?test-mode=1` which enables virtual time manipulation for testin
 
 ### Running Locally
 ```bash
-# Frontend only (sync disabled)
+# Frontend only (no API server)
 npm run dev
 
 # Full stack (two terminals)
