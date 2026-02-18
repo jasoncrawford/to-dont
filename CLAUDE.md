@@ -26,7 +26,7 @@ To-Don't is a minimalist todo app where items fade away over 14 days. The core i
 
 ### Data & Sync
 - **localStorage** for immediate persistence
-- **Supabase** for optional cross-device sync
+- **Supabase** for cross-device sync
 - **CRDT-inspired sync** with per-field Last-Write-Wins timestamps
 - **Fractional indexing** for conflict-free ordering
 - Realtime updates via Supabase subscriptions
@@ -60,10 +60,10 @@ Each item tracks per-field timestamps for conflict resolution:
 ## Running the App
 
 ```bash
-# Start Vite dev server (frontend only, sync disabled)
+# Start Vite dev server (frontend only)
 npm run dev
 
-# Start Vite + API server (full stack with sync)
+# Start Vite + API server (full stack)
 npm run dev        # Terminal 1: Vite on :3000
 npm run dev:api    # Terminal 2: Vercel dev on :3001 (proxied via Vite)
 
