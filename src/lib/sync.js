@@ -473,11 +473,6 @@ const ToDoSync = {
     return syncCycle();
   },
   getConfig: () => ({ ...getConfig() }),
-  onSave: function(todos) {
-    if (syncEnabled) {
-      queueServerSync();
-    }
-  },
   onEventsAppended: function(newEvents) {
     if (syncEnabled) {
       queueServerSync();
