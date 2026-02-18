@@ -20,27 +20,45 @@ export default withLogging(async function handler(req: VercelRequest, res: Verce
 
   const supabase = getSupabase();
 
-  let query = supabase
-    .from('events')
-    .select('*')
-    .order('seq', { ascending: true });
+  // Fetch all events with pagination (Supabase default limit is 1000)
+  const PAGE_SIZE = 1000;
+  const allEvents: DbEvent[] = [];
+  let lastSeq = 0;
+  let hasMore = true;
 
-  // JWT users: filter to their own events
-  if (auth.userId) {
-    query = query.eq('user_id', auth.userId);
-  }
+  while (hasMore) {
+    let query = supabase
+      .from('events')
+      .select('*')
+      .gt('seq', lastSeq)
+      .order('seq', { ascending: true })
+      .limit(PAGE_SIZE);
 
-  const { data, error } = await query;
+    if (auth.userId) {
+      query = query.eq('user_id', auth.userId);
+    }
 
-  if (error) {
-    console.error('Error fetching events:', error);
-    return res.status(500).json({ error: 'Failed to fetch events' });
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching events:', error);
+      return res.status(500).json({ error: 'Failed to fetch events' });
+    }
+
+    const page = (data || []) as DbEvent[];
+    allEvents.push(...page);
+
+    if (page.length < PAGE_SIZE) {
+      hasMore = false;
+    } else {
+      lastSeq = page[page.length - 1].seq;
+    }
   }
 
   // Project events into items (same logic as client-side projectState)
   const items = new Map<string, any>();
 
-  for (const dbEvent of (data || []) as DbEvent[]) {
+  for (const dbEvent of allEvents) {
     const event = fromDbEvent(dbEvent);
 
     if (event.type === 'item_created') {
