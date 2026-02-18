@@ -314,7 +314,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     notifyStateChange();
   }, [pendingFocusRef]);
 
-  const archiveOldItems = useCallback((todos: readonly TodoItem[]) => {
+  const archiveOldItems = useCallback(() => {
+    const todos = loadTodos();
     const now = window.getVirtualNow();
     const toArchive = todos.filter(t => {
       if (t.type === 'section') return false;
@@ -324,9 +325,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
     if (toArchive.length > 0) {
       window.EventLog.emitFieldsChanged(toArchive.map(t => ({ itemId: t.id, field: 'archived', value: true })));
-      return loadTodos();
+      notifyStateChange();
     }
-    return todos as TodoItem[];
   }, []);
 
   const archiveCompleted = useCallback(() => {
