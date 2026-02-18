@@ -4,6 +4,8 @@
 // The materialized state is cached in localStorage 'decay-todos' for
 // backward compatibility with existing code that reads it.
 
+import { projectState } from '../../lib/project-state';
+
 const EVENTS_KEY = 'decay-events';
 const TODOS_KEY = 'decay-todos';
 const CLIENT_ID_KEY = 'decay-client-id';
@@ -72,105 +74,6 @@ function createEvent(type, itemId, field, value) {
     clientId: clientId,
     seq: null, // Assigned by server on push
   };
-}
-
-// ============================================
-// State Projection
-// ============================================
-
-function projectState(events) {
-  const items = new Map(); // itemId -> item
-
-  for (const event of events) {
-    if (event.type === 'item_created') {
-      const val = event.value || {};
-      items.set(event.itemId, {
-        id: event.itemId,
-        text: val.text || '',
-        createdAt: val.createdAt || event.timestamp,
-        important: val.important || false,
-        completed: val.completed || false,
-        completedAt: val.completedAt || undefined,
-        archived: val.archived || false,
-        archivedAt: val.archivedAt || undefined,
-        position: val.position || 'n',
-        type: val.type || 'todo',
-        level: val.level || null,
-        indented: val.indented || false,
-        // Track per-field timestamps for LWW
-        textUpdatedAt: val.textUpdatedAt || event.timestamp,
-        importantUpdatedAt: val.importantUpdatedAt || event.timestamp,
-        completedUpdatedAt: val.completedUpdatedAt || event.timestamp,
-        positionUpdatedAt: val.positionUpdatedAt || event.timestamp,
-        typeUpdatedAt: val.typeUpdatedAt || event.timestamp,
-        levelUpdatedAt: val.levelUpdatedAt || event.timestamp,
-        indentedUpdatedAt: val.indentedUpdatedAt || event.timestamp,
-        archivedUpdatedAt: val.archivedUpdatedAt || event.timestamp,
-      });
-    } else if (event.type === 'field_changed') {
-      const item = items.get(event.itemId);
-      if (!item) continue;
-
-      const field = event.field;
-      const tsKey = field + 'UpdatedAt';
-
-      // LWW check: only apply if this event is newer
-      if (item[tsKey] !== undefined && event.timestamp < item[tsKey]) continue;
-
-      // Apply field change
-      switch (field) {
-        case 'text':
-          item.text = event.value;
-          item.textUpdatedAt = event.timestamp;
-          break;
-        case 'important':
-          item.important = event.value;
-          item.importantUpdatedAt = event.timestamp;
-          break;
-        case 'completed':
-          item.completed = event.value;
-          if (event.value) {
-            item.completedAt = event.timestamp;
-          } else {
-            delete item.completedAt;
-          }
-          item.completedUpdatedAt = event.timestamp;
-          break;
-        case 'position':
-          item.position = event.value;
-          item.positionUpdatedAt = event.timestamp;
-          break;
-        case 'type':
-          item.type = event.value;
-          item.typeUpdatedAt = event.timestamp;
-          break;
-        case 'level':
-          item.level = event.value;
-          item.levelUpdatedAt = event.timestamp;
-          break;
-        case 'indented':
-          item.indented = event.value;
-          item.indentedUpdatedAt = event.timestamp;
-          break;
-        case 'archived':
-          item.archived = event.value;
-          if (event.value) {
-            item.archivedAt = event.timestamp;
-          } else {
-            item.archivedAt = null;
-          }
-          item.archivedUpdatedAt = event.timestamp;
-          break;
-      }
-    } else if (event.type === 'item_deleted') {
-      items.delete(event.itemId);
-    }
-  }
-
-  // Convert to array and sort by position
-  const result = Array.from(items.values());
-  result.sort((a, b) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
-  return result;
 }
 
 // ============================================
