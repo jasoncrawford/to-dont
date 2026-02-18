@@ -88,7 +88,7 @@ export function useViewMode(): ViewMode {
 }
 
 // Sync status store
-export type SyncState = 'synced' | 'syncing' | 'error' | 'reconnecting' | 'offline' | 'disabled';
+export type SyncState = 'synced' | 'syncing' | 'error' | 'reconnecting' | 'offline';
 
 export interface SyncStatus {
   state: SyncState;
