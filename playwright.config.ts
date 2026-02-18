@@ -21,7 +21,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 4 : undefined,
   reporter: 'list',
   use: {
     trace: 'on-first-retry',
@@ -37,6 +37,7 @@ export default defineConfig({
     },
     {
       name: 'sync-e2e-api',
+      fullyParallel: false,
       use: {
         browserName: 'chromium',
         baseURL: `http://localhost:${SYNC_TEST_PORT}`,
@@ -45,6 +46,7 @@ export default defineConfig({
     },
     {
       name: 'sync-e2e',
+      fullyParallel: false,
       use: {
         browserName: 'chromium',
         baseURL: `http://localhost:${SYNC_TEST_PORT}`,
