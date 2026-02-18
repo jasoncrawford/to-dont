@@ -120,7 +120,7 @@ test.describe('Sequence Items', () => {
 
       const stored = await getStoredTodos(page);
       expect(stored.length).toBe(1);
-      expect(stored[0].text).toBe('A > B');
+      expect(stored[0].text).toBe('A &gt; B');
       expect(stored[0].completed).toBe(true);
     });
   });
@@ -133,7 +133,7 @@ test.describe('Sequence Items', () => {
 
       const stored = await getStoredTodos(page);
       expect(stored.length).toBe(1);
-      expect(stored[0].text).toBe('-> B');
+      expect(stored[0].text).toBe('-&gt; B');
       expect(stored[0].completed).toBe(true);
     });
 
@@ -144,7 +144,7 @@ test.describe('Sequence Items', () => {
 
       const stored = await getStoredTodos(page);
       expect(stored.length).toBe(1);
-      expect(stored[0].text).toBe('A ->');
+      expect(stored[0].text).toBe('A -&gt;');
       expect(stored[0].completed).toBe(true);
     });
 

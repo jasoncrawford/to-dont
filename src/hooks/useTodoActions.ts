@@ -36,7 +36,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   const addTodo = useCallback((text: string) => {
     if (!text.trim()) return;
     const todos = loadTodos();
-    const newTodo = createNewItem(text, todos.length, todos);
+    const newTodo = createNewItem(sanitizeHTML(text), todos.length, todos);
     const value: Record<string, unknown> = {
       text: newTodo.text, position: newTodo.position,
     };
@@ -44,8 +44,9 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
       value.important = true;
     }
     window.EventLog.emitItemCreated(newTodo.id, value);
+    pendingFocusRef.current = { itemId: newTodo.id, atEnd: true };
     notifyStateChange();
-  }, [viewMode]);
+  }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
     window.EventLog.emitItemDeleted(id);
