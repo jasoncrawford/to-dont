@@ -10,7 +10,6 @@ const DOT_COLORS: Record<SyncState, string> = {
   error: '#f44336',
   reconnecting: '#9e9e9e',
   offline: '#9e9e9e',
-  disabled: 'transparent',
 };
 
 const LABELS: Record<SyncState, string> = {
@@ -19,7 +18,6 @@ const LABELS: Record<SyncState, string> = {
   error: 'Sync error',
   reconnecting: 'Reconnecting\u2026',
   offline: 'Offline',
-  disabled: '',
 };
 
 export function SyncStatus() {
@@ -43,7 +41,7 @@ export function SyncStatus() {
       }
       setDisplayState('synced');
     } else {
-      // Error, offline, disabled — show immediately
+      // Error, offline — show immediately
       if (syncingTimer.current) {
         clearTimeout(syncingTimer.current);
         syncingTimer.current = null;
@@ -73,8 +71,6 @@ export function SyncStatus() {
       }
     };
   }, [displayState]);
-
-  if (displayState === 'disabled') return null;
 
   const dotColor = DOT_COLORS[displayState];
   const label = LABELS[displayState];

@@ -433,10 +433,6 @@ const EventLog = {
   emitBatch,
 
   // State access
-  loadState: function() {
-    const data = localStorage.getItem(TODOS_KEY);
-    return data ? JSON.parse(data) : [];
-  },
   projectState,
 
   // Sync helpers

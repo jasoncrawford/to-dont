@@ -33,7 +33,6 @@ declare global {
       emitFieldsChanged: (changes: Array<{ itemId: string; field: string; value: unknown }>) => void;
       emitItemDeleted: (itemId: string) => void;
       emitBatch: (specs: Array<{ type: string; itemId: string; field?: string; value?: unknown }>) => void;
-      loadState: () => TodoItem[];
       projectState: (events: unknown[]) => TodoItem[];
       getClientId: () => string;
       loadEvents: () => unknown[];

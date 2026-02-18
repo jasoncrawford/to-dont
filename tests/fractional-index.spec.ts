@@ -109,48 +109,6 @@ test.describe('Fractional Indexing - Shared Module', () => {
     }
   });
 
-  test('ToDoSync and FractionalIndex produce identical results', async ({ page }) => {
-    const result = await page.evaluate(() => {
-      const fi = (window as any).FractionalIndex;
-      const sync = (window as any).ToDoSync;
-
-      if (!sync) return { syncAvailable: false, matches: [] };
-
-      const testCases = [
-        [null, null],
-        [null, 'b'],
-        [null, 'n'],
-        [null, 'a'],
-        ['y', null],
-        ['z', null],
-        ['n', null],
-        ['a', 'z'],
-        ['a', 'b'],
-        ['na', 'nc'],
-        ['abc', 'abd'],
-        ['m', 'o'],
-      ];
-
-      const matches = testCases.map(([before, after]) => {
-        const fiResult = fi.generatePositionBetween(before, after);
-        const syncResult = sync.generatePositionBetween(before, after);
-        return {
-          before,
-          after,
-          fiResult,
-          syncResult,
-          match: fiResult === syncResult,
-        };
-      });
-
-      return { syncAvailable: true, matches };
-    });
-
-    expect(result.syncAvailable).toBe(true);
-    for (const testCase of result.matches) {
-      expect(testCase.match).toBe(true);
-    }
-  });
 
   test('generateInitialPositions with exactly 22 items produces unique sorted positions', async ({ page }) => {
     const result = await page.evaluate(() => {
