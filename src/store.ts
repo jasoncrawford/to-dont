@@ -29,9 +29,6 @@ export function saveTodos(todos: TodoItem[]): void {
   localStorage.setItem('decay-todos', json);
   _todosCacheJson = json;
   _todosCacheParsed = todos;
-  if (window.ToDoSync && window.ToDoSync.onSave) {
-    window.ToDoSync.onSave(todos);
-  }
 }
 
 export function invalidateTodoCache(): void {

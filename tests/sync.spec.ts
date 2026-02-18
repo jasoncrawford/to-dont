@@ -54,69 +54,6 @@ test.describe('Sync Layer', () => {
     expect(isConfigured).toBe(false);
   });
 
-  test('saveTodos calls onSave hook and still saves to localStorage', async ({ page }) => {
-    await setupPage(page);
-
-    // Manually call saveTodos and verify it still saves to localStorage
-    // and also calls the onSave hook
-    const result = await page.evaluate(() => {
-      let onSaveCalled = false;
-      let onSaveArg: unknown = null;
-      const originalOnSave = window.ToDoSync.onSave;
-      window.ToDoSync.onSave = (todos: unknown[]) => {
-        onSaveCalled = true;
-        onSaveArg = todos;
-      };
-
-      const todos = [{
-        id: 'test-123',
-        text: 'Manual save test',
-        createdAt: Date.now(),
-        important: false,
-        completed: false,
-        archived: false
-      }];
-      window.saveTodos(todos);
-
-      // Restore original
-      window.ToDoSync.onSave = originalOnSave;
-
-      return { onSaveCalled, onSaveArg };
-    });
-
-    expect(result.onSaveCalled).toBe(true);
-    expect((result.onSaveArg as Array<{text: string}>)[0].text).toBe('Manual save test');
-
-    const stored = await getStoredTodos(page);
-    expect(stored.length).toBe(1);
-    expect(stored[0].text).toBe('Manual save test');
-  });
-
-  test('saveTodos notifies sync layer via onSave hook', async ({ page }) => {
-    await setupPage(page);
-
-    // Install spy on window.ToDoSync.onSave
-    const result = await page.evaluate(() => {
-      let spyCalled = false;
-      let spyData: unknown = null;
-      const originalOnSave = window.ToDoSync.onSave;
-      window.ToDoSync.onSave = (todos: unknown[]) => {
-        spyCalled = true;
-        spyData = todos;
-      };
-
-      window.saveTodos([{ id: 'test', text: 'hello' }]);
-
-      // Restore
-      window.ToDoSync.onSave = originalOnSave;
-
-      return { spyCalled, spyData };
-    });
-
-    expect(result.spyCalled).toBe(true);
-    expect((result.spyData as Array<{id: string, text: string}>)[0]).toMatchObject({ id: 'test', text: 'hello' });
-  });
-
   test('saveTodos works without sync layer loaded', async ({ page }) => {
     await setupPage(page);
 
@@ -141,15 +78,6 @@ test.describe('Sync Layer', () => {
     const stored = await getStoredTodos(page);
     expect(stored.length).toBe(1);
     expect(stored[0].text).toBe('works without sync');
-  });
-
-  test('ToDoSync exposes onSave hook', async ({ page }) => {
-    await setupPage(page);
-
-    const hasOnSave = await page.evaluate(() => {
-      return typeof window.ToDoSync.onSave === 'function';
-    });
-    expect(hasOnSave).toBe(true);
   });
 
   test('saveTodos no longer monkey-patches via _originalSaveTodos', async ({ page }) => {
@@ -615,7 +543,7 @@ test.describe('Sync Layer', () => {
           headers: { 'Content-Type': 'application/json' },
         }));
       };
-      window.ToDoSync.onSave([]);
+      window.ToDoSync.onEventsAppended([]);
     });
 
     const afterQueue = await page.evaluate(() => ({
@@ -638,7 +566,7 @@ declare global {
       isConfigured: () => boolean;
       refresh: () => Promise<void>;
       getConfig: () => Record<string, string>;
-      onSave: (todos: unknown[]) => void;
+      onEventsAppended: (events: unknown[]) => void;
       _test?: {
         setSyncEnabled: (val: boolean) => void;
         setAccessTokenOverride: (token: string | null) => void;
