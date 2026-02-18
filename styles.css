@@ -116,17 +116,20 @@ body {
   position: relative;
 }
 
-.todo-item .drag-handle {
+.drag-handle {
   position: absolute;
   left: -24px;
   width: 16px;
-  margin-top: 4px;
   cursor: grab;
   color: var(--text-placeholder);
   opacity: 0;
   transition: opacity 0.15s;
   font-size: 12px;
   user-select: none;
+}
+
+.todo-item .drag-handle {
+  margin-top: 4px;
 }
 
 .todo-item:hover .drag-handle {
@@ -220,16 +223,7 @@ body {
 }
 
 .section-header .drag-handle {
-  position: absolute;
-  left: -24px;
-  width: 16px;
   margin-top: 2px;
-  cursor: grab;
-  color: var(--text-placeholder);
-  opacity: 0;
-  transition: opacity 0.15s;
-  font-size: 12px;
-  user-select: none;
 }
 
 .section-header:hover .drag-handle {
@@ -650,6 +644,10 @@ body {
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
+}
+
+.archive-completed-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 
 .archive-completed-btn:disabled {

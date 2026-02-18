@@ -1,34 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { copyFileSync } from 'fs';
-import { resolve } from 'path';
-
-// Files that aren't part of the Vite module graph but need to be in dist/
-const staticAssets = ['styles.css'];
-
-function copyStaticAssets() {
-  return {
-    name: 'copy-static-assets',
-    writeBundle(options) {
-      const outDir = options.dir || 'dist';
-      for (const file of staticAssets) {
-        const src = resolve(__dirname, file);
-        const dest = resolve(outDir, file);
-        try {
-          copyFileSync(src, dest);
-        } catch (e) {
-          console.warn(`Warning: could not copy ${file}: ${e.message}`);
-        }
-      }
-    },
-  };
-}
 
 export default defineConfig({
   plugins: [
     react(),
-    copyStaticAssets(),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
@@ -61,11 +37,6 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
-    },
-  },
-  build: {
-    rollupOptions: {
-      input: resolve(__dirname, 'index.html'),
     },
   },
 });
