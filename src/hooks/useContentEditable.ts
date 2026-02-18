@@ -56,15 +56,17 @@ export function useContentEditable({
     if (isURL(plainText)) {
       if (hasSelection) {
         // Wrap selected text with the pasted URL
-        document.execCommand('createLink', false, plainText);
-        // Set attributes on newly created anchor
-        const anchor = sel!.anchorNode instanceof HTMLElement
-          ? sel!.anchorNode.querySelector('a[href]')
-          : sel!.anchorNode?.parentElement?.closest('a');
-        if (anchor) {
-          anchor.setAttribute('target', '_blank');
-          anchor.setAttribute('rel', 'noopener');
-        }
+        const range = sel!.getRangeAt(0);
+        const anchor = document.createElement('a');
+        anchor.href = plainText;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener';
+        anchor.appendChild(range.extractContents());
+        range.insertNode(anchor);
+        range.setStartAfter(anchor);
+        range.collapse(true);
+        sel!.removeAllRanges();
+        sel!.addRange(range);
       } else {
         // Insert a linked URL
         const anchor = document.createElement('a');
@@ -84,7 +86,15 @@ export function useContentEditable({
         }
       }
     } else {
-      document.execCommand('insertText', false, plainText);
+      // Insert plain text via Range API (replaces deprecated execCommand)
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(plainText));
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
     // Trigger save after paste

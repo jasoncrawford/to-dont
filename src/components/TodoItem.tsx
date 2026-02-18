@@ -118,18 +118,20 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       linkEditorState.existingAnchor.target = '_blank';
       linkEditorState.existingAnchor.rel = 'noopener';
     } else {
-      // Create new link from selection
+      // Create new link from selection via Range API
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) {
-        document.execCommand('createLink', false, url);
-        // Find the new anchor and set attributes
-        const newAnchor = sel.anchorNode instanceof HTMLElement
-          ? sel.anchorNode.querySelector('a[href]')
-          : sel.anchorNode?.parentElement?.closest('a');
-        if (newAnchor) {
-          newAnchor.setAttribute('target', '_blank');
-          newAnchor.setAttribute('rel', 'noopener');
-        }
+        const range = sel.getRangeAt(0);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener';
+        anchor.appendChild(range.extractContents());
+        range.insertNode(anchor);
+        range.setStartAfter(anchor);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
       }
     }
 

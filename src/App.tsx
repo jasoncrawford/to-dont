@@ -33,6 +33,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Archive old items after each render
+  useEffect(() => {
+    actions.archiveOldItems();
+  });
+
   // Auth gate: if sync is configured and user not authenticated, show login
   const syncConfigured = !!getSupabaseClient();
   if (syncConfigured && authState === 'loading') {
@@ -43,11 +48,8 @@ export default function App() {
   }
 
   // Read state
-  let todos = loadTodos();
+  const todos = loadTodos();
   const now = window.getVirtualNow();
-
-  // Archive old items (side effect on every render, same as old app.js)
-  todos = actions.archiveOldItems(todos);
 
   // Compute derived data
   const activeItems = todos.filter(t => !t.archived);
