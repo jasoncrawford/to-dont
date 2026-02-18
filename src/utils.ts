@@ -50,12 +50,6 @@ export function getImportanceLevel(timestamp: number, now: number): number {
   return Math.min(Math.floor(progress * 5) + 1, 5);
 }
 
-export function shouldArchive(todo: TodoItem, now: number): boolean {
-  if (todo.type === 'section') return false;
-  if (todo.important || todo.completed || todo.archived) return false;
-  return getDaysSince(todo.createdAt, now) >= FADE_DURATION_DAYS;
-}
-
 // Get the character offset of the cursor within a contenteditable element.
 // Works cross-browser (Chromium, WebKit/Safari, Firefox) by measuring
 // the text length from the start of the element to the cursor position.

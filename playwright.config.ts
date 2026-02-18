@@ -1,4 +1,13 @@
 import { defineConfig } from '@playwright/test';
+import { readFileSync } from 'fs';
+
+// Load .env.test so test files can access env vars (e.g. SYNC_BEARER_TOKEN)
+for (const line of readFileSync('.env.test', 'utf-8').split('\n')) {
+  const match = line.match(/^(\w+)=(.*)$/);
+  if (match && !process.env[match[1]]) {
+    process.env[match[1]] = match[2];
+  }
+}
 
 const VITE_PORT = 8173;
 const SYNC_TEST_PORT = 8174;

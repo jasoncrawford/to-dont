@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { loadTodos } from '../store';
-import { notifyStateChange } from '../store';
+import { loadTodos, notifyStateChange } from '../store';
 import {
   createNewItem, getItemPosition, generatePositionBetween,
   getItemGroup, splitOnArrow,
