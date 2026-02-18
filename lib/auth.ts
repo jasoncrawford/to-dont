@@ -30,12 +30,3 @@ export async function getAuthResult(req: VercelRequest): Promise<AuthResult> {
     return { authenticated: false, userId: null };
   }
 }
-
-/**
- * Legacy helper — returns true if request is authenticated by any method.
- */
-export function validateAuth(req: VercelRequest): boolean {
-  const auth = req.headers.authorization;
-  if (!auth) return false;
-  return auth === `Bearer ${process.env.SYNC_BEARER_TOKEN}`;
-}

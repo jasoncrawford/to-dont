@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAuthResult, validateAuth } from '../../lib/auth';
+import { getAuthResult } from '../../lib/auth';
 import { getSupabase } from '../../lib/supabase';
 import { EventPayload, DbEvent, toDbEvent, fromDbEvent } from '../../lib/events';
 import { withLogging } from '../../lib/log';
@@ -42,10 +42,9 @@ async function handlePost(req: VercelRequest, res: VercelResponse, userId: strin
   });
 
   // Insert with ON CONFLICT DO NOTHING for idempotency
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('events')
-    .upsert(dbEvents, { onConflict: 'id', ignoreDuplicates: true })
-    .select();
+    .upsert(dbEvents, { onConflict: 'id', ignoreDuplicates: true });
 
   if (error) {
     console.error('Error inserting events:', error);
