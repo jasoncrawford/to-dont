@@ -74,10 +74,6 @@ export async function getTodoByText(page: Page, text: string) {
   return page.locator(`.todo-item:has(.text:text("${text}"))`);
 }
 
-export async function getSectionByText(page: Page, text: string) {
-  return page.locator(`.section-header:has(.text:text("${text}"))`);
-}
-
 export async function completeTodo(page: Page, text: string) {
   const todo = await getTodoByText(page, text);
   await todo.locator('.checkbox').click();
@@ -96,14 +92,6 @@ export async function deleteTodo(page: Page, text: string) {
   await todo.locator('.actions button:has-text("×")').click();
 }
 
-// Note: There's no manual archive button in the UI.
-// Items are auto-archived when they're 14+ days old.
-// This function uses time advancement to trigger auto-archive.
-export async function archiveByTime(page: Page, text: string) {
-  // Advance time by 14 days to trigger auto-archive
-  await setVirtualTime(page, 14);
-}
-
 export async function getStoredTodos(page: Page) {
   return page.evaluate(() => {
     const stored = localStorage.getItem('decay-todos');
@@ -117,12 +105,6 @@ export async function setVirtualTime(page: Page, daysOffset: number) {
   for (let i = 0; i < daysOffset; i++) {
     await page.locator('#advanceDay').click();
   }
-}
-
-export async function enableTestMode(page: Page) {
-  // Test mode is always enabled via the +1 day / reset buttons
-  // Just reset to ensure we're at a known state
-  await page.locator('#resetTime').click();
 }
 
 export async function createSection(page: Page, title: string = '') {

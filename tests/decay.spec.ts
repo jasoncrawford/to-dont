@@ -4,7 +4,6 @@ import {
   addTodo,
   getTodoByText,
   toggleImportant,
-  enableTestMode,
   setVirtualTime,
 } from './helpers';
 
