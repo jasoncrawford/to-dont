@@ -519,3 +519,164 @@ test.describe('Event Log', () => {
     expect(stored[0].text).toBe('Will keep');
   });
 });
+
+test.describe('parentId Migration', () => {
+  test('assigns parentId based on section grouping on first load', async ({ page }) => {
+    await setupPage(page);
+    const now = Date.now();
+
+    // Seed events: top item, L1 section, item under section, another L1 section, item under it
+    await page.evaluate((now) => {
+      const events = [
+        { id: crypto.randomUUID(), itemId: 'top-item', type: 'item_created', field: null,
+          value: { text: 'Top item', position: 'c' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'section-a', type: 'item_created', field: null,
+          value: { text: 'Section A', position: 'f', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'item-under-a', type: 'item_created', field: null,
+          value: { text: 'Under A', position: 'h' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'section-b', type: 'item_created', field: null,
+          value: { text: 'Section B', position: 'n', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'item-under-b', type: 'item_created', field: null,
+          value: { text: 'Under B', position: 't' }, timestamp: now, clientId: 'test', seq: 0 },
+      ];
+      localStorage.setItem('decay-events', JSON.stringify(events));
+      localStorage.removeItem('decay-todos');
+    }, now);
+
+    // Reload to trigger migration
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    const byId = Object.fromEntries(stored.map((t: any) => [t.id, t]));
+
+    // Top item has no parent
+    expect(byId['top-item'].parentId).toBeNull();
+    // L1 sections have no parent
+    expect(byId['section-a'].parentId).toBeNull();
+    expect(byId['section-b'].parentId).toBeNull();
+    // Items under sections get parentId set
+    expect(byId['item-under-a'].parentId).toBe('section-a');
+    expect(byId['item-under-b'].parentId).toBe('section-b');
+  });
+
+  test('assigns parentId for L2 sections under L1 sections', async ({ page }) => {
+    await setupPage(page);
+    const now = Date.now();
+
+    await page.evaluate((now) => {
+      const events = [
+        { id: crypto.randomUUID(), itemId: 'l1-section', type: 'item_created', field: null,
+          value: { text: 'L1 Section', position: 'f', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'l2-section', type: 'item_created', field: null,
+          value: { text: 'L2 Section', position: 'h', type: 'section', level: 2 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'item-under-l2', type: 'item_created', field: null,
+          value: { text: 'Under L2', position: 'n' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'item-after-l2', type: 'item_created', field: null,
+          value: { text: 'After L2 but under L1', position: 't' }, timestamp: now, clientId: 'test', seq: 0 },
+      ];
+      localStorage.setItem('decay-events', JSON.stringify(events));
+      localStorage.removeItem('decay-todos');
+    }, now);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    const byId = Object.fromEntries(stored.map((t: any) => [t.id, t]));
+
+    expect(byId['l1-section'].parentId).toBeNull();
+    expect(byId['l2-section'].parentId).toBe('l1-section');
+    expect(byId['item-under-l2'].parentId).toBe('l2-section');
+    // Item after L2 section but still under L1 — in the flat model, it's under L2
+    // because L2 is the most recent section before this item
+    expect(byId['item-after-l2'].parentId).toBe('l2-section');
+  });
+
+  test('migration is idempotent - does not run twice', async ({ page }) => {
+    await setupPage(page);
+    const now = Date.now();
+
+    await page.evaluate((now) => {
+      const events = [
+        { id: crypto.randomUUID(), itemId: 'sec', type: 'item_created', field: null,
+          value: { text: 'Section', position: 'f', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'item1', type: 'item_created', field: null,
+          value: { text: 'Item 1', position: 'n' }, timestamp: now, clientId: 'test', seq: 0 },
+      ];
+      localStorage.setItem('decay-events', JSON.stringify(events));
+      localStorage.removeItem('decay-todos');
+    }, now);
+
+    // First load triggers migration
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const eventsAfterFirst = await getEventLog(page);
+    const migrationEvents1 = eventsAfterFirst.filter((e: any) => e.field === 'parentId');
+    expect(migrationEvents1.length).toBe(1);
+
+    // Second load should NOT add more migration events
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const eventsAfterSecond = await getEventLog(page);
+    const migrationEvents2 = eventsAfterSecond.filter((e: any) => e.field === 'parentId');
+    expect(migrationEvents2.length).toBe(1); // same count, not doubled
+  });
+
+  test('no migration when no sections exist', async ({ page }) => {
+    await setupPage(page);
+    const now = Date.now();
+
+    await page.evaluate((now) => {
+      const events = [
+        { id: crypto.randomUUID(), itemId: 'item1', type: 'item_created', field: null,
+          value: { text: 'Just an item', position: 'n' }, timestamp: now, clientId: 'test', seq: 0 },
+      ];
+      localStorage.setItem('decay-events', JSON.stringify(events));
+      localStorage.removeItem('decay-todos');
+    }, now);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const events = await getEventLog(page);
+    const migrationEvents = events.filter((e: any) => e.field === 'parentId');
+    expect(migrationEvents.length).toBe(0);
+  });
+
+  test('display order preserved after parentId migration', async ({ page }) => {
+    await setupPage(page);
+    const now = Date.now();
+
+    await page.evaluate((now) => {
+      const events = [
+        { id: crypto.randomUUID(), itemId: 'top1', type: 'item_created', field: null,
+          value: { text: 'Top 1', position: 'c' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'sec1', type: 'item_created', field: null,
+          value: { text: 'Section 1', position: 'f', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'child1', type: 'item_created', field: null,
+          value: { text: 'Child 1', position: 'h' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'child2', type: 'item_created', field: null,
+          value: { text: 'Child 2', position: 'j' }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'sec2', type: 'item_created', field: null,
+          value: { text: 'Section 2', position: 'n', type: 'section', level: 1 }, timestamp: now, clientId: 'test', seq: 0 },
+        { id: crypto.randomUUID(), itemId: 'child3', type: 'item_created', field: null,
+          value: { text: 'Child 3', position: 't' }, timestamp: now, clientId: 'test', seq: 0 },
+      ];
+      localStorage.setItem('decay-events', JSON.stringify(events));
+      localStorage.removeItem('decay-todos');
+    }, now);
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    const stored = await getStoredTodos(page);
+    const displayOrder = stored.map((t: any) => t.text);
+    // DFS traversal with global positions should match original flat order
+    expect(displayOrder).toEqual([
+      'Top 1', 'Section 1', 'Child 1', 'Child 2', 'Section 2', 'Child 3'
+    ]);
+  });
+});

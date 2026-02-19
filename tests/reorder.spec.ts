@@ -88,14 +88,28 @@ test.describe('Reordering', () => {
 
   test.describe('Drag and Drop - Sections', () => {
     test('should drag section with its children', async ({ page }) => {
-      // Create section A with todos
-      await createSection(page, 'Section A');
-      await addTodo(page, 'Task A1');
-      await addTodo(page, 'Task A2');
-
-      // Create section B with todos
-      await createSection(page, 'Section B');
-      await addTodo(page, 'Task B1');
+      // Set up two root-level sections with children via events (tree structure)
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'sec-a', type: 'item_created', field: null,
+            value: { text: 'Section A', position: 'f', type: 'section', level: 1, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-a1', type: 'item_created', field: null,
+            value: { text: 'Task A1', position: 'f', parentId: 'sec-a' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-a2', type: 'item_created', field: null,
+            value: { text: 'Task A2', position: 'n', parentId: 'sec-a' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'sec-b', type: 'item_created', field: null,
+            value: { text: 'Section B', position: 'n', type: 'section', level: 1, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-b1', type: 'item_created', field: null,
+            value: { text: 'Task B1', position: 'f', parentId: 'sec-b' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForSelector('.section-header');
 
       // Drag Section A to after Task B1
       const sectionA = page.locator('.section-header').first();

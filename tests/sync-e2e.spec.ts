@@ -969,45 +969,20 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Create: Section A with item, then Section B with item
+    // Create two root-level sections with children via EventLog API
     // Structure: [Section A] [Item A1] [Section B] [Item B1]
-
-    // Create Section A
     await page.waitForSelector('.new-item', { state: 'visible' });
-    let input = page.locator('.new-item .text');
-    await input.click();
-    await input.pressSequentially('temp');
-    await input.press('Enter');
-    await page.waitForSelector('.todo-item');
-    let todoText = page.locator('.todo-item .text').first();
-    await todoText.click();
-    await todoText.press(`${CMD}+a`);
-    await todoText.press('Backspace');
-    await page.waitForTimeout(50);
-    await todoText.press('Enter');
-    let sectionText = page.locator('.section-header .text').first();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section A');
-    await page.keyboard.press('Enter');
-
-    // Add item under Section A
-    await page.waitForTimeout(100);
-    await page.keyboard.type('Item A1');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-
-    // Create Section B (by clearing the new empty item and pressing Enter)
-    await page.keyboard.press('Enter'); // Creates empty item, which becomes section
-    await page.waitForSelector('.section-header:nth-child(3)'); // Second section
-    sectionText = page.locator('.section-header .text').last();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section B');
-    await page.keyboard.press('Enter');
-
-    // Add item under Section B
-    await page.waitForTimeout(100);
-    await page.keyboard.type('Item B1');
-    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    const ids = await page.evaluate(() => {
+      const secAId = crypto.randomUUID();
+      const secBId = crypto.randomUUID();
+      window.EventLog.emitItemCreated(secAId, { text: 'Section A', position: 'f', type: 'section', level: 2, parentId: null });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item A1', position: 'f', parentId: secAId });
+      window.EventLog.emitItemCreated(secBId, { text: 'Section B', position: 'n', type: 'section', level: 2, parentId: null });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item B1', position: 'f', parentId: secBId });
+      window.render();
+      return { secAId, secBId };
+    });
+    await page.waitForSelector('.section-header');
 
     // Wait for sync - all 4 items should appear
     let dbItems = await waitForDbCondition(
@@ -1026,7 +1001,7 @@ test.describe('E2E Sync Diagnostic', () => {
     expect(sectionAPos < sectionBPos).toBe(true);
 
     // Move Section B up (should move with Item B1)
-    sectionText = page.locator('.section-header .text:text-is("Section B")');
+    const sectionText = page.locator('.section-header .text:text-is("Section B")');
     await sectionText.click();
     await page.keyboard.press(`${CMD}+Shift+ArrowUp`);
 
@@ -1065,45 +1040,17 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Create two L1 sections by reusing the pattern from other tests
-    // First: Section A (level 1)
+    // Create two L1 sections with children via EventLog API
     await page.waitForSelector('.new-item', { state: 'visible' });
-
-    // Section A
-    let input = page.locator('.new-item .text');
-    await input.click();
-    await input.pressSequentially('temp');
-    await input.press('Enter');
-    await page.waitForSelector('.todo-item');
-    let todoText = page.locator('.todo-item .text').first();
-    await todoText.click();
-    await todoText.press(`${CMD}+a`);
-    await todoText.press('Backspace');
-    await page.waitForTimeout(50);
-    await todoText.press('Enter');
-    let sectionText = page.locator('.section-header .text').first();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section A');
-    await sectionText.press('Shift+Tab'); // Promote to L1
-    await expect(page.locator('.section-header.level-1')).toHaveCount(1);
-
-    // Add item by pressing Enter at end of section, then typing
-    await sectionText.press('End');
-    await sectionText.press('Enter');
-    await page.waitForTimeout(100);
-    await page.keyboard.type('Item under A');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-
-    // Create Section B by clearing the new empty todo
-    await page.keyboard.press('Enter'); // Creates empty item which becomes section
-    await page.waitForTimeout(200);
-    sectionText = page.locator('.section-header .text').last();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section B');
-    await sectionText.press('Shift+Tab'); // Promote to L1
-    await expect(page.locator('.section-header.level-1')).toHaveCount(2);
-    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.evaluate(() => {
+      const secAId = crypto.randomUUID();
+      const secBId = crypto.randomUUID();
+      window.EventLog.emitItemCreated(secAId, { text: 'Section A', position: 'f', type: 'section', level: 1, parentId: null });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item under A', position: 'f', parentId: secAId });
+      window.EventLog.emitItemCreated(secBId, { text: 'Section B', position: 'n', type: 'section', level: 1, parentId: null });
+      window.render();
+    });
+    await page.waitForSelector('.section-header');
 
     // Wait for sync - all items should appear (Section A, Item under A, Section B)
     let dbItems = await waitForDbCondition(
@@ -1266,37 +1213,17 @@ test.describe('E2E Sync Diagnostic', () => {
       }
     });
 
-    // Create two sections with items
+    // Create two sections with an item via EventLog API
     await page.waitForSelector('.new-item', { state: 'visible' });
-
-    // Section A
-    let input = page.locator('.new-item .text');
-    await input.click();
-    await input.pressSequentially('temp');
-    await input.press('Enter');
-    await page.waitForSelector('.todo-item');
-    let todoText = page.locator('.todo-item .text').first();
-    await todoText.click();
-    await todoText.press(`${CMD}+a`);
-    await todoText.press('Backspace');
-    await page.waitForTimeout(50);
-    await todoText.press('Enter');
-    let sectionText = page.locator('.section-header .text').first();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section A');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-    await page.keyboard.type('Item under A');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-
-    // Section B (empty item becomes section)
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(200);
-    sectionText = page.locator('.section-header .text').last();
-    await sectionText.click();
-    await sectionText.pressSequentially('Section B');
-    await page.locator('body').click({ position: { x: 10, y: 10 } });
+    await page.evaluate(() => {
+      const secAId = crypto.randomUUID();
+      const secBId = crypto.randomUUID();
+      window.EventLog.emitItemCreated(secAId, { text: 'Section A', position: 'f', type: 'section', level: 2, parentId: null });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item under A', position: 'f', parentId: secAId });
+      window.EventLog.emitItemCreated(secBId, { text: 'Section B', position: 'n', type: 'section', level: 2, parentId: null });
+      window.render();
+    });
+    await page.waitForSelector('.section-header');
 
     // Wait for sync - all items should appear
     let dbItems = await waitForDbCondition(

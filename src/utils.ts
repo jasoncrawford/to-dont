@@ -129,65 +129,25 @@ export function generatePositionBetween(before: string | null, after: string | n
   return _generatePositionBetween(before, after);
 }
 
-export function getItemPosition(todos: TodoItem[], index: number): string | null {
-  if (index < 0 || index >= todos.length) return null;
-  return todos[index].position || 'n';
+// Get siblings of an item (items sharing the same parentId), sorted by position
+export function getSiblings(todos: TodoItem[], parentId: string | null): TodoItem[] {
+  return todos.filter(t => (t.parentId || null) === parentId)
+    .sort((a, b) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
 }
 
-export function createNewItem(text: string = '', insertIndex: number = -1, todos: TodoItem[] | null = null): TodoItem {
-  const now = window.getVirtualNow();
-  let position = 'n';
-
-  if (todos && insertIndex >= 0) {
-    const before = insertIndex > 0 ? getItemPosition(todos, insertIndex - 1) : null;
-    const after = insertIndex < todos.length ? getItemPosition(todos, insertIndex) : null;
-    position = generatePositionBetween(before, after);
-  }
-
-  return {
-    id: generateId(),
-    text: text.trim(),
-    createdAt: now,
-    important: false,
-    completed: false,
-    archived: false,
-    position: position,
-    textUpdatedAt: now,
-    importantUpdatedAt: now,
-    completedUpdatedAt: now,
-    positionUpdatedAt: now,
-    typeUpdatedAt: now,
-    levelUpdatedAt: now,
-    indentedUpdatedAt: now,
-  };
-}
-
-// Get the group of items that belong under a section
-export function getItemGroup(todos: TodoItem[], startIndex: number): number[] {
-  const item = todos[startIndex];
-  if (!item) return [];
-
-  if (item.type !== 'section') {
-    return [startIndex];
-  }
-
-  const indices = [startIndex];
-  const level = item.level || 2;
-
-  for (let i = startIndex + 1; i < todos.length; i++) {
-    const next = todos[i];
-    if (next.archived) continue;
-
-    if (next.type === 'section') {
-      const nextLevel = next.level || 2;
-      if (level === 1 && nextLevel === 1) break;
-      if (level === 2) break;
+// Get all descendant IDs of a section (via parentId chain), in DFS order
+export function getDescendantIds(todos: TodoItem[], sectionId: string): string[] {
+  const ids: string[] = [];
+  function collect(parentId: string) {
+    for (const item of todos) {
+      if ((item.parentId || null) === parentId) {
+        ids.push(item.id);
+        if (item.type === 'section') collect(item.id);
+      }
     }
-
-    indices.push(i);
   }
-
-  return indices;
+  collect(sectionId);
+  return ids;
 }
 
 export function splitOnArrow(text: string): { before: string; after: string } | null {
