@@ -152,15 +152,34 @@ test.describe('Sections and Hierarchy', () => {
   });
 
   test.describe('Section Group Reordering', () => {
-    test('should move section with children using keyboard', async ({ page }) => {
-      // Create section A with children
-      await createSection(page, 'Section A');
-      await addTodo(page, 'Task A1');
-      await addTodo(page, 'Task A2');
+    // Helper: set up two root-level sections with children via events (tree structure)
+    async function setupTwoSections(page: any) {
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'sec-a', type: 'item_created', field: null,
+            value: { text: 'Section A', position: 'f', type: 'section', level: 1, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-a1', type: 'item_created', field: null,
+            value: { text: 'Task A1', position: 'f', parentId: 'sec-a' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-a2', type: 'item_created', field: null,
+            value: { text: 'Task A2', position: 'n', parentId: 'sec-a' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'sec-b', type: 'item_created', field: null,
+            value: { text: 'Section B', position: 'n', type: 'section', level: 1, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'task-b1', type: 'item_created', field: null,
+            value: { text: 'Task B1', position: 'f', parentId: 'sec-b' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForSelector('.section-header');
+    }
 
-      // Create section B with children
-      await createSection(page, 'Section B');
-      await addTodo(page, 'Task B1');
+    test('should move section with children using keyboard', async ({ page }) => {
+      await setupPage(page);
+      await setupTwoSections(page);
 
       // Verify initial order
       let stored = await getStoredTodos(page);
@@ -196,14 +215,8 @@ test.describe('Sections and Hierarchy', () => {
     });
 
     test('should move section down with children using keyboard', async ({ page }) => {
-      // Create section A with children
-      await createSection(page, 'Section A');
-      await addTodo(page, 'Task A1');
-      await addTodo(page, 'Task A2');
-
-      // Create section B with children
-      await createSection(page, 'Section B');
-      await addTodo(page, 'Task B1');
+      await setupPage(page);
+      await setupTwoSections(page);
 
       // Verify initial order
       let stored = await getStoredTodos(page);
@@ -239,14 +252,8 @@ test.describe('Sections and Hierarchy', () => {
     });
 
     test('should move section with children using drag-drop', async ({ page }) => {
-      // Create section A with children
-      await createSection(page, 'Section A');
-      await addTodo(page, 'Task A1');
-      await addTodo(page, 'Task A2');
-
-      // Create section B with children
-      await createSection(page, 'Section B');
-      await addTodo(page, 'Task B1');
+      await setupPage(page);
+      await setupTwoSections(page);
 
       // Get section A drag handle
       const sectionA = page.locator('.section-header').first();

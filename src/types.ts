@@ -11,6 +11,7 @@ export interface TodoItem {
   type?: 'section';
   level?: number;
   indented?: boolean;
+  parentId?: string | null;       // ID of containing section, null for top-level
   serverUuid?: string;
   // CRDT per-field timestamps
   textUpdatedAt: number;
@@ -21,6 +22,7 @@ export interface TodoItem {
   levelUpdatedAt: number;
   indentedUpdatedAt: number;
   archivedUpdatedAt?: number;
+  parentIdUpdatedAt?: number;      // CRDT timestamp for parentId
 }
 
 export type ViewMode = 'important' | 'active' | 'faded' | 'done';

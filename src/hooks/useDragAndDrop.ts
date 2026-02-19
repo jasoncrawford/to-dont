@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { loadTodos, notifyStateChange } from '../store';
-import { getItemGroup, getItemPosition, generatePositionBetween } from '../utils';
+import { getDescendantIds, getSiblings, generatePositionBetween } from '../utils';
 import type { TodoItem } from '../types';
 
 interface DragState {
@@ -43,12 +43,12 @@ export function useDragAndDrop() {
     const rect = div.getBoundingClientRect();
 
     const todos = loadTodos();
-    const sectionIndex = todos.findIndex(t => t.id === sectionId);
-    const groupIndices = getItemGroup(todos, sectionIndex);
-    const groupIds = groupIndices.map(i => todos[i].id);
+    // Get all descendants via parentId tree
+    const descendantIds = getDescendantIds(todos, sectionId);
+    const allIds = [sectionId, ...descendantIds];
 
     const groupElements: HTMLElement[] = [];
-    groupIds.forEach(id => {
+    allIds.forEach(id => {
       const el = document.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
       if (el) groupElements.push(el);
     });
@@ -116,16 +116,16 @@ export function useDragAndDrop() {
         let midY: number;
 
         if (isDraggingSection && item.classList.contains('section-header')) {
+          // For section headers, calculate midpoint including descendants
           const itemId = (item as HTMLElement).dataset.id;
           const todos = loadTodos();
-          const sectionIndex = todos.findIndex(t => t.id === itemId);
-          if (sectionIndex !== -1) {
-            const groupIndices = getItemGroup(todos, sectionIndex);
-            let totalHeight = 0;
-            for (const idx of groupIndices) {
-              const groupItem = todoList.querySelector(`[data-id="${todos[idx].id}"]`) as HTMLElement | null;
-              if (groupItem && groupItem.style.display !== 'none') {
-                totalHeight += groupItem.getBoundingClientRect().height;
+          if (itemId) {
+            const descIds = getDescendantIds(todos, itemId);
+            let totalHeight = rect.height;
+            for (const descId of descIds) {
+              const descEl = todoList.querySelector(`[data-id="${descId}"]`) as HTMLElement | null;
+              if (descEl && descEl.style.display !== 'none') {
+                totalHeight += descEl.getBoundingClientRect().height;
               }
             }
             midY = rect.top + totalHeight / 2;
@@ -159,59 +159,126 @@ export function useDragAndDrop() {
       dragState.clone.remove();
 
       const todos = loadTodos();
-      const draggedIndex = todos.findIndex(t => t.id === dragState.id);
-      const groupIndices = getItemGroup(todos, draggedIndex);
-      const group = groupIndices.map(i => todos[i]);
       const isDraggingSection = !!dragState.isSection;
+      const draggedItem = todos.find(t => t.id === dragState.id);
+      if (!draggedItem) {
+        cleanup(dragState);
+        return;
+      }
 
       const todoList = document.getElementById('todoList');
-      if (!todoList) return;
-
-      const allChildren = Array.from(todoList.children) as HTMLElement[];
-      const placeholderDomIndex = allChildren.indexOf(dragState.placeholder);
-
-      for (let i = groupIndices.length - 1; i >= 0; i--) {
-        todos.splice(groupIndices[i], 1);
+      if (!todoList) {
+        cleanup(dragState);
+        return;
       }
 
-      const draggedIds = group.map(t => t.id);
-      const itemsBeforePlaceholder = allChildren.slice(0, placeholderDomIndex)
-        .filter(el => el.dataset && el.dataset.id && !draggedIds.includes(el.dataset.id))
-        .map(el => el.dataset.id!);
+      if (isDraggingSection) {
+        // Section drag: only change the section's position among its siblings
+        const parentId = draggedItem.parentId || null;
+        const siblings = getSiblings(todos, parentId).filter(t => !t.archived && t.id !== dragState.id);
 
-      let insertAt = 0;
-      if (itemsBeforePlaceholder.length > 0) {
-        const lastBeforeId = itemsBeforePlaceholder[itemsBeforePlaceholder.length - 1];
-        const lastBeforeIndex = todos.findIndex(t => t.id === lastBeforeId);
+        // Find which sibling the placeholder is before in the DOM
+        const allChildren = Array.from(todoList.children) as HTMLElement[];
+        const placeholderIdx = allChildren.indexOf(dragState.placeholder);
+        let targetSiblingId: string | null = null;
 
-        if (isDraggingSection) {
-          const lastBeforeItem = todos[lastBeforeIndex];
-          if (lastBeforeItem && lastBeforeItem.type === 'section') {
-            const prevGroupIndices = getItemGroup(todos, lastBeforeIndex);
-            insertAt = prevGroupIndices[prevGroupIndices.length - 1] + 1;
-          } else if (lastBeforeItem) {
-            insertAt = lastBeforeIndex + 1;
+        // Look forward from placeholder to find the next sibling section
+        for (let i = placeholderIdx + 1; i < allChildren.length; i++) {
+          const el = allChildren[i];
+          const id = el.dataset?.id;
+          if (id && siblings.some(s => s.id === id)) {
+            targetSiblingId = id;
+            break;
+          }
+        }
+
+        let newPosition: string;
+        if (targetSiblingId) {
+          // Insert before this sibling
+          const targetIdx = siblings.findIndex(s => s.id === targetSiblingId);
+          const before = targetIdx > 0 ? siblings[targetIdx - 1].position : null;
+          const after = siblings[targetIdx].position;
+          newPosition = generatePositionBetween(before, after);
+        } else {
+          // Insert at end
+          const lastPos = siblings.length > 0 ? siblings[siblings.length - 1].position : null;
+          newPosition = generatePositionBetween(lastPos, null);
+        }
+
+        window.EventLog.emitFieldChanged(dragState.id, 'position', newPosition);
+      } else {
+        // Item drag: determine new parentId and position from drop target
+        const allChildren = Array.from(todoList.children) as HTMLElement[];
+        const placeholderIdx = allChildren.indexOf(dragState.placeholder);
+
+        // Find the item the placeholder is before
+        let targetId: string | null = null;
+        for (let i = placeholderIdx + 1; i < allChildren.length; i++) {
+          const el = allChildren[i];
+          if (el.dataset?.id && el.dataset.id !== dragState.id) {
+            targetId = el.dataset.id;
+            break;
+          }
+        }
+
+        // Find the item the placeholder is after
+        let prevId: string | null = null;
+        for (let i = placeholderIdx - 1; i >= 0; i--) {
+          const el = allChildren[i];
+          if (el.dataset?.id && el.dataset.id !== dragState.id) {
+            prevId = el.dataset.id;
+            break;
+          }
+        }
+
+        // Determine parentId: match the parent of the adjacent item
+        let newParentId: string | null = null;
+        if (targetId) {
+          const targetItem = todos.find(t => t.id === targetId);
+          if (targetItem) {
+            newParentId = targetItem.parentId || null;
+          }
+        } else if (prevId) {
+          const prevItem = todos.find(t => t.id === prevId);
+          if (prevItem) {
+            newParentId = prevItem.parentId || null;
+          }
+        }
+
+        // Calculate position among new siblings
+        const newSiblings = getSiblings(todos, newParentId).filter(t => t.id !== dragState.id);
+        let newPosition: string;
+
+        if (targetId) {
+          const targetIdx = newSiblings.findIndex(t => t.id === targetId);
+          if (targetIdx >= 0) {
+            const before = targetIdx > 0 ? newSiblings[targetIdx - 1].position : null;
+            const after = newSiblings[targetIdx].position;
+            newPosition = generatePositionBetween(before, after);
+          } else {
+            const lastPos = newSiblings.length > 0 ? newSiblings[newSiblings.length - 1].position : null;
+            newPosition = generatePositionBetween(lastPos, null);
           }
         } else {
-          insertAt = lastBeforeIndex + 1;
+          const lastPos = newSiblings.length > 0 ? newSiblings[newSiblings.length - 1].position : null;
+          newPosition = generatePositionBetween(lastPos, null);
         }
+
+        const events: Array<{ itemId: string; field: string; value: unknown }> = [
+          { itemId: dragState.id, field: 'position', value: newPosition },
+        ];
+        if ((draggedItem.parentId || null) !== newParentId) {
+          events.push({ itemId: dragState.id, field: 'parentId', value: newParentId });
+        }
+        window.EventLog.emitFieldsChanged(events);
       }
 
-      const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
-      const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
-      let lastPos = before;
-      const positionChanges: Array<{ itemId: string; field: string; value: string }> = [];
-      group.forEach((item, i) => {
-        const nextPos = i === group.length - 1 ? after : null;
-        const newPos = generatePositionBetween(lastPos, nextPos || after);
-        positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
-        item.position = newPos;
-        lastPos = newPos;
-      });
-
-      window.EventLog.emitFieldsChanged(positionChanges);
-
       // Clean up
+      cleanup(dragState);
+      notifyStateChange();
+    };
+
+    function cleanup(dragState: DragState) {
       if (dragState.isSection) {
         dragState.placeholder.remove();
         dragState.originalElements?.forEach(el => { el.style.display = ''; });
@@ -219,8 +286,7 @@ export function useDragAndDrop() {
         dragState.placeholder.classList.remove('placeholder');
       }
       dragStateRef.current = null;
-      notifyStateChange();
-    };
+    }
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
