@@ -62,15 +62,29 @@ function midpointPosition(before, after) {
     return before.slice(0, diffIndex) + BASE_CHARS[midIdx];
   }
 
+  // Adjacent characters (diff === 1) at diffIndex.
+  // prefix is before's string up to and including the differing char.
+  // Any string starting with prefix is guaranteed < after, so we just
+  // need a suffix that makes the result > before.
   const prefix = before.slice(0, diffIndex + 1);
+
   if (after.length > diffIndex + 1) {
     const restFirstChar = after[diffIndex + 1];
     const restIdx = BASE_CHARS.indexOf(restFirstChar);
     if (restIdx > 1) {
       const midRestIdx = Math.floor(restIdx / 2);
-      return prefix + BASE_CHARS[midRestIdx];
+      const candidate = prefix + BASE_CHARS[midRestIdx];
+      if (candidate > before) {
+        return candidate;
+      }
     }
   }
+
+  // before extends past the diff point — need suffix > before's remaining chars
+  if (before.length > diffIndex + 1) {
+    return prefix + incrementPosition(before.slice(diffIndex + 1));
+  }
+
   return prefix + MID_CHAR;
 }
 

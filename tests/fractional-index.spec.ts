@@ -184,6 +184,81 @@ test.describe('Fractional Indexing - Shared Module', () => {
     expect(result.inOrder).toBe(true);
   });
 
+  test('midpoint with adjacent chars and longer before produces valid position', async ({ page }) => {
+    // Regression test for #40: midpointPosition("sn", "t") was returning "sn" (== before)
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const cases = [
+        ['sn', 't'],      // was returning "sn" (== before)
+        ['snn', 't'],     // was returning "sn" (< before)
+        ['smnn', 'sn'],   // was returning "smn" (< before)
+        ['smnnn', 'sn'],  // was returning "smn" (< before)
+        ['tn', 'u'],      // was returning "tn" (== before)
+        ['rg', 'sn'],     // was returning "rg" (== before, via after-remaining path)
+        ['rb', 'sc'],     // was returning "rb" (== before, via after-remaining path)
+        ['yz', 'z'],
+        ['san', 'sb'],
+      ];
+      const results: { before: string; after: string; mid: string; valid: boolean }[] = [];
+      for (const [before, after] of cases) {
+        const mid = fi.generatePositionBetween(before, after);
+        results.push({ before, after, mid, valid: mid > before && mid < after });
+      }
+      return results;
+    });
+
+    for (const r of result) {
+      expect(r.valid, `midpoint("${r.before}", "${r.after}") = "${r.mid}" should be between them`).toBe(true);
+    }
+  });
+
+  test('consecutive insertions under a section never produce duplicate positions', async ({ page }) => {
+    // Regression test for #40: after ~6 insertions, positions would duplicate
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      // Simulate: section at "h", next section at "t", repeatedly press Enter
+      let lastPos = 'h';
+      const positions = ['h'];
+      for (let i = 0; i < 30; i++) {
+        const newPos = fi.generatePositionBetween(lastPos, 't');
+        if (newPos <= lastPos || newPos >= 't') {
+          return { ok: false, step: i, lastPos, newPos };
+        }
+        positions.push(newPos);
+        lastPos = newPos;
+      }
+      const unique = new Set(positions);
+      return { ok: true, count: positions.length, allUnique: unique.size === positions.length };
+    });
+
+    expect(result.ok).toBe(true);
+    if ('allUnique' in result) {
+      expect(result.allUnique).toBe(true);
+    }
+  });
+
+  test('alternating insertions produce unique sorted positions', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const fi = (window as any).FractionalIndex;
+      const positions = ['c', 'x'];
+      for (let i = 0; i < 50; i++) {
+        const idx = i % (positions.length - 1);
+        const mid = fi.generatePositionBetween(positions[idx], positions[idx + 1]);
+        if (mid <= positions[idx] || mid >= positions[idx + 1]) {
+          return { ok: false, step: i, before: positions[idx], after: positions[idx + 1], mid };
+        }
+        positions.splice(idx + 1, 0, mid);
+      }
+      const unique = new Set(positions);
+      return { ok: true, count: positions.length, allUnique: unique.size === positions.length };
+    });
+
+    expect(result.ok).toBe(true);
+    if ('allUnique' in result) {
+      expect(result.allUnique).toBe(true);
+    }
+  });
+
   test('generateInitialPositions positions are lexicographically strictly increasing', async ({ page }) => {
     const result = await page.evaluate(() => {
       const fi = (window as any).FractionalIndex;
