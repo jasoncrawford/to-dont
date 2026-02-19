@@ -140,8 +140,10 @@ export function generateInitialPositions(count) {
   return positions;
 }
 
-// Window global for backward compat (tests use window.FractionalIndex)
-window.FractionalIndex = {
-  generatePositionBetween,
-  generateInitialPositions,
-};
+// Window global for backward compat (e2e tests use window.FractionalIndex)
+if (typeof window !== 'undefined') {
+  window.FractionalIndex = {
+    generatePositionBetween,
+    generateInitialPositions,
+  };
+}
