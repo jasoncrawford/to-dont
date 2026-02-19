@@ -2,6 +2,7 @@
 // Event-based sync: pushes local events to server, pulls remote events.
 
 import { getSupabaseClient, getAccessToken } from './supabase-client.ts';
+import { computeSyncStatus } from './sync-status.ts';
 
 // Configuration - reads from window.SYNC_* variables set by compat.ts
 function getConfig() {
@@ -22,6 +23,7 @@ let supabaseClient = null;
 let realtimeChannel = null;
 let isSyncing = false;
 let syncPending = false;
+let lastSyncOk = false;
 
 // Event cursor - persisted in localStorage
 const CURSOR_KEY = 'decay-event-cursor';
@@ -65,15 +67,19 @@ function notifyStatus() {
 }
 
 function getSyncStatus() {
-  if (!isSyncConfigured()) return { state: 'error', message: 'Sync not configured' };
-  if (!navigator.onLine) return { state: 'offline' };
-  if (retryCount > 0 && !isSyncing) {
-    const delay = Math.min(BASE_RETRY_MS * Math.pow(2, retryCount - 1), MAX_RETRY_MS);
-    return { state: 'error', retryCount, maxRetries: MAX_RETRIES, nextRetryMs: delay };
-  }
-  if (syncEnabled && !realtimeConnected) return { state: 'reconnecting' };
-  if (isSyncing || syncPending) return { state: 'syncing' };
-  return { state: 'synced' };
+  return computeSyncStatus({
+    isConfigured: isSyncConfigured(),
+    isOnline: navigator.onLine,
+    syncEnabled,
+    realtimeConnected,
+    isSyncing,
+    syncPending,
+    retryCount,
+    lastSyncOk,
+    maxRetries: MAX_RETRIES,
+    baseRetryMs: BASE_RETRY_MS,
+    maxRetryMs: MAX_RETRY_MS,
+  });
 }
 
 // Check if sync is properly configured (no longer requires bearer token)
@@ -245,6 +251,7 @@ async function syncCycle() {
     await pullEvents();
 
     retryCount = 0;
+    lastSyncOk = true;
     clearRetryTimer();
 
     if (window.EventLog) {
@@ -255,6 +262,7 @@ async function syncCycle() {
     }
   } catch (err) {
     console.error('[Sync] Sync failed:', err);
+    lastSyncOk = false;
     scheduleRetry();
   } finally {
     isSyncing = false;
@@ -423,6 +431,7 @@ async function enableSync() {
 function disableSync() {
   syncEnabled = false;
   realtimeConnected = false;
+  lastSyncOk = false;
   clearRetryTimer();
   retryCount = 0;
   unsubscribeFromRealtime();
@@ -490,6 +499,8 @@ if (isTestMode) {
     setIsSyncing: (val) => { isSyncing = val; },
     setRetryCount: (val) => { retryCount = val; },
     setRealtimeConnected: (val) => { realtimeConnected = val; },
+    setLastSyncOk: (val) => { lastSyncOk = val; },
+    lastSyncOk: () => lastSyncOk,
     notifyStatus: notifyStatus,
     triggerEventSync: () => syncCycle(),
     handleOnline: handleOnline,
