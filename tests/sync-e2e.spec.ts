@@ -993,12 +993,21 @@ test.describe('E2E Sync Diagnostic', () => {
     // Add item under Section A
     await page.waitForTimeout(100);
     await page.keyboard.type('Item A1');
-    await page.keyboard.press('Enter');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForTimeout(100);
 
-    // Create Section B (by clearing the new empty item and pressing Enter)
-    await page.keyboard.press('Enter'); // Creates empty item, which becomes section
-    await page.waitForSelector('.section-header:nth-child(3)'); // Second section
+    // Create Section B at root level (via input box, then convert)
+    input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp2');
+    await input.press('Enter');
+    await page.waitForTimeout(100);
+    todoText = page.locator('.todo-item .text').last();
+    await todoText.click();
+    await todoText.press(`${CMD}+a`);
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
     sectionText = page.locator('.section-header .text').last();
     await sectionText.click();
     await sectionText.pressSequentially('Section B');
@@ -1092,12 +1101,21 @@ test.describe('E2E Sync Diagnostic', () => {
     await sectionText.press('Enter');
     await page.waitForTimeout(100);
     await page.keyboard.type('Item under A');
-    await page.keyboard.press('Enter');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForTimeout(100);
 
-    // Create Section B by clearing the new empty todo
-    await page.keyboard.press('Enter'); // Creates empty item which becomes section
-    await page.waitForTimeout(200);
+    // Create Section B at root level (via input box, then convert)
+    input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp2');
+    await input.press('Enter');
+    await page.waitForTimeout(100);
+    todoText = page.locator('.todo-item .text').last();
+    await todoText.click();
+    await todoText.press(`${CMD}+a`);
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
     sectionText = page.locator('.section-header .text').last();
     await sectionText.click();
     await sectionText.pressSequentially('Section B');
@@ -1287,12 +1305,21 @@ test.describe('E2E Sync Diagnostic', () => {
     await page.keyboard.press('Enter');
     await page.waitForTimeout(100);
     await page.keyboard.type('Item under A');
-    await page.keyboard.press('Enter');
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForTimeout(100);
 
-    // Section B (empty item becomes section)
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(200);
+    // Section B at root level (via input box, then convert)
+    input = page.locator('.new-item .text');
+    await input.click();
+    await input.pressSequentially('temp2');
+    await input.press('Enter');
+    await page.waitForTimeout(100);
+    todoText = page.locator('.todo-item .text').last();
+    await todoText.click();
+    await todoText.press(`${CMD}+a`);
+    await todoText.press('Backspace');
+    await page.waitForTimeout(50);
+    await todoText.press('Enter');
     sectionText = page.locator('.section-header .text').last();
     await sectionText.click();
     await sectionText.pressSequentially('Section B');
