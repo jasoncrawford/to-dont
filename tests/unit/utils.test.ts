@@ -1,27 +1,18 @@
 import { describe, test, expect } from 'vitest';
-import * as utils from '../../src/utils';
-
-const {
+import {
   getDaysSince,
   getFadeOpacity,
   getImportanceLevel,
   formatDayHeader,
   getDayKey,
-  getItemGroup,
+  getSiblings,
+  getDescendantIds,
   splitOnArrow,
   FADE_DURATION_DAYS,
   IMPORTANT_ESCALATION_DAYS,
-} = utils;
+} from '../../src/utils';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
-
-test('diagnostic: utils module exports', () => {
-  const keys = Object.keys(utils).sort();
-  console.log('utils exports:', keys);
-  console.log('getItemGroup type:', typeof utils.getItemGroup);
-  console.log('splitOnArrow type:', typeof utils.splitOnArrow);
-  expect(typeof utils.getItemGroup).toBe('function');
-});
 
 describe('getDaysSince', () => {
   test('returns 0 for same timestamp', () => {
@@ -202,87 +193,83 @@ describe('splitOnArrow', () => {
   });
 });
 
-describe('getItemGroup', () => {
-  const makeTodo = (text: string, overrides: any = {}) => ({
-    id: text,
-    text,
-    createdAt: Date.now(),
-    important: false,
-    completed: false,
-    archived: false,
-    position: 'n',
-    ...overrides,
-  });
+describe('getSiblings', () => {
+  const makeTodo = (id: string, parentId: string | null = null, position = 'n') => ({
+    id, text: id, createdAt: Date.now(), important: false, completed: false,
+    archived: false, position, parentId,
+  } as any);
 
-  const makeSection = (text: string, level: number = 2, overrides: any = {}) => ({
-    ...makeTodo(text),
-    type: 'section' as const,
-    level,
-    ...overrides,
-  });
-
-  test('non-section returns just itself', () => {
-    const todos = [makeTodo('A'), makeTodo('B')];
-    expect(getItemGroup(todos, 0)).toEqual([0]);
-    expect(getItemGroup(todos, 1)).toEqual([1]);
-  });
-
-  test('returns empty for invalid index', () => {
-    expect(getItemGroup([], 0)).toEqual([]);
-    expect(getItemGroup([makeTodo('A')], 5)).toEqual([]);
-  });
-
-  test('level-2 section includes following todos until next section', () => {
+  test('returns items with matching parentId sorted by position', () => {
     const todos = [
-      makeSection('Section A'),
-      makeTodo('Item 1'),
-      makeTodo('Item 2'),
-      makeSection('Section B'),
-      makeTodo('Item 3'),
+      makeTodo('c', 'sec', 'z'),
+      makeTodo('a', 'sec', 'a'),
+      makeTodo('b', 'sec', 'n'),
+      makeTodo('other', null, 'n'),
     ];
-    expect(getItemGroup(todos, 0)).toEqual([0, 1, 2]);
+    const siblings = getSiblings(todos, 'sec');
+    expect(siblings.map(s => s.id)).toEqual(['a', 'b', 'c']);
   });
 
-  test('level-1 section includes following level-2 sections and todos', () => {
+  test('returns root items when parentId is null', () => {
     const todos = [
-      makeSection('H1', 1),
-      makeTodo('Item 1'),
-      makeSection('H2', 2),
-      makeTodo('Item 2'),
-      makeSection('Another H1', 1),
+      makeTodo('root1', null, 'a'),
+      makeTodo('child', 'sec', 'n'),
+      makeTodo('root2', null, 'z'),
     ];
-    expect(getItemGroup(todos, 0)).toEqual([0, 1, 2, 3]);
+    const siblings = getSiblings(todos, null);
+    expect(siblings.map(s => s.id)).toEqual(['root1', 'root2']);
   });
 
-  test('level-1 section stops at next level-1 section', () => {
-    const todos = [
-      makeSection('H1-A', 1),
-      makeTodo('Item 1'),
-      makeSection('H1-B', 1),
-      makeTodo('Item 2'),
-    ];
-    expect(getItemGroup(todos, 0)).toEqual([0, 1]);
+  test('returns empty array when no siblings match', () => {
+    const todos = [makeTodo('a', 'sec1', 'n')];
+    expect(getSiblings(todos, 'sec2')).toEqual([]);
   });
 
-  test('section at end of list includes everything after', () => {
+  test('sorts by id as tiebreaker for equal positions', () => {
     const todos = [
-      makeTodo('Before'),
-      makeSection('Last Section'),
-      makeTodo('Item 1'),
-      makeTodo('Item 2'),
+      makeTodo('b', null, 'n'),
+      makeTodo('a', null, 'n'),
     ];
-    expect(getItemGroup(todos, 1)).toEqual([1, 2, 3]);
+    const siblings = getSiblings(todos, null);
+    expect(siblings.map(s => s.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('getDescendantIds', () => {
+  const makeTodo = (id: string, parentId: string | null = null) => ({
+    id, text: id, createdAt: Date.now(), important: false, completed: false,
+    archived: false, position: 'n', parentId,
+  } as any);
+
+  const makeSection = (id: string, parentId: string | null = null) => ({
+    ...makeTodo(id, parentId), type: 'section' as const,
   });
 
-  test('skips archived items in group', () => {
+  test('returns direct children', () => {
     const todos = [
-      makeSection('Section'),
-      makeTodo('Active'),
-      makeTodo('Archived', { archived: true }),
-      makeTodo('Also Active'),
-      makeSection('Next'),
+      makeSection('sec'),
+      makeTodo('child1', 'sec'),
+      makeTodo('child2', 'sec'),
+      makeTodo('other', null),
     ];
-    // archived items are skipped (continue), not included but don't break the loop
-    expect(getItemGroup(todos, 0)).toEqual([0, 1, 3]);
+    expect(getDescendantIds(todos, 'sec')).toEqual(['child1', 'child2']);
+  });
+
+  test('returns nested descendants recursively', () => {
+    const todos = [
+      makeSection('l1'),
+      makeSection('l2', 'l1'),
+      makeTodo('deep', 'l2'),
+      makeTodo('direct', 'l1'),
+    ];
+    const ids = getDescendantIds(todos, 'l1');
+    expect(ids).toContain('l2');
+    expect(ids).toContain('deep');
+    expect(ids).toContain('direct');
+  });
+
+  test('returns empty array for no children', () => {
+    const todos = [makeTodo('a', null)];
+    expect(getDescendantIds(todos, 'nonexistent')).toEqual([]);
   });
 });

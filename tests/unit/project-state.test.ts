@@ -27,6 +27,7 @@ describe('projectState', () => {
     expect(items[0].completed).toBe(false);
     expect(items[0].important).toBe(false);
     expect(items[0].archived).toBe(false);
+    expect(items[0].parentId).toBeNull();
   });
 
   test('item_created with full state (compacted snapshot)', () => {
@@ -42,6 +43,7 @@ describe('projectState', () => {
         type: 'section',
         level: 1,
         indented: true,
+        parentId: 'parent1',
       }, 1000),
     ]);
     expect(items).toHaveLength(1);
@@ -54,6 +56,8 @@ describe('projectState', () => {
     expect(items[0].type).toBe('section');
     expect(items[0].level).toBe(1);
     expect(items[0].indented).toBe(true);
+    // parentId points to non-existent item, gets reparented to null (orphan detection)
+    expect(items[0].parentId).toBeNull();
   });
 
   test('field_changed updates text', () => {
@@ -77,6 +81,7 @@ describe('projectState', () => {
       makeEvent('field_changed', 'a', 'level', 2, 2005),
       makeEvent('field_changed', 'a', 'indented', true, 2006),
       makeEvent('field_changed', 'a', 'archived', true, 2007),
+      makeEvent('field_changed', 'a', 'parentId', null, 2008),
     ]);
     expect(items[0].text).toBe('New text');
     expect(items[0].important).toBe(true);
@@ -88,6 +93,7 @@ describe('projectState', () => {
     expect(items[0].indented).toBe(true);
     expect(items[0].archived).toBe(true);
     expect(items[0].archivedAt).toBe(2007);
+    expect(items[0].parentId).toBeNull();
   });
 
   test('LWW resolution: later timestamp wins', () => {
@@ -126,7 +132,7 @@ describe('projectState', () => {
     expect(items).toEqual([]);
   });
 
-  test('items sorted by position', () => {
+  test('root items sorted by position', () => {
     const items = projectState([
       makeEvent('item_created', 'z-id', null, { text: 'First', position: 'a' }, 1000),
       makeEvent('item_created', 'a-id', null, { text: 'Last', position: 'z' }, 1001),
@@ -218,6 +224,7 @@ describe('projectState', () => {
     expect(items[0].indented).toBe(false);
     expect(items[0].level).toBeNull();
     expect(items[0].createdAt).toBe(1000);
+    expect(items[0].parentId).toBeNull();
   });
 
   test('defaults for item_created with null value', () => {
@@ -226,5 +233,56 @@ describe('projectState', () => {
     ]);
     expect(items[0].text).toBe('');
     expect(items[0].position).toBe('n');
+    expect(items[0].parentId).toBeNull();
+  });
+
+  // parentId and tree structure tests
+  test('parentId field change is applied', () => {
+    const items = projectState([
+      makeEvent('item_created', 'sec', null, { text: 'Section', type: 'section', position: 'a' }, 1000),
+      makeEvent('item_created', 'child', null, { text: 'Child', position: 'n' }, 1001),
+      makeEvent('field_changed', 'child', 'parentId', 'sec', 2000),
+    ]);
+    expect(items.find((i: any) => i.id === 'child').parentId).toBe('sec');
+  });
+
+  test('DFS traversal: children appear after parent', () => {
+    const items = projectState([
+      makeEvent('item_created', 'sec', null, { text: 'Section', type: 'section', position: 'a' }, 1000),
+      makeEvent('item_created', 'child1', null, { text: 'Child 1', position: 'a', parentId: 'sec' }, 1001),
+      makeEvent('item_created', 'child2', null, { text: 'Child 2', position: 'b', parentId: 'sec' }, 1002),
+      makeEvent('item_created', 'root2', null, { text: 'Root 2', position: 'z' }, 1003),
+    ]);
+    const ids = items.map((i: any) => i.id);
+    expect(ids).toEqual(['sec', 'child1', 'child2', 'root2']);
+  });
+
+  test('nested DFS traversal', () => {
+    const items = projectState([
+      makeEvent('item_created', 'l1', null, { text: 'L1', type: 'section', position: 'a' }, 1000),
+      makeEvent('item_created', 'l2', null, { text: 'L2', type: 'section', position: 'a', parentId: 'l1' }, 1001),
+      makeEvent('item_created', 'deep', null, { text: 'Deep', position: 'a', parentId: 'l2' }, 1002),
+      makeEvent('item_created', 'sibling', null, { text: 'Sibling', position: 'b', parentId: 'l1' }, 1003),
+    ]);
+    const ids = items.map((i: any) => i.id);
+    expect(ids).toEqual(['l1', 'l2', 'deep', 'sibling']);
+  });
+
+  test('orphan detection: reparent to root if parent deleted', () => {
+    const items = projectState([
+      makeEvent('item_created', 'sec', null, { text: 'Section', type: 'section', position: 'a' }, 1000),
+      makeEvent('item_created', 'child', null, { text: 'Child', position: 'n', parentId: 'sec' }, 1001),
+      makeEvent('item_deleted', 'sec', null, null, 2000),
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('child');
+    expect(items[0].parentId).toBeNull(); // orphan reparented to root
+  });
+
+  test('orphan detection: reparent if parentId points to nonexistent item', () => {
+    const items = projectState([
+      makeEvent('item_created', 'a', null, { text: 'Orphan', position: 'n', parentId: 'nonexistent' }, 1000),
+    ]);
+    expect(items[0].parentId).toBeNull();
   });
 });
