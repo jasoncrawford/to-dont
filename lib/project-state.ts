@@ -36,6 +36,8 @@ export function projectState(events: ProjectEvent[]): any[] {
         levelUpdatedAt: val.levelUpdatedAt || event.timestamp,
         indentedUpdatedAt: val.indentedUpdatedAt || event.timestamp,
         archivedUpdatedAt: val.archivedUpdatedAt || event.timestamp,
+        parentId: val.parentId !== undefined ? val.parentId : null,
+        parentIdUpdatedAt: val.parentIdUpdatedAt || event.timestamp,
       });
     } else if (event.type === 'field_changed') {
       const item = items.get(event.itemId);
@@ -90,13 +92,51 @@ export function projectState(events: ProjectEvent[]): any[] {
           }
           item.archivedUpdatedAt = event.timestamp;
           break;
+        case 'parentId':
+          item.parentId = event.value;
+          item.parentIdUpdatedAt = event.timestamp;
+          break;
       }
     } else if (event.type === 'item_deleted') {
       items.delete(event.itemId);
     }
   }
 
-  const result = Array.from(items.values());
-  result.sort((a: any, b: any) => (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id));
+  // Orphan detection: if an item's parentId points to a non-existent item, reparent to root
+  for (const item of items.values()) {
+    if (item.parentId && !items.has(item.parentId)) {
+      item.parentId = null;
+    }
+  }
+
+  // Group items by parentId
+  const childrenByParent = new Map<string | null, any[]>();
+  for (const item of items.values()) {
+    const pid = item.parentId || null;
+    if (!childrenByParent.has(pid)) {
+      childrenByParent.set(pid, []);
+    }
+    childrenByParent.get(pid)!.push(item);
+  }
+
+  // Sort each group by position (with id tiebreaker)
+  const sortFn = (a: any, b: any) =>
+    (a.position || 'n').localeCompare(b.position || 'n') || a.id.localeCompare(b.id);
+  for (const group of childrenByParent.values()) {
+    group.sort(sortFn);
+  }
+
+  // DFS traversal to flatten into ordered array
+  const result: any[] = [];
+  function visit(parentId: string | null) {
+    const children = childrenByParent.get(parentId);
+    if (!children) return;
+    for (const item of children) {
+      result.push(item);
+      visit(item.id);
+    }
+  }
+  visit(null);
+
   return result;
 }
