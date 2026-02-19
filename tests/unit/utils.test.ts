@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest';
-import {
+import * as utils from '../../src/utils';
+
+const {
   getDaysSince,
   getFadeOpacity,
   getImportanceLevel,
@@ -9,9 +11,17 @@ import {
   splitOnArrow,
   FADE_DURATION_DAYS,
   IMPORTANT_ESCALATION_DAYS,
-} from '../../src/utils';
+} = utils;
 
 const DAY_MS = 1000 * 60 * 60 * 24;
+
+test('diagnostic: utils module exports', () => {
+  const keys = Object.keys(utils).sort();
+  console.log('utils exports:', keys);
+  console.log('getItemGroup type:', typeof utils.getItemGroup);
+  console.log('splitOnArrow type:', typeof utils.splitOnArrow);
+  expect(typeof utils.getItemGroup).toBe('function');
+});
 
 describe('getDaysSince', () => {
   test('returns 0 for same timestamp', () => {
