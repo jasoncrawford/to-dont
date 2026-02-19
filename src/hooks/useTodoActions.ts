@@ -1,14 +1,37 @@
 import { useCallback, useRef } from 'react';
 import { loadTodos, notifyStateChange } from '../store';
 import {
-  createNewItem, getItemPosition, generatePositionBetween,
-  getItemGroup, splitOnArrow,
+  generateId, generatePositionBetween, getSiblings, splitOnArrow,
 } from '../utils';
 import { sanitizeHTML, textLengthOfHTML } from '../lib/sanitize';
 import type { TodoItem, ViewMode } from '../types';
 import type { PendingFocus } from './useFocusManager';
 
 const SAVE_DEBOUNCE_MS = 300;
+
+// Calculate position after a sibling item within the same parent
+function positionAfterSibling(todos: TodoItem[], siblingId: string): { parentId: string | null; position: string } {
+  const sibling = todos.find(t => t.id === siblingId);
+  if (!sibling) return { parentId: null, position: 'n' };
+
+  const parentId = sibling.parentId || null;
+  const siblings = getSiblings(todos, parentId);
+  const idx = siblings.findIndex(t => t.id === siblingId);
+  const after = idx < siblings.length - 1 ? siblings[idx + 1].position : null;
+  return { parentId, position: generatePositionBetween(sibling.position, after) };
+}
+
+// Calculate position before a sibling item within the same parent
+function positionBeforeSibling(todos: TodoItem[], siblingId: string): { parentId: string | null; position: string } {
+  const sibling = todos.find(t => t.id === siblingId);
+  if (!sibling) return { parentId: null, position: 'n' };
+
+  const parentId = sibling.parentId || null;
+  const siblings = getSiblings(todos, parentId);
+  const idx = siblings.findIndex(t => t.id === siblingId);
+  const before = idx > 0 ? siblings[idx - 1].position : null;
+  return { parentId, position: generatePositionBetween(before, sibling.position) };
+}
 
 export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | null>, viewMode: ViewMode = 'active') {
   const saveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -36,19 +59,47 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   const addTodo = useCallback((text: string) => {
     if (!text.trim()) return;
     const todos = loadTodos();
-    const newTodo = createNewItem(sanitizeHTML(text), todos.length, todos);
+
+    // Add at end of root-level siblings
+    const rootSiblings = getSiblings(todos, null);
+    const lastPos = rootSiblings.length > 0 ? rootSiblings[rootSiblings.length - 1].position : null;
+    const position = generatePositionBetween(lastPos, null);
+
+    const newId = generateId();
     const value: Record<string, unknown> = {
-      text: newTodo.text, position: newTodo.position,
+      text: sanitizeHTML(text).trim(), position, parentId: null,
     };
     if (viewMode === 'important') {
       value.important = true;
     }
-    window.EventLog.emitItemCreated(newTodo.id, value);
-    pendingFocusRef.current = { itemId: newTodo.id, atEnd: true };
+    window.EventLog.emitItemCreated(newId, value);
+    pendingFocusRef.current = { itemId: newId, atEnd: true };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
+    const todos = loadTodos();
+    const item = todos.find(t => t.id === id);
+
+    // If deleting a section, reparent its children to the section's parent
+    if (item?.type === 'section') {
+      const children = todos.filter(t => (t.parentId || null) === id);
+      const grandparentId = item.parentId || null;
+      if (children.length > 0) {
+        // Append children at end of new parent's siblings
+        const newSiblings = getSiblings(todos, grandparentId).filter(t => t.id !== id);
+        let lastPos = newSiblings.length > 0 ? newSiblings[newSiblings.length - 1].position : null;
+        const reparentEvents: Array<{ itemId: string; field: string; value: unknown }> = [];
+        for (const child of children) {
+          const newPos = generatePositionBetween(lastPos, null);
+          reparentEvents.push({ itemId: child.id, field: 'parentId', value: grandparentId });
+          reparentEvents.push({ itemId: child.id, field: 'position', value: newPos });
+          lastPos = newPos;
+        }
+        window.EventLog.emitFieldsChanged(reparentEvents);
+      }
+    }
+
     window.EventLog.emitItemDeleted(id);
     notifyStateChange();
   }, []);
@@ -70,11 +121,13 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
       const split = splitOnArrow(plainDiv.textContent || '');
       if (split) {
         batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
-        const todoIndex = todos.indexOf(todo);
-        const newTodo = createNewItem(split.after, todoIndex + 1, todos);
+
+        // New item is a sibling after the completed item
+        const { parentId, position } = positionAfterSibling(todos, id);
+        const newId = generateId();
         batch.push({
-          type: 'item_created', itemId: newTodo.id, value: {
-            text: newTodo.text, position: newTodo.position,
+          type: 'item_created', itemId: newId, value: {
+            text: split.after, position, parentId,
             indented: todo.indented || false,
           },
         });
@@ -103,64 +156,75 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
   const insertTodoAfter = useCallback((afterId: string) => {
     const todos = loadTodos();
-    const index = todos.findIndex(t => t.id === afterId);
-    if (index === -1) return;
+    const afterItem = todos.find(t => t.id === afterId);
+    if (!afterItem) return;
 
-    const newTodo = createNewItem('', index + 1, todos);
-    const value: Record<string, unknown> = {
-      text: '', position: newTodo.position,
-    };
+    let parentId: string | null;
+    let position: string;
+
+    if (afterItem.type === 'section') {
+      // Enter on section header → new item is first child of section
+      parentId = afterItem.id;
+      const children = getSiblings(todos, parentId);
+      const after = children.length > 0 ? children[0].position : null;
+      position = generatePositionBetween(null, after);
+    } else {
+      // Enter at end of item → new sibling after current
+      ({ parentId, position } = positionAfterSibling(todos, afterId));
+    }
+
+    const newId = generateId();
+    const value: Record<string, unknown> = { text: '', position, parentId };
     if (viewMode === 'important') {
       value.important = true;
     }
-    window.EventLog.emitItemCreated(newTodo.id, value);
-    pendingFocusRef.current = { itemId: newTodo.id, cursorPos: 0 };
+    window.EventLog.emitItemCreated(newId, value);
+    pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
   const insertTodoBefore = useCallback((beforeId: string) => {
     const todos = loadTodos();
-    const index = todos.findIndex(t => t.id === beforeId);
-    if (index === -1) return;
+    const beforeItem = todos.find(t => t.id === beforeId);
+    if (!beforeItem) return;
 
-    const newTodo = createNewItem('', index, todos);
-    const value: Record<string, unknown> = {
-      text: '', position: newTodo.position,
-    };
+    const { parentId, position } = positionBeforeSibling(todos, beforeId);
+    const newId = generateId();
+    const value: Record<string, unknown> = { text: '', position, parentId };
     if (viewMode === 'important') {
       value.important = true;
     }
-    window.EventLog.emitItemCreated(newTodo.id, value);
+    window.EventLog.emitItemCreated(newId, value);
     pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
   const splitTodoAt = useCallback((id: string, textBefore: string, textAfter: string) => {
     const todos = loadTodos();
-    const index = todos.findIndex(t => t.id === id);
-    if (index === -1) return;
+    const item = todos.find(t => t.id === id);
+    if (!item) return;
 
-    const newTodo = createNewItem(textAfter, index + 1, todos);
-    const newItemValue: Record<string, unknown> = { text: newTodo.text, position: newTodo.position };
+    // New item is a sibling after the current item
+    const { parentId, position } = positionAfterSibling(todos, id);
+    const newId = generateId();
+    const newItemValue: Record<string, unknown> = { text: textAfter.trim(), position, parentId };
     if (viewMode === 'important') {
       newItemValue.important = true;
     }
     window.EventLog.emitBatch([
       { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-      { type: 'item_created', itemId: newTodo.id, value: newItemValue },
+      { type: 'item_created', itemId: newId, value: newItemValue },
     ]);
-    pendingFocusRef.current = { itemId: newTodo.id, cursorPos: 0 };
+    pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
   const mergeWithPrevious = useCallback((currentId: string, prevId: string) => {
     const todos = loadTodos();
-    const currentIndex = todos.findIndex(t => t.id === currentId);
-    const prevIndex = todos.findIndex(t => t.id === prevId);
-    if (currentIndex === -1 || prevIndex === -1) return;
+    const currentTodo = todos.find(t => t.id === currentId);
+    const prevTodo = todos.find(t => t.id === prevId);
+    if (!currentTodo || !prevTodo) return;
 
-    const currentTodo = todos[currentIndex];
-    const prevTodo = todos[prevIndex];
     const cursorPos = textLengthOfHTML(prevTodo.text);
     const mergedText = sanitizeHTML(prevTodo.text + currentTodo.text);
 
@@ -173,6 +237,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   }, [pendingFocusRef]);
 
   const convertToSection = useCallback((id: string) => {
+    // Item becomes section. parentId stays the same. Section starts empty.
     window.EventLog.emitBatch([
       { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
       { type: 'field_changed', itemId: id, field: 'level', value: 2 },
@@ -195,121 +260,89 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   const setSectionLevel = useCallback((id: string, level: number) => {
     const todos = loadTodos();
     const section = todos.find(t => t.id === id);
-    if (section && section.type === 'section') {
-      window.EventLog.emitFieldChanged(id, 'level', level);
-      pendingFocusRef.current = { itemId: id };
-      notifyStateChange();
+    if (!section || section.type !== 'section') return;
+
+    const events: Array<{ itemId: string; field: string; value: unknown }> = [
+      { itemId: id, field: 'level', value: level },
+    ];
+
+    if (level === 2 && !(section.parentId)) {
+      // Tab: L1 → L2. Find preceding L1 section among root siblings
+      const rootSiblings = getSiblings(todos, null).filter(t => !t.archived);
+      const idx = rootSiblings.findIndex(t => t.id === id);
+      let precedingL1Id: string | null = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (rootSiblings[i].type === 'section' && (rootSiblings[i].level || 2) === 1) {
+          precedingL1Id = rootSiblings[i].id;
+          break;
+        }
+      }
+      if (precedingL1Id) {
+        // Move to be child of preceding L1 section
+        const newParentChildren = getSiblings(todos, precedingL1Id);
+        const lastChildPos = newParentChildren.length > 0
+          ? newParentChildren[newParentChildren.length - 1].position : null;
+        events.push({ itemId: id, field: 'parentId', value: precedingL1Id });
+        events.push({ itemId: id, field: 'position', value: generatePositionBetween(lastChildPos, null) });
+      }
+    } else if (level === 1 && section.parentId) {
+      // Shift-Tab: L2 → L1. Move to root, positioned after old parent
+      const parentSection = todos.find(t => t.id === section.parentId);
+      if (parentSection) {
+        const rootSiblings = getSiblings(todos, null);
+        const parentIdx = rootSiblings.findIndex(t => t.id === parentSection.id);
+        const afterParent = parentIdx < rootSiblings.length - 1
+          ? rootSiblings[parentIdx + 1].position : null;
+        events.push({ itemId: id, field: 'parentId', value: null });
+        events.push({ itemId: id, field: 'position', value: generatePositionBetween(parentSection.position, afterParent) });
+      } else {
+        events.push({ itemId: id, field: 'parentId', value: null });
+      }
     }
+
+    window.EventLog.emitFieldsChanged(events);
+    pendingFocusRef.current = { itemId: id };
+    notifyStateChange();
   }, [pendingFocusRef]);
 
   const moveItemUp = useCallback((id: string) => {
     const todos = loadTodos();
-    const active = todos.filter(t => !t.archived);
-    const activeIndex = active.findIndex(t => t.id === id);
-    if (activeIndex <= 0) return;
+    const item = todos.find(t => t.id === id);
+    if (!item) return;
 
-    const actualIndex = todos.findIndex(t => t.id === id);
-    const currentItem = todos[actualIndex];
-    const groupIndices = getItemGroup(todos, actualIndex);
+    // Move among siblings (same parentId), skipping archived
+    const parentId = item.parentId || null;
+    const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
+    const idx = siblings.findIndex(t => t.id === id);
+    if (idx <= 0) return;
 
-    let insertAt: number;
-    if (currentItem.type === 'section') {
-      let prevSectionIndex = -1;
-      for (let i = actualIndex - 1; i >= 0; i--) {
-        if (todos[i].type === 'section' && !todos[i].archived) {
-          prevSectionIndex = i;
-          break;
-        }
-      }
-      if (prevSectionIndex === -1) {
-        insertAt = 0;
-      } else {
-        const prevGroupIndices = getItemGroup(todos, prevSectionIndex);
-        insertAt = prevGroupIndices[0];
-      }
-    } else {
-      const prevActiveId = active[activeIndex - 1].id;
-      const prevActualIndex = todos.findIndex(t => t.id === prevActiveId);
-      const prevGroupIndices = getItemGroup(todos, prevActualIndex);
-      insertAt = prevGroupIndices[0];
-    }
+    // Position before the previous sibling
+    const prevSibling = siblings[idx - 1];
+    const beforePrev = idx > 1 ? siblings[idx - 2].position : null;
+    const newPosition = generatePositionBetween(beforePrev, prevSibling.position);
 
-    const group = groupIndices.map(i => todos[i]);
-    for (let i = groupIndices.length - 1; i >= 0; i--) {
-      todos.splice(groupIndices[i], 1);
-    }
-
-    const before = insertAt > 0 ? getItemPosition(todos, insertAt - 1) : null;
-    const after = insertAt < todos.length ? getItemPosition(todos, insertAt) : null;
-    let lastPos = before;
-    const positionChanges: Array<{ itemId: string; field: string; value: string }> = [];
-    group.forEach((item, i) => {
-      const nextPos = i === group.length - 1 ? after : null;
-      const newPos = generatePositionBetween(lastPos, nextPos || after);
-      positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
-      lastPos = newPos;
-    });
-
-    window.EventLog.emitFieldsChanged(positionChanges);
+    window.EventLog.emitFieldChanged(id, 'position', newPosition);
     pendingFocusRef.current = { itemId: id };
     notifyStateChange();
   }, [pendingFocusRef]);
 
   const moveItemDown = useCallback((id: string) => {
     const todos = loadTodos();
-    const active = todos.filter(t => !t.archived);
-    const activeIndex = active.findIndex(t => t.id === id);
-    if (activeIndex === -1 || activeIndex >= active.length - 1) return;
+    const item = todos.find(t => t.id === id);
+    if (!item) return;
 
-    const actualIndex = todos.findIndex(t => t.id === id);
-    const currentItem = todos[actualIndex];
-    const groupIndices = getItemGroup(todos, actualIndex);
-    const groupSize = groupIndices.length;
+    // Move among siblings (same parentId), skipping archived
+    const parentId = item.parentId || null;
+    const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
+    const idx = siblings.findIndex(t => t.id === id);
+    if (idx === -1 || idx >= siblings.length - 1) return;
 
-    let insertAt: number;
-    if (currentItem.type === 'section') {
-      let nextSectionIndex = -1;
-      for (let i = groupIndices[groupIndices.length - 1] + 1; i < todos.length; i++) {
-        if (todos[i].type === 'section' && !todos[i].archived) {
-          nextSectionIndex = i;
-          break;
-        }
-      }
-      if (nextSectionIndex === -1) {
-        insertAt = todos.length;
-      } else {
-        const nextGroupIndices = getItemGroup(todos, nextSectionIndex);
-        insertAt = nextGroupIndices[nextGroupIndices.length - 1] + 1;
-      }
-    } else {
-      let nextIndex = activeIndex + 1;
-      while (nextIndex < active.length && groupIndices.includes(todos.findIndex(t => t.id === active[nextIndex].id))) {
-        nextIndex++;
-      }
-      if (nextIndex >= active.length) return;
-      const nextActiveId = active[nextIndex].id;
-      const nextActualIndex = todos.findIndex(t => t.id === nextActiveId);
-      insertAt = nextActualIndex + 1;
-    }
+    // Position after the next sibling
+    const nextSibling = siblings[idx + 1];
+    const afterNext = idx < siblings.length - 2 ? siblings[idx + 2].position : null;
+    const newPosition = generatePositionBetween(nextSibling.position, afterNext);
 
-    const group = groupIndices.map(i => todos[i]);
-    for (let i = groupIndices.length - 1; i >= 0; i--) {
-      todos.splice(groupIndices[i], 1);
-    }
-    const adjustedInsert = insertAt - groupSize;
-
-    const before = adjustedInsert > 0 ? getItemPosition(todos, adjustedInsert - 1) : null;
-    const after = adjustedInsert < todos.length ? getItemPosition(todos, adjustedInsert) : null;
-    let lastPos = before;
-    const positionChanges: Array<{ itemId: string; field: string; value: string }> = [];
-    group.forEach((item, i) => {
-      const nextPos = i === group.length - 1 ? after : null;
-      const newPos = generatePositionBetween(lastPos, nextPos || after);
-      positionChanges.push({ itemId: item.id, field: 'position', value: newPos });
-      lastPos = newPos;
-    });
-
-    window.EventLog.emitFieldsChanged(positionChanges);
+    window.EventLog.emitFieldChanged(id, 'position', newPosition);
     pendingFocusRef.current = { itemId: id };
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -340,19 +373,29 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
   const reorderTodo = useCallback((draggedId: string, targetId: string) => {
     const todos = loadTodos();
-    const draggedIndex = todos.findIndex(t => t.id === draggedId);
-    const targetIndex = todos.findIndex(t => t.id === targetId);
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    const dragged = todos.find(t => t.id === draggedId);
+    const target = todos.find(t => t.id === targetId);
+    if (!dragged || !target) return;
 
-    const todosClone = [...todos];
-    todosClone.splice(draggedIndex, 1);
-    const newTargetIndex = todosClone.findIndex(t => t.id === targetId);
+    // Determine new parentId: same as target's parent (insert as sibling before target)
+    const newParentId = target.parentId || null;
+    const siblings = getSiblings(todos, newParentId).filter(t => t.id !== draggedId);
+    const targetIdx = siblings.findIndex(t => t.id === targetId);
 
-    const before = newTargetIndex > 0 ? getItemPosition(todosClone, newTargetIndex - 1) : null;
-    const after = getItemPosition(todosClone, newTargetIndex);
+    const before = targetIdx > 0 ? siblings[targetIdx - 1].position : null;
+    const after = target.position;
     const newPos = generatePositionBetween(before, after);
 
-    window.EventLog.emitFieldChanged(draggedId, 'position', newPos);
+    const events: Array<{ itemId: string; field: string; value: unknown }> = [
+      { itemId: draggedId, field: 'position', value: newPos },
+    ];
+
+    // Update parentId if moving across sections
+    if ((dragged.parentId || null) !== newParentId) {
+      events.push({ itemId: draggedId, field: 'parentId', value: newParentId });
+    }
+
+    window.EventLog.emitFieldsChanged(events);
     notifyStateChange();
   }, []);
 

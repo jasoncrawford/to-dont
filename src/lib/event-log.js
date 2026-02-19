@@ -217,6 +217,8 @@ function compactEvents() {
       levelUpdatedAt: item.levelUpdatedAt,
       indentedUpdatedAt: item.indentedUpdatedAt,
       archivedUpdatedAt: item.archivedUpdatedAt,
+      parentId: item.parentId || null,
+      parentIdUpdatedAt: item.parentIdUpdatedAt,
     },
     timestamp: item.createdAt,
     clientId: clientId,
@@ -297,6 +299,62 @@ function migrateFromState() {
 }
 
 // ============================================
+// Parent ID Migration
+// ============================================
+
+function migrateToParentIds() {
+  const events = loadEvents();
+  if (events.length === 0) return false;
+
+  const state = projectState(events);
+  if (state.length === 0) return false;
+
+  // Check if migration is needed: sections exist but no items have parentId
+  const hasSections = state.some(item => item.type === 'section');
+  if (!hasSections) return false;
+
+  const hasParentIds = state.some(item => item.parentId != null);
+  if (hasParentIds) return false;
+
+  // Walk items in position order (flat, since all parentId are null).
+  // Track current L1 and L2 sections, assign parentId to each item.
+  let currentL1 = null;
+  let currentL2 = null;
+  const changes = [];
+
+  for (const item of state) {
+    if (item.type === 'section') {
+      const level = item.level || 2;
+      if (level === 1) {
+        currentL1 = item.id;
+        currentL2 = null;
+        // L1 section is top-level, parentId stays null
+      } else {
+        // L2 section belongs under current L1 section
+        currentL2 = item.id;
+        if (currentL1) {
+          changes.push({ itemId: item.id, field: 'parentId', value: currentL1 });
+        }
+      }
+    } else {
+      // Regular item belongs under the most specific enclosing section
+      const parentId = currentL2 || currentL1 || null;
+      if (parentId) {
+        changes.push({ itemId: item.id, field: 'parentId', value: parentId });
+      }
+    }
+  }
+
+  if (changes.length === 0) return false;
+
+  const newEvents = changes.map(c => createEvent('field_changed', c.itemId, c.field, c.value));
+  appendEvents(newEvents);
+
+  console.log('[EventLog] Migrated', changes.length, 'items to parentId tree structure');
+  return true;
+}
+
+// ============================================
 // Initialization
 // ============================================
 
@@ -322,6 +380,9 @@ if (!migrated) {
     materializeState(state);
   }
 }
+
+// Migrate to parentId tree structure if needed
+migrateToParentIds();
 
 // ============================================
 // Public API
