@@ -9,7 +9,7 @@ interface SectionItemProps {
   viewMode: ViewMode;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onDragStart: (e: React.MouseEvent, sectionId: string, div: HTMLElement) => void;
+  onDragStart: (e: React.MouseEvent | React.TouchEvent, sectionId: string, div: HTMLElement) => void;
 }
 
 export function SectionItemComponent({ section, viewMode, actions, onKeyDown, onDragStart }: SectionItemProps) {
@@ -82,7 +82,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     onKeyDown(e, div, textEl, section.id);
   }, [section.id, actions, onKeyDown]);
 
-  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const div = divRef.current;
     if (div) onDragStart(e, section.id, div);
   }, [section.id, onDragStart]);
@@ -97,7 +97,8 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
       <div
         className="drag-handle"
         style={viewMode === 'done' ? { display: 'none' } : undefined}
-        onMouseDown={handleDragMouseDown}
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
       >
         ⋮⋮
       </div>

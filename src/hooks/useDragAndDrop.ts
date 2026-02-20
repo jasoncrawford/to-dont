@@ -11,13 +11,16 @@ interface DragState {
   fixedX: number;
   offsetY: number;
   isSection?: boolean;
+  isTouch?: boolean;
 }
 
 export function useDragAndDrop() {
   const dragStateRef = useRef<DragState | null>(null);
 
-  const startItemDrag = useCallback((e: React.MouseEvent, itemId: string, div: HTMLElement) => {
+  const startItemDrag = useCallback((e: React.MouseEvent | React.TouchEvent, itemId: string, div: HTMLElement) => {
     e.preventDefault();
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const isTouch = 'touches' in e;
     const rect = div.getBoundingClientRect();
 
     const clone = div.cloneNode(true) as HTMLElement;
@@ -34,12 +37,15 @@ export function useDragAndDrop() {
       placeholder: div,
       clone: clone,
       fixedX: rect.left,
-      offsetY: e.clientY - rect.top,
+      offsetY: clientY - rect.top,
+      isTouch,
     };
   }, []);
 
-  const startSectionDrag = useCallback((e: React.MouseEvent, sectionId: string, div: HTMLElement) => {
+  const startSectionDrag = useCallback((e: React.MouseEvent | React.TouchEvent, sectionId: string, div: HTMLElement) => {
     e.preventDefault();
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const isTouch = 'touches' in e;
     const rect = div.getBoundingClientRect();
 
     const todos = loadTodos();
@@ -88,18 +94,19 @@ export function useDragAndDrop() {
       originalElements: groupElements,
       clone: cloneContainer,
       fixedX: rect.left,
-      offsetY: e.clientY - rect.top,
+      offsetY: clientY - rect.top,
       isSection: true,
+      isTouch,
     };
   }, []);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleDragMove = (clientY: number) => {
       const dragState = dragStateRef.current;
       if (!dragState) return;
 
       dragState.clone.style.left = dragState.fixedX + 'px';
-      dragState.clone.style.top = (e.clientY - dragState.offsetY) + 'px';
+      dragState.clone.style.top = (clientY - dragState.offsetY) + 'px';
 
       const todoList = document.getElementById('todoList');
       if (!todoList) return;
@@ -116,7 +123,6 @@ export function useDragAndDrop() {
         let midY: number;
 
         if (isDraggingSection && item.classList.contains('section-header')) {
-          // For section headers, calculate midpoint including descendants
           const itemId = (item as HTMLElement).dataset.id;
           const todos = loadTodos();
           if (itemId) {
@@ -136,7 +142,7 @@ export function useDragAndDrop() {
           midY = rect.top + rect.height / 2;
         }
 
-        if (e.clientY < midY) {
+        if (clientY < midY) {
           if (isDraggingSection && !item.classList.contains('section-header')) {
             continue;
           }
@@ -152,7 +158,18 @@ export function useDragAndDrop() {
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStateRef.current || dragStateRef.current.isTouch) return;
+      handleDragMove(e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragStateRef.current || !dragStateRef.current.isTouch) return;
+      e.preventDefault(); // Prevent scrolling while dragging
+      handleDragMove(e.touches[0].clientY);
+    };
+
+    const handleDragEnd = () => {
       const dragState = dragStateRef.current;
       if (!dragState) return;
 
@@ -289,10 +306,16 @@ export function useDragAndDrop() {
     }
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseup', handleDragEnd);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleDragEnd);
+    document.addEventListener('touchcancel', handleDragEnd);
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseup', handleDragEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleDragEnd);
+      document.removeEventListener('touchcancel', handleDragEnd);
     };
   }, []);
 
