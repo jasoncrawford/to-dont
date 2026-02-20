@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSyncStatus, type SyncState } from '../store';
 
 const SYNCING_DELAY_MS = 3000;
@@ -86,11 +86,35 @@ export function SyncStatus() {
     }
   }
 
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleClick = useCallback(() => {
+    if (detail) setTooltipVisible(v => !v);
+  }, [detail]);
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    if (!tooltipVisible) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setTooltipVisible(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [tooltipVisible]);
+
+  // Hide tooltip when state changes away from error
+  useEffect(() => {
+    if (displayState !== 'error') setTooltipVisible(false);
+  }, [displayState]);
+
   return (
-    <div className="sync-status">
+    <div ref={containerRef} className="sync-status" onClick={handleClick}>
       <span className="sync-dot" style={{ backgroundColor: dotColor }} />
       <span className={`sync-label${labelFaded ? ' faded' : ''}`}>{label}</span>
-      {detail && <span className="sync-tooltip">{detail}</span>}
+      {detail && <span className={`sync-tooltip${tooltipVisible ? ' visible' : ''}`}>{detail}</span>}
     </div>
   );
 }
