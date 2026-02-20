@@ -715,10 +715,21 @@ body {
     opacity: 1;
   }
 
-  /* Always show drag handles */
+  /* Show drag handles inline instead of absolute-positioned */
   .todo-item .drag-handle,
   .section-header .drag-handle {
     opacity: 1;
+    position: static;
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+
+  .todo-item .drag-handle {
+    margin-top: 4px;
+  }
+
+  .section-header .drag-handle {
+    margin-top: 2px;
   }
 
   /* Larger tap targets for checkboxes */
@@ -739,7 +750,6 @@ body {
   .drag-handle {
     width: 24px;
     font-size: 14px;
-    left: -28px;
   }
 
   /* Larger account icon tap target */
@@ -752,7 +762,7 @@ body {
     opacity: 0;
   }
 
-  .sync-tooltip.visible {
+  .sync-status .sync-tooltip.visible {
     opacity: 1;
     pointer-events: auto;
   }
