@@ -19,6 +19,15 @@ export function useFocusManager() {
     pendingFocusRef.current = null;
 
     const el = document.querySelector(`[data-id="${pending.itemId}"] .text`) as HTMLElement | null;
+    const beforeFocus = document.activeElement;
+    console.log('[FocusManager]', {
+      itemId: pending.itemId,
+      found: !!el,
+      elTag: el?.tagName,
+      elClass: el?.className,
+      beforeFocus: beforeFocus?.tagName + '.' + beforeFocus?.className,
+      allDataIds: Array.from(document.querySelectorAll('[data-id]')).map(e => e.getAttribute('data-id')),
+    });
     if (!el) return;
 
     el.focus();
@@ -27,6 +36,7 @@ export function useFocusManager() {
     } else if (pending.cursorPos !== undefined) {
       setCursorPosition(el, pending.cursorPos);
     }
+    console.log('[FocusManager] after focus:', { activeElement: document.activeElement?.tagName + '.' + document.activeElement?.className, isTarget: document.activeElement === el });
   });
 
   return { pendingFocusRef };
