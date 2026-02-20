@@ -7,6 +7,7 @@ async function setSyncState(page: any, opts: {
   syncing?: boolean;
   retryCount?: number;
   realtimeConnected?: boolean;
+  lastSyncOk?: boolean;
 }) {
   await page.evaluate((o: any) => {
     const t = (window as any).ToDoSync._test;
@@ -14,172 +15,21 @@ async function setSyncState(page: any, opts: {
     if (o.syncing !== undefined) t.setIsSyncing(o.syncing);
     if (o.retryCount !== undefined) t.setRetryCount(o.retryCount);
     if (o.realtimeConnected !== undefined) t.setRealtimeConnected(o.realtimeConnected);
+    if (o.lastSyncOk !== undefined) t.setLastSyncOk(o.lastSyncOk);
     t.notifyStatus();
   }, opts);
 }
 
-// Helper: read the getStatus() result
-async function getStatus(page: any) {
-  return page.evaluate(() => (window as any).ToDoSync.getStatus());
+// Helper to configure sync globals for UI tests
+async function configureSyncGlobals(page: any) {
+  await page.evaluate(() => {
+    (window as any).SYNC_SUPABASE_URL = 'http://test';
+    (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
+    (window as any).SYNC_API_URL = 'http://test';
+  });
 }
 
-test.describe('Sync Status - State Machine', () => {
-  test('returns error when sync is not configured', async ({ page }) => {
-    await setupPage(page);
-    const status = await getStatus(page);
-    expect(status.state).toBe('error');
-    expect(status.message).toBe('Sync not configured');
-  });
-
-  test('returns synced when enabled with realtime connected', async ({ page }) => {
-    await setupPage(page);
-    // Simulate configured sync by setting window globals
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    await setSyncState(page, { enabled: true, realtimeConnected: true });
-    const status = await getStatus(page);
-    expect(status.state).toBe('synced');
-  });
-
-  test('returns syncing when isSyncing is true', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    await setSyncState(page, { enabled: true, syncing: true, realtimeConnected: true });
-    const status = await getStatus(page);
-    expect(status.state).toBe('syncing');
-  });
-
-  test('returns error when retryCount > 0', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    await setSyncState(page, { enabled: true, retryCount: 2, realtimeConnected: true });
-    const status = await getStatus(page);
-    expect(status.state).toBe('error');
-    expect(status.retryCount).toBe(2);
-    expect(status.maxRetries).toBe(5);
-  });
-
-  test('returns reconnecting when enabled but realtime not connected', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    await setSyncState(page, { enabled: true, realtimeConnected: false });
-    const status = await getStatus(page);
-    expect(status.state).toBe('reconnecting');
-  });
-
-  test('returns offline when navigator is offline', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    // Simulate going offline
-    await page.context().setOffline(true);
-    await setSyncState(page, { enabled: true, realtimeConnected: true });
-    const status = await getStatus(page);
-    expect(status.state).toBe('offline');
-    await page.context().setOffline(false);
-  });
-
-  test('error takes priority over reconnecting', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    // Both retryCount > 0 and realtime disconnected
-    await setSyncState(page, { enabled: true, retryCount: 1, realtimeConnected: false });
-    const status = await getStatus(page);
-    expect(status.state).toBe('error');
-  });
-
-  test('offline takes priority over error', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    await page.context().setOffline(true);
-    await setSyncState(page, { enabled: true, retryCount: 3, realtimeConnected: false });
-    const status = await getStatus(page);
-    expect(status.state).toBe('offline');
-    await page.context().setOffline(false);
-  });
-
-  test('error persists through new mutations until sync succeeds', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    // Put into error state
-    await setSyncState(page, { enabled: true, retryCount: 3, realtimeConnected: true });
-    let status = await getStatus(page);
-    expect(status.state).toBe('error');
-
-    // Simulate a new mutation triggering queueServerSync — retryCount should NOT reset
-    await page.evaluate(() => {
-      (window as any).ToDoSync.onEventsAppended([]);
-    });
-    status = await getStatus(page);
-    expect(status.state).toBe('error');
-    expect(status.retryCount).toBe(3);
-  });
-
-  test('error clears to syncing when sync cycle starts', async ({ page }) => {
-    await setupPage(page);
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-    // Error with retryCount > 0, then isSyncing = true
-    await setSyncState(page, { enabled: true, retryCount: 3, syncing: true, realtimeConnected: true });
-    const status = await getStatus(page);
-    // isSyncing causes error check to be skipped, falls through to syncing
-    expect(status.state).toBe('syncing');
-  });
-});
-
 test.describe('Sync Status - UI Indicator', () => {
-  // Helper to configure sync globals for UI tests
-  async function configureSyncGlobals(page: any) {
-    await page.evaluate(() => {
-      (window as any).SYNC_SUPABASE_URL = 'http://test';
-      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
-
-      (window as any).SYNC_API_URL = 'http://test';
-    });
-  }
-
   test('shows red error indicator when sync is not configured', async ({ page }) => {
     await setupPage(page);
     // Sync not configured (no SYNC_* globals set) → should show red error

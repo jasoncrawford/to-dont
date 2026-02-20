@@ -518,6 +518,68 @@ test.describe('Sync Layer', () => {
     expect(afterDisable.hasRetryTimer).toBe(false);
   });
 
+  test('successful sync cycle clears reconnecting status (sleep/wake scenario)', async ({ page }) => {
+    await setupPage(page);
+
+    // Configure sync globals so isSyncConfigured() returns true
+    await page.evaluate(() => {
+      (window as any).SYNC_SUPABASE_URL = 'http://test';
+      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
+      (window as any).SYNC_API_URL = 'http://test';
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.ToDoSync._test!.setRealtimeConnected(false);
+      // Mock successful HTTP sync
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ events: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    // Before sync: should show reconnecting
+    const beforeStatus = await page.evaluate(() => (window as any).ToDoSync.getStatus());
+    expect(beforeStatus.state).toBe('reconnecting');
+
+    // Run sync cycle (succeeds via HTTP despite websocket being down)
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+
+    // After successful sync: should show synced even with realtime disconnected
+    const afterStatus = await page.evaluate(() => (window as any).ToDoSync.getStatus());
+    expect(afterStatus.state).toBe('synced');
+  });
+
+  test('failed sync cycle keeps reconnecting status', async ({ page }) => {
+    await setupPage(page);
+
+    await page.evaluate(() => {
+      (window as any).SYNC_SUPABASE_URL = 'http://test';
+      (window as any).SYNC_SUPABASE_ANON_KEY = 'test';
+      (window as any).SYNC_API_URL = 'http://test';
+      window.ToDoSync._test!.setAccessTokenOverride('test-token');
+      window.ToDoSync._test!.setSyncEnabled(true);
+      window.ToDoSync._test!.setRealtimeConnected(false);
+      // Mock failed HTTP sync
+      window.fetch = function() {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'fail' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      };
+    });
+
+    // Run sync cycle (fails)
+    await page.evaluate(() => window.ToDoSync._test!.triggerEventSync());
+
+    // After failed sync: should show error (retryCount > 0 takes priority)
+    const afterStatus = await page.evaluate(() => (window as any).ToDoSync.getStatus());
+    expect(afterStatus.state).toBe('error');
+
+    // Clean up retry timer
+    await page.evaluate(() => window.ToDoSync._test!.clearRetryTimer());
+  });
+
   test('queueServerSync clears pending retry', async ({ page }) => {
     await setupPage(page);
 
@@ -570,6 +632,8 @@ declare global {
       _test?: {
         setSyncEnabled: (val: boolean) => void;
         setAccessTokenOverride: (token: string | null) => void;
+        setLastSyncOk: (val: boolean) => void;
+        lastSyncOk: () => boolean;
         triggerEventSync: () => Promise<void>;
         handleOnline: () => void;
         isSyncing: () => boolean;

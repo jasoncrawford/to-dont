@@ -1,5 +1,6 @@
 import { useSyncExternalStore, useEffect, useState } from 'react';
 import type { TodoItem, ViewMode } from './types';
+import type { SyncState, SyncStatus } from './lib/sync-status';
 import { getSupabaseClient } from './lib/supabase-client';
 
 // In-memory cache for parsed todos
@@ -81,15 +82,7 @@ export function useViewMode(): ViewMode {
 }
 
 // Sync status store
-export type SyncState = 'synced' | 'syncing' | 'error' | 'reconnecting' | 'offline';
-
-export interface SyncStatus {
-  state: SyncState;
-  retryCount?: number;
-  maxRetries?: number;
-  nextRetryMs?: number;
-  message?: string;
-}
+export type { SyncState, SyncStatus } from './lib/sync-status';
 
 let _syncStatus: SyncStatus = { state: 'error' };
 let _syncListeners: Set<() => void> = new Set();

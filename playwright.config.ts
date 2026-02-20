@@ -33,7 +33,7 @@ export default defineConfig({
         browserName: 'chromium',
         baseURL: `http://localhost:${VITE_PORT}`,
       },
-      testIgnore: /sync-e2e/,
+      testIgnore: [/sync-e2e/, /unit\//],
     },
     {
       name: 'sync-e2e-api',
