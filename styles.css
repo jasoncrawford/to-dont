@@ -673,3 +673,40 @@ body {
   border-radius: 4px;
   color: var(--text-primary);
 }
+
+/* Responsive: narrow screens */
+@media (max-width: 480px) {
+  body {
+    padding: 16px 16px;
+  }
+
+  .view-tab {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .drag-handle {
+    display: none;
+  }
+
+  .link-editor {
+    left: 8px !important;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+  }
+
+  .link-editor input {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .login-container {
+    padding-top: 40px;
+  }
+
+  .login-form {
+    width: auto;
+    max-width: 280px;
+    min-width: 0;
+  }
+}
