@@ -11,8 +11,8 @@ interface TodoListProps {
   now: number;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onItemDragStart: (e: React.MouseEvent, itemId: string, div: HTMLElement) => void;
-  onSectionDragStart: (e: React.MouseEvent, sectionId: string, div: HTMLElement) => void;
+  onItemDragStart: (e: React.MouseEvent | React.TouchEvent, itemId: string, div: HTMLElement) => void;
+  onSectionDragStart: (e: React.MouseEvent | React.TouchEvent, sectionId: string, div: HTMLElement) => void;
 }
 
 export function TodoList({

@@ -685,10 +685,6 @@ body {
     font-size: 13px;
   }
 
-  .drag-handle {
-    display: none;
-  }
-
   .link-editor {
     left: 8px !important;
     right: 8px;
@@ -708,5 +704,66 @@ body {
     width: auto;
     max-width: 280px;
     min-width: 0;
+  }
+}
+
+/* Touch devices: always show hover-dependent controls */
+@media (hover: none) {
+  /* Always show action buttons */
+  .todo-item .actions,
+  .section-header .actions {
+    opacity: 1;
+  }
+
+  /* Show drag handles inline instead of absolute-positioned */
+  .todo-item .drag-handle,
+  .section-header .drag-handle {
+    opacity: 1;
+    position: static;
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+
+  .todo-item .drag-handle {
+    margin-top: 4px;
+  }
+
+  .section-header .drag-handle {
+    margin-top: 2px;
+  }
+
+  /* Larger tap targets for checkboxes */
+  .todo-item .checkbox {
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+  }
+
+  /* Larger tap targets for action buttons */
+  .todo-item .actions button,
+  .section-header .actions button {
+    padding: 6px 10px;
+    font-size: 16px;
+  }
+
+  /* Larger drag handle tap target */
+  .drag-handle {
+    width: 24px;
+    font-size: 14px;
+  }
+
+  /* Larger account icon tap target */
+  .account-icon-btn {
+    padding: 8px;
+  }
+
+  /* Sync tooltip: tap to toggle (controlled via JS) */
+  .sync-status:hover .sync-tooltip {
+    opacity: 0;
+  }
+
+  .sync-status .sync-tooltip.visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
