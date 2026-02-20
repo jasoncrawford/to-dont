@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useLayoutEffect } from 'react';
 import { setCursorPosition } from '../utils';
 
 export interface PendingFocus {
@@ -10,7 +10,10 @@ export interface PendingFocus {
 export function useFocusManager() {
   const pendingFocusRef = useRef<PendingFocus | null>(null);
 
-  useEffect(() => {
+  // useLayoutEffect ensures focus is set synchronously during the commit phase,
+  // after child useLayoutEffects (which set innerHTML) but before browser paint.
+  // This prevents a gap where the element is rendered but not focused.
+  useLayoutEffect(() => {
     const pending = pendingFocusRef.current;
     if (!pending) return;
     pendingFocusRef.current = null;

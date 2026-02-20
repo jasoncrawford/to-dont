@@ -12,6 +12,7 @@ export function NewItemInput({ visible, onAdd }: NewItemInputProps) {
     if (e.key === 'Enter') {
       e.preventDefault();
       const text = inputRef.current?.textContent || '';
+      console.log('[NewItemInput Enter]', { text: text.slice(0, 30), visible: inputRef.current ? getComputedStyle(inputRef.current.closest('.new-item')!).display : 'n/a' });
       if (text.trim()) {
         onAdd(text);
         if (inputRef.current) {
