@@ -33,6 +33,10 @@ export async function addTodo(page: Page, text: string) {
     await input.click();
     await input.pressSequentially(text);
     await input.press('Enter');
+    // Delete the trailing empty item so tests see clean state
+    // The empty item is focused, so Backspace at position 0 merges it away
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.todo-item')).toHaveCount(1, { timeout: 2000 });
   } else {
     // Check if there's already an empty, focused todo we can type into
     // (e.g. left over from NewItemInput or a previous Enter)
@@ -122,19 +126,22 @@ export async function createSection(page: Page, title: string = '') {
   // First add a placeholder todo
   await addTodo(page, 'x');
 
-  // Get the todo we just added (it's the last one)
-  const todoText = page.locator('.todo-item .text').last();
-  await todoText.click();
+  // Click the 'x' item, clear its text, and convert to section
+  const xItem = page.locator('.todo-item .text:text-is("x")').last();
+  await xItem.click();
 
   // Select all and delete to clear the text
-  await todoText.press(`${CMD}+a`);
-  await todoText.press('Backspace');
+  await page.keyboard.press(`${CMD}+a`);
+  await page.keyboard.press('Backspace');
 
-  // Wait for the text to be cleared
-  await expect(todoText).toHaveText('', { timeout: 2000 });
+  // Wait for text to be empty (use the focused element since the text locator no longer matches)
+  await page.waitForFunction(
+    () => document.activeElement?.textContent === '',
+    { timeout: 2000 }
+  );
 
   // Press Enter to convert to section
-  await todoText.press('Enter');
+  await page.keyboard.press('Enter');
 
   // Wait for section to appear
   await page.waitForSelector('.section-header');

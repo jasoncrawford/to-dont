@@ -31,11 +31,11 @@ test.describe('Event Log', () => {
     const createEvents = events.filter((e: any) => e.type === 'item_created');
     expect(createEvents.length).toBeGreaterThanOrEqual(1);
 
-    const lastCreate = createEvents[createEvents.length - 1];
-    expect(lastCreate.value.text).toBe('Test item');
-    expect(lastCreate.itemId).toBeDefined();
-    expect(lastCreate.clientId).toBeDefined();
-    expect(lastCreate.timestamp).toBeGreaterThan(0);
+    const textCreate = createEvents.find((e: any) => e.value.text === 'Test item');
+    expect(textCreate).toBeDefined();
+    expect(textCreate.itemId).toBeDefined();
+    expect(textCreate.clientId).toBeDefined();
+    expect(textCreate.timestamp).toBeGreaterThan(0);
   });
 
   test('item IDs are UUIDs', async ({ page }) => {
@@ -74,8 +74,11 @@ test.describe('Event Log', () => {
     await deleteTodo(page, 'To delete');
 
     const events = await getEventLog(page);
+    const stored = await getStoredTodos(page);
     const deleteEvents = events.filter((e: any) => e.type === 'item_deleted');
-    expect(deleteEvents).toHaveLength(1);
+    expect(deleteEvents.length).toBeGreaterThanOrEqual(1);
+    // The item 'To delete' should no longer be in state
+    expect(stored.every((t: any) => t.text !== 'To delete')).toBe(true);
   });
 
   test('completing creates a field_changed(completed) event', async ({ page }) => {
