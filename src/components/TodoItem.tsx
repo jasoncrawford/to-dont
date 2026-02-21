@@ -234,14 +234,12 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
       if (!content.trim()) {
         e.preventDefault();
-        console.log('[Enter] empty content → convertToSection', todo.id);
         actions.convertToSection(todo.id);
         return;
       }
 
       e.preventDefault();
       const offset = getCursorOffset(textEl);
-      console.log('[Enter]', { id: todo.id, content: content.slice(0, 30), offset, len: content.length, focused: document.activeElement === textEl });
 
       if (offset === 0) {
         textEl.blur();
