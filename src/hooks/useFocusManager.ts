@@ -32,7 +32,10 @@ export function useFocusManager() {
     } else if (pending.cursorPos !== undefined) {
       setCursorPosition(el, pending.cursorPos);
     }
-    console.log('[FocusManager] after focus+cursor, active:', ae(), 'isTarget:', document.activeElement === el);
+    const sel = window.getSelection();
+    console.log('[FocusManager] after focus+cursor, active:', ae(), 'isTarget:', document.activeElement === el,
+      'sel:', { rangeCount: sel?.rangeCount, collapsed: sel?.isCollapsed, anchorInEl: sel?.anchorNode ? el.contains(sel.anchorNode) : false },
+      'contentEditable:', el.contentEditable, 'isConnected:', el.isConnected);
 
     // Track if anything steals focus
     const targetEl = el;
