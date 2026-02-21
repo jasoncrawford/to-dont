@@ -28,32 +28,43 @@ export async function addTodo(page: Page, text: string) {
 
   if (totalCount === 0) {
     // Use the new-item input when list is empty
+    // Enter creates the text item + an empty item below, with focus on the empty item
     const input = page.locator('.new-item .text');
     await input.click();
     await input.pressSequentially(text);
     await input.press('Enter');
   } else {
-    // Add after last item by pressing Enter at the end
-    // Get the last item (could be todo or section)
-    const lastItem = page.locator('.todo-item, .section-header').last();
-    const lastText = lastItem.locator('.text');
-    await lastText.click();
-    await lastText.press('End');
-    await lastText.press('Enter');
-
-    // Wait for the new todo to be created and focused
-    await page.waitForFunction(
-      (expected) => {
-        const count = document.querySelectorAll('.todo-item').length + document.querySelectorAll('.section-header').length;
-        const hasFocus = document.querySelector('.todo-item .text:focus') !== null;
-        return count >= expected && hasFocus;
-      },
-      totalCount + 1
-    );
-
-    // Find the focused element (should be the new empty todo)
+    // Check if there's already an empty, focused todo we can type into
+    // (e.g. left over from NewItemInput or a previous Enter)
     const focusedText = page.locator('.todo-item .text:focus');
-    await focusedText.pressSequentially(text);
+    const hasFocusedEmpty = await focusedText.count() > 0 &&
+      (await focusedText.textContent()) === '';
+
+    if (hasFocusedEmpty) {
+      // Type directly into the already-focused empty item
+      await focusedText.pressSequentially(text);
+    } else {
+      // Add after last item by pressing Enter at the end
+      const lastItem = page.locator('.todo-item, .section-header').last();
+      const lastText = lastItem.locator('.text');
+      await lastText.click();
+      await lastText.press('End');
+      await lastText.press('Enter');
+
+      // Wait for the new todo to be created and focused
+      await page.waitForFunction(
+        (expected) => {
+          const count = document.querySelectorAll('.todo-item').length + document.querySelectorAll('.section-header').length;
+          const hasFocus = document.querySelector('.todo-item .text:focus') !== null;
+          return count >= expected && hasFocus;
+        },
+        totalCount + 1
+      );
+
+      // Find the focused element (should be the new empty todo)
+      const newFocused = page.locator('.todo-item .text:focus');
+      await newFocused.pressSequentially(text);
+    }
 
     // Click elsewhere to blur and save the text
     await page.locator('body').click({ position: { x: 10, y: 10 } });

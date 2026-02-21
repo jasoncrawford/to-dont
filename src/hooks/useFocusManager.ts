@@ -17,13 +17,7 @@ export function useFocusManager() {
     if (!pending) return;
     pendingFocusRef.current = null;
 
-    const ae = () => {
-      const a = document.activeElement;
-      return a ? `${a.tagName}.${a.className}${a.id ? '#' + a.id : ''}` : 'null';
-    };
-
     const el = document.querySelector(`[data-id="${pending.itemId}"] .text`) as HTMLElement | null;
-    console.log('[FocusManager] pending:', pending.itemId, 'found:', !!el, 'active before:', ae());
     if (!el) return;
 
     el.focus();
@@ -32,21 +26,6 @@ export function useFocusManager() {
     } else if (pending.cursorPos !== undefined) {
       setCursorPosition(el, pending.cursorPos);
     }
-    const sel = window.getSelection();
-    console.log('[FocusManager] after focus+cursor, active:', ae(), 'isTarget:', document.activeElement === el,
-      'sel:', { rangeCount: sel?.rangeCount, collapsed: sel?.isCollapsed, anchorInEl: sel?.anchorNode ? el.contains(sel.anchorNode) : false },
-      'contentEditable:', el.contentEditable, 'isConnected:', el.isConnected);
-
-    // Track if anything steals focus
-    const targetEl = el;
-    setTimeout(() => {
-      const stillFocused = document.activeElement === targetEl;
-      console.log('[FocusManager] 50ms later, stillFocused:', stillFocused, 'active:', ae());
-    }, 50);
-    setTimeout(() => {
-      const stillFocused = document.activeElement === targetEl;
-      console.log('[FocusManager] 200ms later, stillFocused:', stillFocused, 'active:', ae());
-    }, 200);
   });
 
   return { pendingFocusRef };

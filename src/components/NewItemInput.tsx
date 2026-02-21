@@ -13,28 +13,20 @@ export function NewItemInput({ visible, onAdd }: NewItemInputProps) {
     if (e.key === 'Enter') {
       e.preventDefault();
       const text = inputRef.current?.textContent || '';
-      const ae = () => {
-        const a = document.activeElement;
-        return a ? `${a.tagName}.${a.className}${a.id ? '#' + a.id : ''}` : 'null';
-      };
-      console.log('[NewItemInput Enter] text:', JSON.stringify(text), 'active:', ae());
       if (text.trim()) {
-        console.log('[NewItemInput] before blur, active:', ae());
+        // Blur first to release focus from this (soon-to-be-hidden) input
         inputRef.current?.blur();
-        console.log('[NewItemInput] after blur, active:', ae());
-        console.log('[NewItemInput] calling flushSync...');
+        // flushSync forces the render + useLayoutEffect (which sets focus on
+        // the new TodoItem) to complete synchronously within this handler.
+        // Without this, React 18 batches the update and focus is set after
+        // the handler returns, creating a window where the browser's layout
+        // engine can interfere with focus on the hidden element.
         flushSync(() => {
-          console.log('[NewItemInput] inside flushSync, calling onAdd');
           onAdd(text);
-          console.log('[NewItemInput] onAdd returned, active:', ae());
         });
-        console.log('[NewItemInput] flushSync returned, active:', ae());
-        console.log('[NewItemInput] todoItems:', document.querySelectorAll('.todo-item').length);
-        console.log('[NewItemInput] newItem display:', getComputedStyle(document.querySelector('.new-item')!).display);
         if (inputRef.current) {
           inputRef.current.textContent = '';
         }
-        console.log('[NewItemInput] handler done, active:', ae());
       }
     }
   }, [onAdd]);
