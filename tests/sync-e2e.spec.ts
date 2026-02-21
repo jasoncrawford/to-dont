@@ -712,25 +712,17 @@ test.describe('E2E Sync Diagnostic', () => {
     await browser1SyncReady;
     console.log('Browser1 sync enabled');
 
-    // Add Item 1
-    await browser1.waitForSelector('.new-item', { state: 'visible' });
-    await browser1.locator('.new-item .text').click();
-    await browser1.keyboard.type('Item 1');
-    await browser1.keyboard.press('Enter');
-    await browser1.waitForSelector('.todo-item .text:text-is("Item 1")');
-
-    // Add Item 2
-    await browser1.locator('.todo-item .text:text-is("Item 1")').click();
-    await browser1.keyboard.press('End');
-    await browser1.keyboard.press('Enter');
-    await browser1.waitForTimeout(100);
-    await browser1.keyboard.type('Item 2');
-
-    // Add Item 3
-    await browser1.keyboard.press('Enter');
-    await browser1.waitForTimeout(100);
-    await browser1.keyboard.type('Item 3');
-    await browser1.locator('body').click({ position: { x: 10, y: 10 } });
+    // Add 3 items programmatically to avoid trailing empty items from NewItemInput
+    await browser1.evaluate(() => {
+      const FI = window.FractionalIndex;
+      const pos1 = FI.midpointPosition('', '');
+      const pos2 = FI.midpointPosition(pos1, '');
+      const pos3 = FI.midpointPosition(pos2, '');
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item 1', position: pos1 });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item 2', position: pos2 });
+      window.EventLog.emitItemCreated(crypto.randomUUID(), { text: 'Item 3', position: pos3 });
+      window.render();
+    });
     await browser1.waitForSelector('.todo-item .text:text-is("Item 3")');
     console.log('Browser1 added all 3 items');
 
@@ -1137,13 +1129,18 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.click();
     await input.pressSequentially('temp');
     await input.press('Enter');
+    // Delete trailing empty item from NewItemInput
+    await browser1.keyboard.press('Backspace');
     await browser1.waitForSelector('.todo-item');
     const todoText = browser1.locator('.todo-item .text').first();
     await todoText.click();
     await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
-    await expect(todoText).toHaveText('', { timeout: 2000 });
-    await todoText.press('Enter');
+    await browser1.waitForFunction(
+      () => document.activeElement?.textContent === '',
+      { timeout: 2000 }
+    );
+    await browser1.keyboard.press('Enter');
     const sectionText = browser1.locator('.section-header .text').first();
     await sectionText.click();
     await sectionText.pressSequentially('Shared Section');
