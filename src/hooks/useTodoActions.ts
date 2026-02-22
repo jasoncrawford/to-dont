@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { loadTodos, notifyStateChange } from '../store';
 import {
   generateId, generatePositionBetween, getSiblings, splitOnArrow,
+  buildConvertToSectionEvents, rebuildParentIds,
 } from '../utils';
 import { sanitizeHTML, textLengthOfHTML } from '../lib/sanitize';
 import type { TodoItem, ViewMode } from '../types';
@@ -31,6 +32,13 @@ function positionBeforeSibling(todos: TodoItem[], siblingId: string): { parentId
   const idx = siblings.findIndex(t => t.id === siblingId);
   const before = idx > 0 ? siblings[idx - 1].position : null;
   return { parentId, position: generatePositionBetween(before, sibling.position) };
+}
+
+function rebuildAndEmit() {
+  const changes = rebuildParentIds(loadTodos());
+  if (changes.length > 0) {
+    window.EventLog.emitFieldsChanged(changes);
+  }
 }
 
 export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | null>, viewMode: ViewMode = 'active') {
@@ -79,29 +87,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-
-    // If deleting a section, reparent its children to the section's parent
-    if (item?.type === 'section') {
-      const children = todos.filter(t => (t.parentId || null) === id);
-      const grandparentId = item.parentId || null;
-      if (children.length > 0) {
-        // Append children at end of new parent's siblings
-        const newSiblings = getSiblings(todos, grandparentId).filter(t => t.id !== id);
-        let lastPos = newSiblings.length > 0 ? newSiblings[newSiblings.length - 1].position : null;
-        const reparentEvents: Array<{ itemId: string; field: string; value: unknown }> = [];
-        for (const child of children) {
-          const newPos = generatePositionBetween(lastPos, null);
-          reparentEvents.push({ itemId: child.id, field: 'parentId', value: grandparentId });
-          reparentEvents.push({ itemId: child.id, field: 'position', value: newPos });
-          lastPos = newPos;
-        }
-        window.EventLog.emitFieldsChanged(reparentEvents);
-      }
-    }
-
     window.EventLog.emitItemDeleted(id);
+    rebuildAndEmit();
     notifyStateChange();
   }, []);
 
@@ -238,12 +225,12 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   }, [pendingFocusRef]);
 
   const convertToSection = useCallback((id: string) => {
-    // Item becomes section. parentId stays the same. Section starts empty.
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
-      { type: 'field_changed', itemId: id, field: 'level', value: 2 },
-      { type: 'field_changed', itemId: id, field: 'text', value: '' },
-    ]);
+    const todos = loadTodos();
+    const batch = buildConvertToSectionEvents(todos, id);
+    if (!batch) return;
+
+    window.EventLog.emitBatch(batch);
+    rebuildAndEmit();
     pendingFocusRef.current = { itemId: id, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -302,6 +289,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     }
 
     window.EventLog.emitFieldsChanged(events);
+    rebuildAndEmit();
     pendingFocusRef.current = { itemId: id };
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -323,6 +311,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const newPosition = generatePositionBetween(beforePrev, prevSibling.position);
 
     window.EventLog.emitFieldChanged(id, 'position', newPosition);
+    rebuildAndEmit();
     pendingFocusRef.current = { itemId: id };
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -344,6 +333,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const newPosition = generatePositionBetween(nextSibling.position, afterNext);
 
     window.EventLog.emitFieldChanged(id, 'position', newPosition);
+    rebuildAndEmit();
     pendingFocusRef.current = { itemId: id };
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -397,6 +387,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     }
 
     window.EventLog.emitFieldsChanged(events);
+    rebuildAndEmit();
     notifyStateChange();
   }, []);
 

@@ -8,9 +8,11 @@ import {
   getSiblings,
   getDescendantIds,
   splitOnArrow,
+  rebuildParentIds,
   FADE_DURATION_DAYS,
   IMPORTANT_ESCALATION_DAYS,
 } from '../../src/utils';
+import type { TodoItem } from '../../src/types';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -271,5 +273,147 @@ describe('getDescendantIds', () => {
   test('returns empty array for no children', () => {
     const todos = [makeTodo('a', null)];
     expect(getDescendantIds(todos, 'nonexistent')).toEqual([]);
+  });
+});
+
+describe('rebuildParentIds', () => {
+  function makeTodo(id: string, overrides: Partial<TodoItem> = {}): TodoItem {
+    return {
+      id, text: id, createdAt: Date.now(), important: false, completed: false,
+      archived: false, position: 'n', textUpdatedAt: 0, importantUpdatedAt: 0,
+      completedUpdatedAt: 0, positionUpdatedAt: 0, typeUpdatedAt: 0,
+      levelUpdatedAt: 0, indentedUpdatedAt: 0,
+      ...overrides,
+    };
+  }
+
+  function makeSection(id: string, level: number, overrides: Partial<TodoItem> = {}): TodoItem {
+    return makeTodo(id, { type: 'section', level, ...overrides });
+  }
+
+  test('items before any section get parentId null', () => {
+    const todos = [
+      makeTodo('a', { parentId: 'wrong' }),
+      makeTodo('b', { parentId: 'wrong' }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'a', field: 'parentId', value: null },
+      { itemId: 'b', field: 'parentId', value: null },
+    ]);
+  });
+
+  test('items after L1 section get parentId = L1', () => {
+    const todos = [
+      makeSection('sec1', 1),
+      makeTodo('a', { parentId: null }),
+      makeTodo('b', { parentId: null }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'a', field: 'parentId', value: 'sec1' },
+      { itemId: 'b', field: 'parentId', value: 'sec1' },
+    ]);
+  });
+
+  test('items after L2 under L1 get parentId = L2', () => {
+    const todos = [
+      makeSection('l1', 1),
+      makeSection('l2', 2, { parentId: null }),
+      makeTodo('a', { parentId: null }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'l2', field: 'parentId', value: 'l1' },
+      { itemId: 'a', field: 'parentId', value: 'l2' },
+    ]);
+  });
+
+  test('L2 section gets parentId = current L1', () => {
+    const todos = [
+      makeSection('l1', 1),
+      makeSection('l2', 2, { parentId: null }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'l2', field: 'parentId', value: 'l1' },
+    ]);
+  });
+
+  test('new L1 resets L2 tracking', () => {
+    const todos = [
+      makeSection('l1a', 1),
+      makeSection('l2', 2, { parentId: 'l1a' }),
+      makeTodo('a', { parentId: 'l2' }),
+      makeSection('l1b', 1),
+      makeTodo('b', { parentId: 'l2' }), // wrong: should be l1b
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'b', field: 'parentId', value: 'l1b' },
+    ]);
+  });
+
+  test('already-correct tree returns no changes', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null }),
+      makeSection('l2', 2, { parentId: 'l1' }),
+      makeTodo('a', { parentId: 'l2' }),
+      makeTodo('b', { parentId: 'l2' }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([]);
+  });
+
+  test('archived items are skipped', () => {
+    const todos = [
+      makeSection('l1', 1),
+      makeTodo('archived-item', { parentId: 'wrong', archived: true }),
+      makeTodo('active-item', { parentId: null }),
+    ];
+    const changes = rebuildParentIds(todos);
+    // archived-item is skipped, only active-item is fixed
+    expect(changes).toEqual([
+      { itemId: 'active-item', field: 'parentId', value: 'l1' },
+    ]);
+  });
+
+  test('mix of correct and incorrect returns only diffs', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null }),
+      makeTodo('correct', { parentId: 'l1' }),
+      makeTodo('wrong', { parentId: null }),
+      makeTodo('also-correct', { parentId: 'l1' }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'wrong', field: 'parentId', value: 'l1' },
+    ]);
+  });
+
+  test('L1 section has parentId null', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: 'something-wrong' }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'l1', field: 'parentId', value: null },
+    ]);
+  });
+
+  test('L2 without preceding L1 gets parentId null', () => {
+    const todos = [
+      makeSection('l2', 2, { parentId: 'nonexistent' }),
+      makeTodo('a', { parentId: 'nonexistent' }),
+    ];
+    const changes = rebuildParentIds(todos);
+    expect(changes).toEqual([
+      { itemId: 'l2', field: 'parentId', value: null },
+      { itemId: 'a', field: 'parentId', value: 'l2' },
+    ]);
+  });
+
+  test('empty list returns no changes', () => {
+    expect(rebuildParentIds([])).toEqual([]);
   });
 });

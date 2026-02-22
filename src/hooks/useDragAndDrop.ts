@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { loadTodos, notifyStateChange } from '../store';
-import { getDescendantIds, getSiblings, generatePositionBetween } from '../utils';
+import { getDescendantIds, getSiblings, generatePositionBetween, rebuildParentIds } from '../utils';
 import type { TodoItem } from '../types';
 
 interface DragState {
@@ -381,6 +381,10 @@ export function useDragAndDrop() {
     }
 
     cleanup(dragState);
+    const parentChanges = rebuildParentIds(loadTodos());
+    if (parentChanges.length > 0) {
+      window.EventLog.emitFieldsChanged(parentChanges);
+    }
     notifyStateChange();
   }
 
