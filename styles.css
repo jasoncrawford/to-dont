@@ -674,6 +674,90 @@ body {
   color: var(--text-primary);
 }
 
+/* Swipe-to-reveal content wrappers */
+.todo-item-content {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-page);
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+}
+
+.section-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-page);
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+}
+
+/* Swipe actions tray — hidden by default, shown on touch devices */
+.swipe-actions-tray {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  align-items: stretch;
+}
+
+.swipe-actions-tray button {
+  border: none;
+  cursor: pointer;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.swipe-actions-tray .swipe-btn-important {
+  background: #f57c00;
+}
+
+.swipe-actions-tray .swipe-btn-important.active {
+  background: #999;
+}
+
+.swipe-actions-tray .swipe-btn-delete {
+  background: #e53935;
+}
+
+/* Touch device overrides */
+@media (pointer: coarse) {
+  .todo-item,
+  .section-header {
+    overflow: hidden;
+  }
+
+  .swipe-actions-tray {
+    display: flex;
+  }
+
+  .todo-item .actions,
+  .section-header .actions {
+    display: none !important;
+  }
+
+  .drag-handle {
+    display: none !important;
+  }
+
+  .todo-item-content,
+  .section-content {
+    touch-action: pan-y;
+  }
+}
+
 /* Responsive: narrow screens */
 @media (max-width: 480px) {
   body {

@@ -6,6 +6,7 @@ import { sanitizeHTML } from '../lib/sanitize';
 import { notifyStateChange } from '../store';
 import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
+import type { TouchProps } from './TodoList';
 
 interface TodoItemProps {
   todo: TodoItemType;
@@ -13,7 +14,8 @@ interface TodoItemProps {
   now: number;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onDragStart: (e: React.MouseEvent | React.TouchEvent, itemId: string, div: HTMLElement) => void;
+  onDragStart: (e: React.MouseEvent, itemId: string, div: HTMLElement) => void;
+  touchProps: TouchProps;
 }
 
 interface LinkEditorState {
@@ -22,7 +24,7 @@ interface LinkEditorState {
   rect: DOMRect;
 }
 
-export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onDragStart }: TodoItemProps) {
+export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onDragStart, touchProps }: TodoItemProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const [linkEditorState, setLinkEditorState] = useState<LinkEditorState | null>(null);
@@ -259,11 +261,31 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     onKeyDown(e, div, textEl, todo.id);
   }, [todo.id, actions, onKeyDown]);
 
-  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
     if (todo.archived) return;
     const div = divRef.current;
     if (div) onDragStart(e, todo.id, div);
   }, [todo.id, todo.archived, onDragStart]);
+
+  // Swipe ref callback for content wrapper
+  const contentRefCallback = useCallback((el: HTMLDivElement | null) => {
+    if (el) touchProps.bindSwipeTarget(el, todo.id);
+  }, [touchProps.bindSwipeTarget, todo.id]);
+
+  // Long-press touch handler on outer div
+  const handleItemTouchStart = useCallback((e: React.TouchEvent) => {
+    if (todo.archived) return;
+    if (viewMode !== 'active' && viewMode !== 'important') return;
+
+    const target = e.target as HTMLElement;
+    // Skip if touching text field or swipe tray buttons (checkbox is ok — short taps toggle, long press drags)
+    if (target.closest('.text[contenteditable]') || target.closest('.swipe-actions-tray')) return;
+
+    const div = divRef.current;
+    if (div) {
+      touchProps.handleTouchStartForDrag(todo.id, div, false, e.touches[0]);
+    }
+  }, [todo.id, todo.archived, viewMode, touchProps.handleTouchStartForDrag]);
 
   return (
     <div
@@ -272,50 +294,68 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       data-id={todo.id}
       style={style}
       onClick={handleDivClick}
+      onTouchStart={handleItemTouchStart}
     >
-      <div
-        className="drag-handle"
-        style={viewMode !== 'active' && viewMode !== 'important' ? { display: 'none' } : undefined}
-        onMouseDown={handleDragStart}
-        onTouchStart={handleDragStart}
-      >
-        ⋮⋮
-      </div>
-      <div
-        className="checkbox"
-        onClick={viewMode !== 'done' ? handleCheckboxClick : undefined}
-        style={viewMode === 'done' ? { cursor: 'default' } : undefined}
-      >
-        {todo.completed ? '✓' : ''}
-      </div>
-      <div
-        ref={textRef}
-        className="text"
-        contentEditable={!todo.archived}
-        suppressContentEditableWarning
-        onBlur={handleBlur}
-        onInput={handleInput}
-        onPaste={handlePaste}
-        onKeyDown={handleTextKeyDown}
-        onMouseDown={handleTextMouseDown}
-      />
-      <span className="date">{formatDate(todo.createdAt, now)}</span>
-      <div className="actions">
+      <div className="swipe-actions-tray">
         {viewMode !== 'done' && (
           <button
-            className={`important-btn${todo.important ? ' active' : ''}`}
-            title={todo.archived ? 'Rescue item' : (todo.important ? 'Remove urgency' : 'Mark urgent')}
-            onClick={(e) => { e.stopPropagation(); actions.toggleImportant(todo.id); }}
+            className={`swipe-btn-important${todo.important ? ' active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.toggleImportant(todo.id); }}
           >
             !
           </button>
         )}
         <button
-          title="Delete"
-          onClick={(e) => { e.stopPropagation(); actions.deleteTodo(todo.id); }}
+          className="swipe-btn-delete"
+          onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(todo.id); }}
         >
           ×
         </button>
+      </div>
+      <div className="todo-item-content" ref={contentRefCallback}>
+        <div
+          className="drag-handle"
+          style={viewMode !== 'active' && viewMode !== 'important' ? { display: 'none' } : undefined}
+          onMouseDown={handleDragStart}
+        >
+          ⋮⋮
+        </div>
+        <div
+          className="checkbox"
+          onClick={viewMode !== 'done' ? handleCheckboxClick : undefined}
+          style={viewMode === 'done' ? { cursor: 'default' } : undefined}
+        >
+          {todo.completed ? '✓' : ''}
+        </div>
+        <div
+          ref={textRef}
+          className="text"
+          contentEditable={!todo.archived}
+          suppressContentEditableWarning
+          onBlur={handleBlur}
+          onInput={handleInput}
+          onPaste={handlePaste}
+          onKeyDown={handleTextKeyDown}
+          onMouseDown={handleTextMouseDown}
+        />
+        <span className="date">{formatDate(todo.createdAt, now)}</span>
+        <div className="actions">
+          {viewMode !== 'done' && (
+            <button
+              className={`important-btn${todo.important ? ' active' : ''}`}
+              title={todo.archived ? 'Rescue item' : (todo.important ? 'Remove urgency' : 'Mark urgent')}
+              onClick={(e) => { e.stopPropagation(); actions.toggleImportant(todo.id); }}
+            >
+              !
+            </button>
+          )}
+          <button
+            title="Delete"
+            onClick={(e) => { e.stopPropagation(); actions.deleteTodo(todo.id); }}
+          >
+            ×
+          </button>
+        </div>
       </div>
       {linkEditorState && (
         <LinkEditor

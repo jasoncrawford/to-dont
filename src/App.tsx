@@ -5,6 +5,7 @@ import { useFocusManager } from './hooks/useFocusManager';
 import { useTodoActions } from './hooks/useTodoActions';
 import { useCommonKeydown } from './hooks/useKeyboardNav';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
+import { useSwipeToReveal } from './hooks/useSwipeToReveal';
 import { ViewToggle } from './components/ViewToggle';
 import { TestModePanel } from './components/TestModePanel';
 import { NewItemInput } from './components/NewItemInput';
@@ -19,7 +20,8 @@ export default function App() {
   const { pendingFocusRef } = useFocusManager();
   const actions = useTodoActions(pendingFocusRef, viewMode);
   const handleCommonKeydown = useCommonKeydown(actions);
-  const { startItemDrag, startSectionDrag } = useDragAndDrop();
+  const { startItemDrag, startSectionDrag, handleTouchStartForDrag, cancelLongPress, isDragActive } = useDragAndDrop();
+  const { getSwipedItemId, bindSwipeTarget, closeSwipe } = useSwipeToReveal();
 
   // NewItemInput Enter: create the typed item, then an empty line after it
   const handleNewItemAdd = useCallback((text: string) => {
@@ -86,6 +88,14 @@ export default function App() {
         onKeyDown={handleCommonKeydown}
         onItemDragStart={startItemDrag}
         onSectionDragStart={startSectionDrag}
+        touchProps={{
+          handleTouchStartForDrag,
+          cancelLongPress,
+          isDragActive,
+          getSwipedItemId,
+          bindSwipeTarget,
+          closeSwipe,
+        }}
       />
       {viewMode === 'important' && (
         <NewItemInput
