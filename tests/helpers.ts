@@ -28,32 +28,47 @@ export async function addTodo(page: Page, text: string) {
 
   if (totalCount === 0) {
     // Use the new-item input when list is empty
+    // Enter creates the text item + an empty item below, with focus on the empty item
     const input = page.locator('.new-item .text');
     await input.click();
     await input.pressSequentially(text);
     await input.press('Enter');
+    // Delete the trailing empty item so tests see clean state
+    // The empty item is focused, so Backspace at position 0 merges it away
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.todo-item')).toHaveCount(1, { timeout: 2000 });
   } else {
-    // Add after last item by pressing Enter at the end
-    // Get the last item (could be todo or section)
-    const lastItem = page.locator('.todo-item, .section-header').last();
-    const lastText = lastItem.locator('.text');
-    await lastText.click();
-    await lastText.press('End');
-    await lastText.press('Enter');
-
-    // Wait for the new todo to be created and focused
-    await page.waitForFunction(
-      (expected) => {
-        const count = document.querySelectorAll('.todo-item').length + document.querySelectorAll('.section-header').length;
-        const hasFocus = document.querySelector('.todo-item .text:focus') !== null;
-        return count >= expected && hasFocus;
-      },
-      totalCount + 1
-    );
-
-    // Find the focused element (should be the new empty todo)
+    // Check if there's already an empty, focused todo we can type into
+    // (e.g. left over from NewItemInput or a previous Enter)
     const focusedText = page.locator('.todo-item .text:focus');
-    await focusedText.pressSequentially(text);
+    const hasFocusedEmpty = await focusedText.count() > 0 &&
+      (await focusedText.textContent()) === '';
+
+    if (hasFocusedEmpty) {
+      // Type directly into the already-focused empty item
+      await focusedText.pressSequentially(text);
+    } else {
+      // Add after last item by pressing Enter at the end
+      const lastItem = page.locator('.todo-item, .section-header').last();
+      const lastText = lastItem.locator('.text');
+      await lastText.click();
+      await lastText.press('End');
+      await lastText.press('Enter');
+
+      // Wait for the new todo to be created and focused
+      await page.waitForFunction(
+        (expected) => {
+          const count = document.querySelectorAll('.todo-item').length + document.querySelectorAll('.section-header').length;
+          const hasFocus = document.querySelector('.todo-item .text:focus') !== null;
+          return count >= expected && hasFocus;
+        },
+        totalCount + 1
+      );
+
+      // Find the focused element (should be the new empty todo)
+      const newFocused = page.locator('.todo-item .text:focus');
+      await newFocused.pressSequentially(text);
+    }
 
     // Click elsewhere to blur and save the text
     await page.locator('body').click({ position: { x: 10, y: 10 } });
@@ -111,19 +126,22 @@ export async function createSection(page: Page, title: string = '') {
   // First add a placeholder todo
   await addTodo(page, 'x');
 
-  // Get the todo we just added (it's the last one)
-  const todoText = page.locator('.todo-item .text').last();
-  await todoText.click();
+  // Click the 'x' item, clear its text, and convert to section
+  const xItem = page.locator('.todo-item .text:text-is("x")').last();
+  await xItem.click();
 
   // Select all and delete to clear the text
-  await todoText.press(`${CMD}+a`);
-  await todoText.press('Backspace');
+  await page.keyboard.press(`${CMD}+a`);
+  await page.keyboard.press('Backspace');
 
-  // Wait for the text to be cleared
-  await expect(todoText).toHaveText('', { timeout: 2000 });
+  // Wait for text to be empty (use the focused element since the text locator no longer matches)
+  await page.waitForFunction(
+    () => document.activeElement?.textContent === '',
+    { timeout: 2000 }
+  );
 
   // Press Enter to convert to section
-  await todoText.press('Enter');
+  await page.keyboard.press('Enter');
 
   // Wait for section to appear
   await page.waitForSelector('.section-header');

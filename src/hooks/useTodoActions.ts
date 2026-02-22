@@ -56,8 +56,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     }
   }, []);
 
-  const addTodo = useCallback((text: string) => {
-    if (!text.trim()) return;
+  const addTodo = useCallback((text: string): string => {
+    if (!text.trim()) return '';
     const todos = loadTodos();
 
     // Add at end of root-level siblings
@@ -75,6 +75,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     window.EventLog.emitItemCreated(newId, value);
     pendingFocusRef.current = { itemId: newId, atEnd: true };
     notifyStateChange();
+    return newId;
   }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {

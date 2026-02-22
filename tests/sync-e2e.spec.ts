@@ -471,12 +471,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.press('Enter');
     await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
 
-    // Create second item
+    // Create second item - focus is already on the empty trailing item from Enter above
     const item2Text = `Second ${Date.now()}`;
-    await page.locator('.todo-item .text').last().click();
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
     await page.keyboard.type(item2Text);
     await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
@@ -540,11 +536,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.press('Enter');
     await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
 
+    // Create second item - focus is already on the empty trailing item from Enter above
     const item2Text = `RefreshSecond ${Date.now()}`;
-    await page.locator('.todo-item .text').last().click();
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
     await page.keyboard.type(item2Text);
     await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
@@ -632,11 +625,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.press('Enter');
     await page.waitForSelector(`.todo-item .text:text-is("${item1Text}")`);
 
+    // Create second item - focus is already on the empty trailing item from Enter above
     const item2Text = `DragSecond ${Date.now()}`;
-    await page.locator('.todo-item .text').last().click();
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
     await page.keyboard.type(item2Text);
     await page.locator('body').click({ position: { x: 10, y: 10 } });
     await page.waitForSelector(`.todo-item .text:text-is("${item2Text}")`);
@@ -722,21 +712,17 @@ test.describe('E2E Sync Diagnostic', () => {
     await browser1SyncReady;
     console.log('Browser1 sync enabled');
 
-    // Add Item 1
+    // Add Item 1 via NewItemInput
     await browser1.waitForSelector('.new-item', { state: 'visible' });
     await browser1.locator('.new-item .text').click();
     await browser1.keyboard.type('Item 1');
     await browser1.keyboard.press('Enter');
     await browser1.waitForSelector('.todo-item .text:text-is("Item 1")');
 
-    // Add Item 2
-    await browser1.locator('.todo-item .text:text-is("Item 1")').click();
-    await browser1.keyboard.press('End');
-    await browser1.keyboard.press('Enter');
-    await browser1.waitForTimeout(100);
+    // Add Item 2 - focus is on trailing empty from NewItemInput Enter
     await browser1.keyboard.type('Item 2');
 
-    // Add Item 3
+    // Add Item 3 - Enter creates new empty, type into it
     await browser1.keyboard.press('Enter');
     await browser1.waitForTimeout(100);
     await browser1.keyboard.type('Item 3');
@@ -820,6 +806,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.click();
     await input.pressSequentially('Will become section');
     await input.press('Enter');
+    // Delete trailing empty item created by NewItemInput's text-editor Enter behavior
+    await page.keyboard.press('Backspace');
     await page.waitForSelector('.todo-item .text:text-is("Will become section")');
 
     // Wait for initial sync
@@ -867,6 +855,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.click();
     await input.pressSequentially('temp');
     await input.press('Enter');
+    // Delete trailing empty item
+    await page.keyboard.press('Backspace');
     await page.waitForSelector('.todo-item');
 
     const todoText = page.locator('.todo-item .text').first();
@@ -921,6 +911,8 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.click();
     await input.pressSequentially('temp');
     await input.press('Enter');
+    // Delete trailing empty item
+    await page.keyboard.press('Backspace');
     await page.waitForSelector('.todo-item');
 
     const todoText = page.locator('.todo-item .text').first();
@@ -1141,13 +1133,18 @@ test.describe('E2E Sync Diagnostic', () => {
     await input.click();
     await input.pressSequentially('temp');
     await input.press('Enter');
+    // Delete trailing empty item from NewItemInput
+    await browser1.keyboard.press('Backspace');
     await browser1.waitForSelector('.todo-item');
     const todoText = browser1.locator('.todo-item .text').first();
     await todoText.click();
     await todoText.press(`${CMD}+a`);
     await todoText.press('Backspace');
-    await expect(todoText).toHaveText('', { timeout: 2000 });
-    await todoText.press('Enter');
+    await browser1.waitForFunction(
+      () => document.activeElement?.textContent === '',
+      { timeout: 2000 }
+    );
+    await browser1.keyboard.press('Enter');
     const sectionText = browser1.locator('.section-header .text').first();
     await sectionText.click();
     await sectionText.pressSequentially('Shared Section');

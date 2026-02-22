@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { loadTodos, useStateVersion, useViewMode, useAuthState } from './store';
 import { UPDATE_INTERVAL } from './utils';
 import { useFocusManager } from './hooks/useFocusManager';
@@ -20,6 +20,12 @@ export default function App() {
   const actions = useTodoActions(pendingFocusRef, viewMode);
   const handleCommonKeydown = useCommonKeydown(actions);
   const { startItemDrag, startSectionDrag } = useDragAndDrop();
+
+  // NewItemInput Enter: create the typed item, then an empty line after it
+  const handleNewItemAdd = useCallback((text: string) => {
+    const newId = actions.addTodo(text);
+    if (newId) actions.insertTodoAfter(newId);
+  }, [actions]);
 
   // Periodic re-render when not editing
   useEffect(() => {
@@ -84,13 +90,13 @@ export default function App() {
       {viewMode === 'important' && (
         <NewItemInput
           visible={importantItems.length === 0}
-          onAdd={actions.addTodo}
+          onAdd={handleNewItemAdd}
         />
       )}
       {viewMode === 'active' && (
         <NewItemInput
           visible={activeItems.length === 0}
-          onAdd={actions.addTodo}
+          onAdd={handleNewItemAdd}
         />
       )}
       <TestModePanel />
