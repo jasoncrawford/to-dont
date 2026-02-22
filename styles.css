@@ -143,6 +143,8 @@ body {
   background: var(--bg-page);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   transform: scale(1.02);
+  border-radius: 8px;
+  box-sizing: border-box;
 }
 
 .todo-item.drag-clone .drag-handle {
@@ -737,6 +739,7 @@ body {
   .todo-item,
   .section-header {
     overflow: hidden;
+    position: relative;
   }
 
   .swipe-actions-tray {

@@ -39,9 +39,12 @@ export function useDragAndDrop() {
 
     const clone = div.cloneNode(true) as HTMLElement;
     clone.classList.add('drag-clone');
-    clone.style.width = rect.width + 'px';
-    clone.style.left = rect.left + 'px';
+    const pad = 16;
+    clone.style.width = (rect.width + pad * 2) + 'px';
+    clone.style.left = (rect.left - pad) + 'px';
     clone.style.top = rect.top + 'px';
+    clone.style.paddingLeft = pad + 'px';
+    clone.style.paddingRight = pad + 'px';
     document.body.appendChild(clone);
 
     div.classList.add('placeholder');
@@ -54,7 +57,7 @@ export function useDragAndDrop() {
       id: itemId,
       placeholder: div,
       clone: clone,
-      fixedX: rect.left,
+      fixedX: rect.left - pad,
       offsetY: clientY - rect.top,
       isTouch,
     };
@@ -85,16 +88,22 @@ export function useDragAndDrop() {
       todoList.insertBefore(placeholderContainer, groupElements[0]);
     }
 
+    const pad = 16;
     const cloneContainer = document.createElement('div');
     cloneContainer.className = 'drag-clone-container';
     cloneContainer.style.position = 'fixed';
-    cloneContainer.style.left = rect.left + 'px';
+    cloneContainer.style.left = (rect.left - pad) + 'px';
     cloneContainer.style.top = rect.top + 'px';
+    cloneContainer.style.width = (rect.width + pad * 2) + 'px';
     cloneContainer.style.zIndex = '1000';
     cloneContainer.style.pointerEvents = 'none';
     cloneContainer.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim();
     cloneContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.18)';
     cloneContainer.style.transform = 'scale(1.02)';
+    cloneContainer.style.borderRadius = '8px';
+    cloneContainer.style.paddingLeft = pad + 'px';
+    cloneContainer.style.paddingRight = pad + 'px';
+    cloneContainer.style.boxSizing = 'border-box';
 
     groupElements.forEach(el => {
       const clone = el.cloneNode(true) as HTMLElement;
@@ -114,7 +123,7 @@ export function useDragAndDrop() {
       placeholder: placeholderContainer,
       originalElements: groupElements,
       clone: cloneContainer,
-      fixedX: rect.left,
+      fixedX: rect.left - pad,
       offsetY: clientY - rect.top,
       isSection: true,
       isTouch,
