@@ -141,6 +141,8 @@ body {
   pointer-events: none;
   z-index: 1000;
   background: var(--bg-page);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transform: scale(1.02);
 }
 
 .todo-item.drag-clone .drag-handle {
@@ -683,7 +685,6 @@ body {
   background: var(--bg-page);
   position: relative;
   z-index: 1;
-  will-change: transform;
 }
 
 .section-content {
@@ -694,7 +695,6 @@ body {
   background: var(--bg-page);
   position: relative;
   z-index: 1;
-  will-change: transform;
 }
 
 /* Swipe actions tray — hidden by default, shown on touch devices */

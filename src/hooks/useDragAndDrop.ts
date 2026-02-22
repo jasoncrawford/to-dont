@@ -46,6 +46,10 @@ export function useDragAndDrop() {
 
     div.classList.add('placeholder');
 
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+
     dragStateRef.current = {
       id: itemId,
       placeholder: div,
@@ -89,6 +93,8 @@ export function useDragAndDrop() {
     cloneContainer.style.zIndex = '1000';
     cloneContainer.style.pointerEvents = 'none';
     cloneContainer.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim();
+    cloneContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.18)';
+    cloneContainer.style.transform = 'scale(1.02)';
 
     groupElements.forEach(el => {
       const clone = el.cloneNode(true) as HTMLElement;
@@ -98,6 +104,10 @@ export function useDragAndDrop() {
     });
 
     document.body.appendChild(cloneContainer);
+
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
 
     dragStateRef.current = {
       id: sectionId,
@@ -368,6 +378,9 @@ export function useDragAndDrop() {
     } else {
       dragState.placeholder.classList.remove('placeholder');
     }
+    // Restore text selection
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
     dragStateRef.current = null;
   }
 
