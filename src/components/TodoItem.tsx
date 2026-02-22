@@ -296,22 +296,6 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       onClick={handleDivClick}
       onTouchStart={handleItemTouchStart}
     >
-      <div className="swipe-actions-tray">
-        {viewMode !== 'done' && (
-          <button
-            className={`swipe-btn-important${todo.important ? ' active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.toggleImportant(todo.id); }}
-          >
-            !
-          </button>
-        )}
-        <button
-          className="swipe-btn-delete"
-          onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(todo.id); }}
-        >
-          ×
-        </button>
-      </div>
       <div className="todo-item-content" ref={contentRefCallback}>
         <div
           className="drag-handle"
@@ -352,6 +336,22 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
           <button
             title="Delete"
             onClick={(e) => { e.stopPropagation(); actions.deleteTodo(todo.id); }}
+          >
+            ×
+          </button>
+        </div>
+        <div className="swipe-actions-tray">
+          {viewMode !== 'done' && (
+            <button
+              className={`swipe-btn-important${todo.important ? ' active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.toggleImportant(todo.id); }}
+            >
+              !
+            </button>
+          )}
+          <button
+            className="swipe-btn-delete"
+            onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(todo.id); }}
           >
             ×
           </button>

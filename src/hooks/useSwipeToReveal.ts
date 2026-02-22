@@ -5,18 +5,6 @@ const SNAP_THRESHOLD = 60; // px to trigger snap-open
 const TRAY_WIDTH_TODO = 100; // px — width of tray with 2 buttons (! and ×)
 const TRAY_WIDTH_SECTION = 52; // px — width of tray with 1 button (×)
 
-function getTray(contentEl: HTMLElement): HTMLElement | null {
-  return contentEl.parentElement?.querySelector('.swipe-actions-tray') as HTMLElement | null;
-}
-
-function showTray(contentEl: HTMLElement) {
-  getTray(contentEl)?.classList.add('visible');
-}
-
-function hideTray(contentEl: HTMLElement) {
-  getTray(contentEl)?.classList.remove('visible');
-}
-
 interface SwipeState {
   startX: number;
   startY: number;
@@ -38,11 +26,7 @@ export function useSwipeToReveal() {
       swipedContentRef.current.style.transform = '';
       swipedContentRef.current.style.transition = 'transform 0.2s ease';
       const el = swipedContentRef.current;
-      const cleanup = () => {
-        el.style.transition = '';
-        hideTray(el);
-        el.removeEventListener('transitionend', cleanup);
-      };
+      const cleanup = () => { el.style.transition = ''; el.removeEventListener('transitionend', cleanup); };
       el.addEventListener('transitionend', cleanup);
     }
     swipedItemIdRef.current = null;
@@ -65,8 +49,8 @@ export function useSwipeToReveal() {
         closeSwipe();
       }
 
-      // Measure tray width from sibling
-      const tray = getTray(contentEl);
+      // Measure tray width (tray is a child of contentEl)
+      const tray = contentEl.querySelector('.swipe-actions-tray') as HTMLElement | null;
       let trayWidth = TRAY_WIDTH_TODO;
       if (tray) {
         const buttons = tray.querySelectorAll('button');
@@ -99,8 +83,6 @@ export function useSwipeToReveal() {
         state.directionDecided = true;
         if (Math.abs(deltaX) / Math.abs(deltaY) > 2) {
           state.isSwiping = true;
-          // Make tray visible as soon as horizontal swipe is detected
-          showTray(contentEl);
         } else {
           // Vertical scroll — abandon
           stateRef.current = null;
@@ -160,14 +142,10 @@ export function useSwipeToReveal() {
           const cleanup = () => { contentEl.style.transition = ''; contentEl.removeEventListener('transitionend', cleanup); };
           contentEl.addEventListener('transitionend', cleanup);
         } else {
-          // Snap back — hide tray after animation
+          // Snap back
           contentEl.style.transition = 'transform 0.2s ease';
           contentEl.style.transform = '';
-          const cleanup = () => {
-            contentEl.style.transition = '';
-            hideTray(contentEl);
-            contentEl.removeEventListener('transitionend', cleanup);
-          };
+          const cleanup = () => { contentEl.style.transition = ''; contentEl.removeEventListener('transitionend', cleanup); };
           contentEl.addEventListener('transitionend', cleanup);
         }
       }

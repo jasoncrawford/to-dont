@@ -203,23 +203,13 @@ test.describe('Touch Gestures', () => {
       expect(handleDisplay).toBe('none');
     });
 
-    test('swipe tray is present but hidden until swiped', async ({ page }) => {
+    test('swipe tray is visible on touch devices', async ({ page }) => {
       await addTodo(page, 'Tray visible');
 
-      const tray = page.locator('.swipe-actions-tray').first();
-      const trayDisplay = await tray.evaluate(el => getComputedStyle(el).display);
+      const trayDisplay = await page.locator('.swipe-actions-tray').first().evaluate(el => {
+        return getComputedStyle(el).display;
+      });
       expect(trayDisplay).toBe('flex');
-
-      // Tray should be invisible (opacity 0) before swipe
-      const opacityBefore = await tray.evaluate(el => getComputedStyle(el).opacity);
-      expect(opacityBefore).toBe('0');
-
-      // After swiping, tray should become visible
-      const todoContent = page.locator('.todo-item-content').first();
-      await swipeLeft(page, todoContent);
-
-      const opacityAfter = await tray.evaluate(el => getComputedStyle(el).opacity);
-      expect(opacityAfter).toBe('1');
     });
   });
 

@@ -684,9 +684,7 @@ body {
   align-items: flex-start;
   flex: 1;
   min-width: 0;
-  background: var(--bg-page);
   position: relative;
-  z-index: 1;
 }
 
 .section-content {
@@ -694,26 +692,20 @@ body {
   align-items: center;
   flex: 1;
   min-width: 0;
-  background: var(--bg-page);
   position: relative;
-  z-index: 1;
 }
 
-/* Swipe actions tray — hidden by default, shown on touch devices */
+/* Swipe actions tray — hidden by default, shown on touch devices.
+   Positioned just outside the content wrapper's right edge.
+   When the content wrapper translates left, the tray slides into view. */
 .swipe-actions-tray {
   display: none;
   position: absolute;
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 0;
+  transform: translateX(100%);
   align-items: stretch;
-  opacity: 0;
-  transition: opacity 0s;
-}
-
-.swipe-actions-tray.visible {
-  opacity: 1;
 }
 
 .swipe-actions-tray button {

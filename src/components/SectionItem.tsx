@@ -115,14 +115,6 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
       onClick={handleDivClick}
       onTouchStart={handleSectionTouchStart}
     >
-      <div className="swipe-actions-tray">
-        <button
-          className="swipe-btn-delete"
-          onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(section.id); }}
-        >
-          ×
-        </button>
-      </div>
       <div className="section-content" ref={contentRefCallback}>
         <div
           className="drag-handle"
@@ -145,6 +137,14 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
           <button
             title="Delete section"
             onClick={(e) => { e.stopPropagation(); actions.deleteTodo(section.id); }}
+          >
+            ×
+          </button>
+        </div>
+        <div className="swipe-actions-tray">
+          <button
+            className="swipe-btn-delete"
+            onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(section.id); }}
           >
             ×
           </button>
