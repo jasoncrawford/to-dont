@@ -13,7 +13,7 @@ interface TodoItemProps {
   now: number;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onDragStart: (e: React.MouseEvent, itemId: string, div: HTMLElement) => void;
+  onDragStart: (e: React.MouseEvent | React.TouchEvent, itemId: string, div: HTMLElement) => void;
 }
 
 interface LinkEditorState {
@@ -259,7 +259,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     onKeyDown(e, div, textEl, todo.id);
   }, [todo.id, actions, onKeyDown]);
 
-  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (todo.archived) return;
     const div = divRef.current;
     if (div) onDragStart(e, todo.id, div);
@@ -276,7 +276,8 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       <div
         className="drag-handle"
         style={viewMode !== 'active' && viewMode !== 'important' ? { display: 'none' } : undefined}
-        onMouseDown={handleDragMouseDown}
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
       >
         ⋮⋮
       </div>

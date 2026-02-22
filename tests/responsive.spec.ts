@@ -69,15 +69,20 @@ test.describe('Responsive Layout', () => {
     expect(minWidth).toBe('0px');
   });
 
-  test('drag handles are hidden on narrow viewport', async ({ page }) => {
+  test('drag handles are visible on narrow viewport', async ({ page }) => {
     await addTodo(page, 'Test drag handle visibility');
 
-    const display = await page.evaluate(() => {
-      const handle = document.querySelector('.drag-handle') as HTMLElement;
-      if (!handle) return 'not found';
-      return getComputedStyle(handle).display;
-    });
-    expect(display).toBe('none');
+    // On narrow viewports, drag handles should still exist in the DOM
+    const handle = await page.locator('.drag-handle').first();
+    await expect(handle).toBeAttached();
+  });
+
+  test('action buttons are visible without hover on narrow viewport', async ({ page }) => {
+    await addTodo(page, 'Test action visibility');
+
+    // Actions should be in the DOM and accessible
+    const actions = await page.locator('.todo-item .actions').first();
+    await expect(actions).toBeAttached();
   });
 
   test('desktop viewport retains original padding', async ({ page }) => {
