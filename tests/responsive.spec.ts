@@ -69,12 +69,19 @@ test.describe('Responsive Layout', () => {
     expect(minWidth).toBe('0px');
   });
 
-  test('drag handles are visible on narrow viewport', async ({ page }) => {
+  test('drag handles are visible on narrow non-touch viewport', async ({ page }) => {
+    // On a narrow screen without touch (pointer: fine), drag handles should still be present
+    // The narrow 375px viewport set in beforeEach has pointer:fine (default for desktop chromium)
     await addTodo(page, 'Test drag handle visibility');
 
-    // On narrow viewports, drag handles should still exist in the DOM
-    const handle = await page.locator('.drag-handle').first();
-    await expect(handle).toBeAttached();
+    // Hover to reveal the handle (it starts with opacity 0)
+    const todo = page.locator('.todo-item').first();
+    await todo.hover();
+
+    const handle = page.locator('.drag-handle').first();
+    // Should NOT be display:none — it should be present (visible on hover)
+    const display = await handle.evaluate(el => getComputedStyle(el).display);
+    expect(display).not.toBe('none');
   });
 
   test('action buttons are visible without hover on narrow viewport', async ({ page }) => {

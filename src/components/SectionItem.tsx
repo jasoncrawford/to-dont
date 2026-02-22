@@ -3,16 +3,18 @@ import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
 import type { TodoActions } from '../hooks/useTodoActions';
+import type { TouchProps } from './TodoList';
 
 interface SectionItemProps {
   section: TodoItemType;
   viewMode: ViewMode;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onDragStart: (e: React.MouseEvent | React.TouchEvent, sectionId: string, div: HTMLElement) => void;
+  onDragStart: (e: React.MouseEvent, sectionId: string, div: HTMLElement) => void;
+  touchProps: TouchProps;
 }
 
-export function SectionItemComponent({ section, viewMode, actions, onKeyDown, onDragStart }: SectionItemProps) {
+export function SectionItemComponent({ section, viewMode, actions, onKeyDown, onDragStart, touchProps }: SectionItemProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +35,13 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
   });
 
   const handleDivClick = useCallback((e: React.MouseEvent) => {
+    // If swipe tray is open or was just closed, close it and blur instead of focusing
+    if (touchProps.getSwipedItemId() === section.id || touchProps.wasRecentlyClosed()) {
+      touchProps.closeSwipe();
+      textRef.current?.blur();
+      return;
+    }
+
     const target = e.target as HTMLElement;
     if (target === textRef.current || target.closest('.actions')) return;
     const el = textRef.current;
@@ -47,7 +56,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         sel.addRange(range);
       }
     }
-  }, []);
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, section.id]);
 
   const handleTextKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const div = divRef.current;
@@ -82,10 +91,33 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     onKeyDown(e, div, textEl, section.id);
   }, [section.id, actions, onKeyDown]);
 
-  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
     const div = divRef.current;
     if (div) onDragStart(e, section.id, div);
   }, [section.id, onDragStart]);
+
+  // Swipe ref callback for content wrapper
+  const contentRefCallback = useCallback((el: HTMLDivElement | null) => {
+    if (el) touchProps.bindSwipeTarget(el, section.id);
+  }, [touchProps.bindSwipeTarget, section.id]);
+
+  // Long-press touch handler on outer div
+  const handleSectionTouchStart = useCallback((e: React.TouchEvent) => {
+    if (viewMode === 'done') return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest('.text[contenteditable]') || target.closest('.swipe-actions-tray')) return;
+
+    // Close any open swipe tray before starting drag
+    if (touchProps.getSwipedItemId()) {
+      touchProps.closeSwipe();
+    }
+
+    const div = divRef.current;
+    if (div) {
+      touchProps.handleTouchStartForDrag(section.id, div, true, e.touches[0]);
+    }
+  }, [section.id, viewMode, touchProps.handleTouchStartForDrag, touchProps.getSwipedItemId, touchProps.closeSwipe]);
 
   return (
     <div
@@ -93,32 +125,42 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
       className={`section-header level-${section.level || 2}`}
       data-id={section.id}
       onClick={handleDivClick}
+      onTouchStart={handleSectionTouchStart}
     >
-      <div
-        className="drag-handle"
-        style={viewMode === 'done' ? { display: 'none' } : undefined}
-        onMouseDown={handleDragStart}
-        onTouchStart={handleDragStart}
-      >
-        ⋮⋮
-      </div>
-      <div
-        ref={textRef}
-        className="text"
-        contentEditable="true"
-        suppressContentEditableWarning
-        onBlur={handleBlur}
-        onInput={handleInput}
-        onPaste={handlePaste}
-        onKeyDown={handleTextKeyDown}
-      />
-      <div className="actions">
-        <button
-          title="Delete section"
-          onClick={(e) => { e.stopPropagation(); actions.deleteTodo(section.id); }}
+      <div className="section-content" ref={contentRefCallback}>
+        <div
+          className="drag-handle"
+          style={viewMode === 'done' ? { display: 'none' } : undefined}
+          onMouseDown={handleDragStart}
         >
-          ×
-        </button>
+          ⋮⋮
+        </div>
+        <div
+          ref={textRef}
+          className="text"
+          contentEditable="true"
+          suppressContentEditableWarning
+          onBlur={handleBlur}
+          onInput={handleInput}
+          onPaste={handlePaste}
+          onKeyDown={handleTextKeyDown}
+        />
+        <div className="actions">
+          <button
+            title="Delete section"
+            onClick={(e) => { e.stopPropagation(); actions.deleteTodo(section.id); }}
+          >
+            ×
+          </button>
+        </div>
+        <div className="swipe-actions-tray">
+          <button
+            className="swipe-btn-delete"
+            onClick={(e) => { e.stopPropagation(); touchProps.closeSwipe(); actions.deleteTodo(section.id); }}
+          >
+            ×
+          </button>
+        </div>
       </div>
     </div>
   );

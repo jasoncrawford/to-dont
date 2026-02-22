@@ -141,6 +141,10 @@ body {
   pointer-events: none;
   z-index: 1000;
   background: var(--bg-page);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transform: scale(1.02);
+  border-radius: 8px;
+  box-sizing: border-box;
 }
 
 .todo-item.drag-clone .drag-handle {
@@ -672,6 +676,86 @@ body {
   background: var(--bg-surface);
   border-radius: 4px;
   color: var(--text-primary);
+}
+
+/* Swipe-to-reveal content wrappers */
+.todo-item-content {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.section-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+/* Swipe actions tray — hidden by default, shown on touch devices.
+   Positioned just outside the content wrapper's right edge.
+   When the content wrapper translates left, the tray slides into view. */
+.swipe-actions-tray {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  transform: translateX(100%);
+  align-items: stretch;
+}
+
+.swipe-actions-tray button {
+  border: none;
+  cursor: pointer;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.swipe-actions-tray .swipe-btn-important {
+  background: #f57c00;
+}
+
+.swipe-actions-tray .swipe-btn-important.active {
+  background: #999;
+}
+
+.swipe-actions-tray .swipe-btn-delete {
+  background: #e53935;
+}
+
+/* Touch device overrides */
+@media (pointer: coarse) {
+  .todo-item,
+  .section-header {
+    overflow: hidden;
+  }
+
+  .swipe-actions-tray {
+    display: flex;
+  }
+
+  .todo-item .actions,
+  .section-header .actions {
+    display: none !important;
+  }
+
+  .drag-handle {
+    display: none !important;
+  }
+
+  .todo-item-content,
+  .section-content {
+    touch-action: pan-y;
+  }
 }
 
 /* Responsive: narrow screens */

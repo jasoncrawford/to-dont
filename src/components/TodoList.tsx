@@ -5,14 +5,25 @@ import { TodoItemComponent } from './TodoItem';
 import { SectionItemComponent } from './SectionItem';
 import type { TodoActions } from '../hooks/useTodoActions';
 
+export interface TouchProps {
+  handleTouchStartForDrag: (itemId: string, div: HTMLElement, isSection: boolean, touch: { clientX: number; clientY: number }) => void;
+  cancelLongPress: () => void;
+  isDragActive: () => boolean;
+  getSwipedItemId: () => string | null;
+  bindSwipeTarget: (contentEl: HTMLElement | null, itemId: string) => void;
+  closeSwipe: () => void;
+  wasRecentlyClosed: () => boolean;
+}
+
 interface TodoListProps {
   todos: TodoItemType[];
   viewMode: ViewMode;
   now: number;
   actions: TodoActions;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, div: HTMLElement, textEl: HTMLElement, itemId: string) => boolean;
-  onItemDragStart: (e: React.MouseEvent | React.TouchEvent, itemId: string, div: HTMLElement) => void;
-  onSectionDragStart: (e: React.MouseEvent | React.TouchEvent, sectionId: string, div: HTMLElement) => void;
+  onItemDragStart: (e: React.MouseEvent, itemId: string, div: HTMLElement) => void;
+  onSectionDragStart: (e: React.MouseEvent, sectionId: string, div: HTMLElement) => void;
+  touchProps: TouchProps;
 }
 
 export function TodoList({
@@ -23,6 +34,7 @@ export function TodoList({
   onKeyDown,
   onItemDragStart,
   onSectionDragStart,
+  touchProps,
 }: TodoListProps) {
   if (viewMode === 'faded') {
     // Faded view: archived but not completed items, sorted by archivedAt descending
@@ -41,6 +53,7 @@ export function TodoList({
             actions={actions}
             onKeyDown={onKeyDown}
             onDragStart={onItemDragStart}
+            touchProps={touchProps}
           />
         ))}
       </div>
@@ -76,6 +89,7 @@ export function TodoList({
                 actions={actions}
                 onKeyDown={onKeyDown}
                 onDragStart={onItemDragStart}
+                touchProps={touchProps}
               />
             ))}
           </React.Fragment>
@@ -119,6 +133,7 @@ export function TodoList({
               actions={actions}
               onKeyDown={onKeyDown}
               onDragStart={onSectionDragStart}
+              touchProps={touchProps}
             />
           ) : (
             <TodoItemComponent
@@ -129,6 +144,7 @@ export function TodoList({
               actions={actions}
               onKeyDown={onKeyDown}
               onDragStart={onItemDragStart}
+              touchProps={touchProps}
             />
           )
         )}
@@ -150,6 +166,7 @@ export function TodoList({
             actions={actions}
             onKeyDown={onKeyDown}
             onDragStart={onSectionDragStart}
+            touchProps={touchProps}
           />
         ) : (
           <TodoItemComponent
@@ -160,6 +177,7 @@ export function TodoList({
             actions={actions}
             onKeyDown={onKeyDown}
             onDragStart={onItemDragStart}
+            touchProps={touchProps}
           />
         )
       )}
