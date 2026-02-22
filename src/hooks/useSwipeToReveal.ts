@@ -4,7 +4,18 @@ const DIRECTION_THRESHOLD = 10; // px before deciding horizontal vs vertical
 const SNAP_THRESHOLD = 60; // px to trigger snap-open
 const TRAY_WIDTH_TODO = 100; // px — width of tray with 2 buttons (! and ×)
 const TRAY_WIDTH_SECTION = 52; // px — width of tray with 1 button (×)
-const TRAY_WIDTH_IMPORTANT_ONLY = 52; // single button when no important btn
+
+function getTray(contentEl: HTMLElement): HTMLElement | null {
+  return contentEl.parentElement?.querySelector('.swipe-actions-tray') as HTMLElement | null;
+}
+
+function showTray(contentEl: HTMLElement) {
+  getTray(contentEl)?.classList.add('visible');
+}
+
+function hideTray(contentEl: HTMLElement) {
+  getTray(contentEl)?.classList.remove('visible');
+}
 
 interface SwipeState {
   startX: number;
@@ -26,9 +37,12 @@ export function useSwipeToReveal() {
     if (swipedContentRef.current) {
       swipedContentRef.current.style.transform = '';
       swipedContentRef.current.style.transition = 'transform 0.2s ease';
-      // Clean up transition after it completes
       const el = swipedContentRef.current;
-      const cleanup = () => { el.style.transition = ''; el.removeEventListener('transitionend', cleanup); };
+      const cleanup = () => {
+        el.style.transition = '';
+        hideTray(el);
+        el.removeEventListener('transitionend', cleanup);
+      };
       el.addEventListener('transitionend', cleanup);
     }
     swipedItemIdRef.current = null;
@@ -38,7 +52,6 @@ export function useSwipeToReveal() {
   const getSwipedItemId = useCallback(() => swipedItemIdRef.current, []);
 
   const bindSwipeTarget = useCallback((contentEl: HTMLElement | null, itemId: string) => {
-    // Clean up old listener for this element if any
     if (!contentEl) return;
 
     // Avoid double-binding
@@ -53,11 +66,9 @@ export function useSwipeToReveal() {
       }
 
       // Measure tray width from sibling
-      const parent = contentEl.parentElement;
-      const tray = parent?.querySelector('.swipe-actions-tray') as HTMLElement | null;
+      const tray = getTray(contentEl);
       let trayWidth = TRAY_WIDTH_TODO;
       if (tray) {
-        // Count buttons to determine width
         const buttons = tray.querySelectorAll('button');
         trayWidth = buttons.length === 1 ? TRAY_WIDTH_SECTION : TRAY_WIDTH_TODO;
       }
@@ -88,6 +99,8 @@ export function useSwipeToReveal() {
         state.directionDecided = true;
         if (Math.abs(deltaX) / Math.abs(deltaY) > 2) {
           state.isSwiping = true;
+          // Make tray visible as soon as horizontal swipe is detected
+          showTray(contentEl);
         } else {
           // Vertical scroll — abandon
           stateRef.current = null;
@@ -131,7 +144,7 @@ export function useSwipeToReveal() {
           // Snap closed
           closeSwipe();
         } else {
-          // Stay open
+          // Stay open — tray stays visible
           contentEl.style.transition = 'transform 0.2s ease';
           contentEl.style.transform = `translateX(-${state.trayWidth}px)`;
           const cleanup = () => { contentEl.style.transition = ''; contentEl.removeEventListener('transitionend', cleanup); };
@@ -139,7 +152,7 @@ export function useSwipeToReveal() {
         }
       } else {
         if (deltaX < -SNAP_THRESHOLD) {
-          // Snap open
+          // Snap open — tray stays visible
           contentEl.style.transition = 'transform 0.2s ease';
           contentEl.style.transform = `translateX(-${state.trayWidth}px)`;
           swipedItemIdRef.current = itemId;
@@ -147,10 +160,14 @@ export function useSwipeToReveal() {
           const cleanup = () => { contentEl.style.transition = ''; contentEl.removeEventListener('transitionend', cleanup); };
           contentEl.addEventListener('transitionend', cleanup);
         } else {
-          // Snap back
+          // Snap back — hide tray after animation
           contentEl.style.transition = 'transform 0.2s ease';
           contentEl.style.transform = '';
-          const cleanup = () => { contentEl.style.transition = ''; contentEl.removeEventListener('transitionend', cleanup); };
+          const cleanup = () => {
+            contentEl.style.transition = '';
+            hideTray(contentEl);
+            contentEl.removeEventListener('transitionend', cleanup);
+          };
           contentEl.addEventListener('transitionend', cleanup);
         }
       }

@@ -708,6 +708,12 @@ body {
   bottom: 0;
   z-index: 0;
   align-items: stretch;
+  opacity: 0;
+  transition: opacity 0s;
+}
+
+.swipe-actions-tray.visible {
+  opacity: 1;
 }
 
 .swipe-actions-tray button {
@@ -739,7 +745,6 @@ body {
   .todo-item,
   .section-header {
     overflow: hidden;
-    position: relative;
   }
 
   .swipe-actions-tray {
