@@ -39,6 +39,8 @@ export function useDragAndDrop() {
 
     const clone = div.cloneNode(true) as HTMLElement;
     clone.classList.add('drag-clone');
+    // Hide swipe tray in drag clone so buttons don't show through
+    clone.querySelectorAll('.swipe-actions-tray').forEach(el => (el as HTMLElement).style.display = 'none');
     const pad = 16;
     clone.style.width = (rect.width + pad * 2) + 'px';
     clone.style.left = (rect.left - pad) + 'px';
@@ -108,6 +110,8 @@ export function useDragAndDrop() {
     groupElements.forEach(el => {
       const clone = el.cloneNode(true) as HTMLElement;
       clone.style.opacity = '0.95';
+      // Hide swipe tray in drag clone so buttons don't show through
+      clone.querySelectorAll('.swipe-actions-tray').forEach(tray => (tray as HTMLElement).style.display = 'none');
       cloneContainer.appendChild(clone);
       el.style.display = 'none';
     });

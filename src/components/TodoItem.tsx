@@ -70,6 +70,13 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
   }
 
   const handleDivClick = useCallback((e: React.MouseEvent) => {
+    // If swipe tray is open or was just closed, close it and blur instead of focusing
+    if (touchProps.getSwipedItemId() === todo.id || touchProps.wasRecentlyClosed()) {
+      touchProps.closeSwipe();
+      textRef.current?.blur();
+      return;
+    }
+
     const target = e.target as HTMLElement;
     if (target === textRef.current || target.closest('.actions')) return;
 
@@ -85,16 +92,23 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         sel.addRange(range);
       }
     }
-  }, []);
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, todo.id]);
 
   const handleTextMouseDown = useCallback((e: React.MouseEvent) => {
+    // If swipe tray is open, prevent focusing and close it
+    if (touchProps.getSwipedItemId() === todo.id) {
+      e.preventDefault();
+      touchProps.closeSwipe();
+      return;
+    }
+
     const target = e.target as HTMLElement;
     const anchor = target.closest('a');
     if (anchor) {
       e.preventDefault();
       window.open(anchor.href, '_blank');
     }
-  }, []);
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, todo.id]);
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -281,11 +295,16 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     // Skip if touching text field or swipe tray buttons (checkbox is ok — short taps toggle, long press drags)
     if (target.closest('.text[contenteditable]') || target.closest('.swipe-actions-tray')) return;
 
+    // Close any open swipe tray before starting drag
+    if (touchProps.getSwipedItemId()) {
+      touchProps.closeSwipe();
+    }
+
     const div = divRef.current;
     if (div) {
       touchProps.handleTouchStartForDrag(todo.id, div, false, e.touches[0]);
     }
-  }, [todo.id, todo.archived, viewMode, touchProps.handleTouchStartForDrag]);
+  }, [todo.id, todo.archived, viewMode, touchProps.handleTouchStartForDrag, touchProps.getSwipedItemId, touchProps.closeSwipe]);
 
   return (
     <div

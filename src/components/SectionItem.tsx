@@ -35,6 +35,13 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
   });
 
   const handleDivClick = useCallback((e: React.MouseEvent) => {
+    // If swipe tray is open or was just closed, close it and blur instead of focusing
+    if (touchProps.getSwipedItemId() === section.id || touchProps.wasRecentlyClosed()) {
+      touchProps.closeSwipe();
+      textRef.current?.blur();
+      return;
+    }
+
     const target = e.target as HTMLElement;
     if (target === textRef.current || target.closest('.actions')) return;
     const el = textRef.current;
@@ -49,7 +56,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         sel.addRange(range);
       }
     }
-  }, []);
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, section.id]);
 
   const handleTextKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const div = divRef.current;
@@ -101,11 +108,16 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     const target = e.target as HTMLElement;
     if (target.closest('.text[contenteditable]') || target.closest('.swipe-actions-tray')) return;
 
+    // Close any open swipe tray before starting drag
+    if (touchProps.getSwipedItemId()) {
+      touchProps.closeSwipe();
+    }
+
     const div = divRef.current;
     if (div) {
       touchProps.handleTouchStartForDrag(section.id, div, true, e.touches[0]);
     }
-  }, [section.id, viewMode, touchProps.handleTouchStartForDrag]);
+  }, [section.id, viewMode, touchProps.handleTouchStartForDrag, touchProps.getSwipedItemId, touchProps.closeSwipe]);
 
   return (
     <div

@@ -20,6 +20,7 @@ export function useSwipeToReveal() {
   const swipedContentRef = useRef<HTMLElement | null>(null);
   const stateRef = useRef<SwipeState | null>(null);
   const listenersRef = useRef<Map<HTMLElement, { start: (e: TouchEvent) => void; move: (e: TouchEvent) => void; end: (e: TouchEvent) => void }>>(new Map());
+  const closedAtRef = useRef<number>(0);
 
   const closeSwipe = useCallback(() => {
     if (swipedContentRef.current) {
@@ -29,9 +30,14 @@ export function useSwipeToReveal() {
       const cleanup = () => { el.style.transition = ''; el.removeEventListener('transitionend', cleanup); };
       el.addEventListener('transitionend', cleanup);
     }
+    if (swipedItemIdRef.current) {
+      closedAtRef.current = Date.now();
+    }
     swipedItemIdRef.current = null;
     swipedContentRef.current = null;
   }, []);
+
+  const wasRecentlyClosed = useCallback(() => Date.now() - closedAtRef.current < 300, []);
 
   const getSwipedItemId = useCallback(() => swipedItemIdRef.current, []);
 
@@ -169,20 +175,24 @@ export function useSwipeToReveal() {
     };
   }, []);
 
-  // Close swipe on outside tap
+  // Close swipe on tap anywhere except tray buttons
   useEffect(() => {
     const handleDocTouch = (e: TouchEvent) => {
       if (!swipedItemIdRef.current) return;
       const target = e.target as HTMLElement;
-      // If touch is inside the swiped item, let it through (for tray button taps)
+      // Let tray button taps through
+      if (target.closest('.swipe-actions-tray')) return;
+      // Prevent focus/click on contenteditable when closing tray
       const swipedEl = swipedContentRef.current?.parentElement;
-      if (swipedEl && swipedEl.contains(target)) return;
+      if (swipedEl && swipedEl.contains(target)) {
+        e.preventDefault();
+      }
       closeSwipe();
     };
 
-    document.addEventListener('touchstart', handleDocTouch, { passive: true });
+    document.addEventListener('touchstart', handleDocTouch, { passive: false });
     return () => document.removeEventListener('touchstart', handleDocTouch);
   }, [closeSwipe]);
 
-  return { getSwipedItemId, bindSwipeTarget, closeSwipe };
+  return { getSwipedItemId, bindSwipeTarget, closeSwipe, wasRecentlyClosed };
 }

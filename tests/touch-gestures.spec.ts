@@ -313,4 +313,139 @@ test.describe('Touch Gestures', () => {
       await expect(clone).toHaveCount(0);
     });
   });
+
+  test.describe('Regression: swipe/drag interaction', () => {
+    test('drag clone does not show swipe tray buttons', async ({ page }) => {
+      await addTodo(page, 'Drag me');
+
+      const item = page.locator('.todo-item').first();
+      const box = await item.boundingBox();
+      if (!box) throw new Error('Could not get bounding box');
+
+      const startX = box.x + 10;
+      const startY = box.y + box.height / 2;
+
+      const client = await longPress(page, startX, startY);
+      try {
+        const clone = page.locator('.drag-clone');
+        await expect(clone).toBeVisible();
+
+        // Swipe tray inside clone should be hidden
+        const trayDisplay = await clone.locator('.swipe-actions-tray').evaluate(el => el.style.display);
+        expect(trayDisplay).toBe('none');
+
+        await client.send('Input.dispatchTouchEvent', {
+          type: 'touchEnd',
+          touchPoints: [],
+        });
+      } finally {
+        await client.detach();
+      }
+    });
+
+    test('tapping item with open tray closes tray without focusing text', async ({ page }) => {
+      await addTodo(page, 'Tap to close');
+
+      const todoContent = page.locator('.todo-item-content').first();
+      await swipeLeft(page, todoContent);
+
+      // Verify tray is open
+      const transformBefore = await todoContent.evaluate(el => el.style.transform);
+      expect(transformBefore).toContain('translateX');
+
+      // Tap on the outer todo-item div using CDP (tap triggers click)
+      const todoItem = page.locator('.todo-item').first();
+      const box = await todoItem.boundingBox();
+      if (!box) throw new Error('Could not get bounding box');
+
+      const client = await page.context().newCDPSession(page);
+      try {
+        const tapX = box.x + box.width / 2;
+        const tapY = box.y + box.height / 2;
+        await client.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: tapX, y: tapY }],
+        });
+        await client.send('Input.dispatchTouchEvent', {
+          type: 'touchEnd',
+          touchPoints: [],
+        });
+      } finally {
+        await client.detach();
+      }
+      await page.waitForTimeout(300);
+
+      // Tray should be closed
+      await expect(todoContent).toHaveJSProperty('style.transform', '');
+
+      // Text should NOT be focused
+      const isFocused = await page.locator('.todo-item .text').first().evaluate(
+        el => document.activeElement === el
+      );
+      expect(isFocused).toBe(false);
+    });
+
+    test('starting drag closes open swipe tray', async ({ page }) => {
+      await addTodo(page, 'First');
+      await addTodo(page, 'Second');
+
+      // Swipe first item open
+      const firstContent = page.locator('.todo-item-content').first();
+      await swipeLeft(page, firstContent);
+
+      // Verify tray is open
+      const transformBefore = await firstContent.evaluate(el => el.style.transform);
+      expect(transformBefore).toContain('translateX');
+
+      // Long press on second item to start drag
+      const secondItem = page.locator('.todo-item').nth(1);
+      const box = await secondItem.boundingBox();
+      if (!box) throw new Error('Could not get bounding box');
+
+      const client = await longPress(page, box.x + 10, box.y + box.height / 2);
+      try {
+        // Drag clone should appear
+        await expect(page.locator('.drag-clone')).toBeVisible();
+
+        // First item's tray should be closed
+        await expect(firstContent).toHaveJSProperty('style.transform', '');
+
+        await client.send('Input.dispatchTouchEvent', {
+          type: 'touchEnd',
+          touchPoints: [],
+        });
+      } finally {
+        await client.detach();
+      }
+    });
+
+    test('no text selection during drag', async ({ page }) => {
+      await addTodo(page, 'Select me not');
+
+      const item = page.locator('.todo-item').first();
+      const box = await item.boundingBox();
+      if (!box) throw new Error('Could not get bounding box');
+
+      const client = await longPress(page, box.x + 10, box.y + box.height / 2);
+      try {
+        await expect(page.locator('.drag-clone')).toBeVisible();
+
+        // Body should have user-select: none
+        const userSelect = await page.evaluate(() => document.body.style.userSelect);
+        expect(userSelect).toBe('none');
+
+        await client.send('Input.dispatchTouchEvent', {
+          type: 'touchEnd',
+          touchPoints: [],
+        });
+      } finally {
+        await client.detach();
+      }
+
+      // After drop, user-select should be restored
+      await page.waitForTimeout(100);
+      const userSelectAfter = await page.evaluate(() => document.body.style.userSelect);
+      expect(userSelectAfter).toBe('');
+    });
+  });
 });

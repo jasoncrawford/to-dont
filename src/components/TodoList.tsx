@@ -12,6 +12,7 @@ export interface TouchProps {
   getSwipedItemId: () => string | null;
   bindSwipeTarget: (contentEl: HTMLElement | null, itemId: string) => void;
   closeSwipe: () => void;
+  wasRecentlyClosed: () => boolean;
 }
 
 interface TodoListProps {

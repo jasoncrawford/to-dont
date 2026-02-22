@@ -21,7 +21,7 @@ export default function App() {
   const actions = useTodoActions(pendingFocusRef, viewMode);
   const handleCommonKeydown = useCommonKeydown(actions);
   const { startItemDrag, startSectionDrag, handleTouchStartForDrag, cancelLongPress, isDragActive } = useDragAndDrop();
-  const { getSwipedItemId, bindSwipeTarget, closeSwipe } = useSwipeToReveal();
+  const { getSwipedItemId, bindSwipeTarget, closeSwipe, wasRecentlyClosed } = useSwipeToReveal();
 
   // NewItemInput Enter: create the typed item, then an empty line after it
   const handleNewItemAdd = useCallback((text: string) => {
@@ -95,6 +95,7 @@ export default function App() {
           getSwipedItemId,
           bindSwipeTarget,
           closeSwipe,
+          wasRecentlyClosed,
         }}
       />
       {viewMode === 'important' && (
