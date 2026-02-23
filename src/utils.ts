@@ -153,7 +153,7 @@ export function getDescendantIds(todos: TodoItem[], sectionId: string): string[]
 export type BatchEvent = { type: string; itemId: string; field?: string; value?: unknown };
 
 // Pure function: compute the batch events for converting an item to a section.
-// Handles promotion (moving out of parent). Adoption is handled by rebuildParentIds().
+// Handles promotion (moving out of parent) and adoption (reparenting following siblings).
 export function buildConvertToSectionEvents(todos: TodoItem[], id: string): BatchEvent[] | null {
   const item = todos.find(t => t.id === id);
   if (!item) return null;
@@ -167,7 +167,10 @@ export function buildConvertToSectionEvents(todos: TodoItem[], id: string): Batc
   // Promote: if item was a child of a section, move it to the grandparent level.
   // Exception: when parent is L1 and item has following siblings, the new L2 section
   // stays under the L1 (split behavior) so that dragging L1 carries all subsections.
+  // For non-L1 parents (e.g., L2), always promote and adopt following siblings
+  // so the new section splits the parent's children correctly.
   let promotionEvents: BatchEvent[] = [];
+  let adoptionEvents: BatchEvent[] = [];
   if (oldParentId) {
     const parentSection = todos.find(t => t.id === oldParentId);
     const parentIsL1 = parentSection?.type === 'section' && (parentSection?.level || 2) === 1;
@@ -187,6 +190,13 @@ export function buildConvertToSectionEvents(todos: TodoItem[], id: string): Batc
       if (grandparentId === null) {
         level = 1;
       }
+
+      // Adopt following siblings: move them from old parent to the new section
+      if (hasFollowingSiblings) {
+        for (let i = idx + 1; i < siblings.length; i++) {
+          adoptionEvents.push({ type: 'field_changed', itemId: siblings[i].id, field: 'parentId', value: id });
+        }
+      }
     }
   }
 
@@ -195,6 +205,7 @@ export function buildConvertToSectionEvents(todos: TodoItem[], id: string): Batc
     { type: 'field_changed', itemId: id, field: 'level', value: level },
     { type: 'field_changed', itemId: id, field: 'text', value: '' },
     ...promotionEvents,
+    ...adoptionEvents,
   ];
 
   return batch;

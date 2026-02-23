@@ -173,10 +173,10 @@ describe('buildConvertToSectionEvents', () => {
     });
   });
 
-  describe('L1 split behavior (stay under L1)', () => {
-    test('mid-section conversion under L1: stays under L1', () => {
+  describe('split behavior', () => {
+    test('mid-section conversion under L1: stays under L1 (split)', () => {
       const todos = [
-        makeSection('parent', { position: 'a', parentId: null }),
+        makeSection('parent', { position: 'a', parentId: null, level: 1 }),
         makeTodo('child-1', { position: 'a', parentId: 'parent' }),
         makeTodo('child-2', { position: 'b', parentId: 'parent' }),
         makeTodo('child-3', { position: 'c', parentId: 'parent' }),
@@ -189,7 +189,7 @@ describe('buildConvertToSectionEvents', () => {
       expect(batch).toHaveLength(3);
     });
 
-    test('blank first child of L1 section: stays under L1', () => {
+    test('blank first child of L1 with following siblings: stays under L1', () => {
       const todos = [
         makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
         makeTodo('blank', { position: 'a', parentId: 'sec-a', text: '' }),
@@ -204,7 +204,41 @@ describe('buildConvertToSectionEvents', () => {
       expect(batch).toHaveLength(3);
     });
 
-    test('blank last child of L1 section: promotes out', () => {
+    test('mid-section conversion under L2: promotes and adopts following siblings', () => {
+      const todos = [
+        makeSection('l1', { position: 'a', parentId: null, level: 1 }),
+        makeSection('l2-a', { position: 'a', parentId: 'l1', level: 2 }),
+        makeTodo('child-1', { position: 'a', parentId: 'l2-a' }),
+        makeTodo('child-2', { position: 'b', parentId: 'l2-a' }),
+        makeSection('l2-b', { position: 'z', parentId: 'l1', level: 2 }),
+      ];
+      const batch = buildConvertToSectionEvents(todos, 'child-1')!;
+
+      // child-1 promoted to L1 level (grandparent of l2-a)
+      expect(fieldValue(batch, 'child-1', 'parentId')).toBe('l1');
+      const newPos = fieldValue(batch, 'child-1', 'position') as string;
+      expect(newPos > 'a').toBe(true);
+      expect(newPos < 'z').toBe(true);
+      // child-2 adopted by child-1
+      expect(fieldValue(batch, 'child-2', 'parentId')).toBe('child-1');
+    });
+
+    test('mid-section conversion under root L2: promotes to root and adopts', () => {
+      const todos = [
+        makeSection('sec-a', { position: 'a', parentId: null, level: 2 }),
+        makeTodo('child-1', { position: 'a', parentId: 'sec-a' }),
+        makeTodo('child-2', { position: 'b', parentId: 'sec-a' }),
+      ];
+      const batch = buildConvertToSectionEvents(todos, 'child-1')!;
+
+      // child-1 promoted to root
+      expect(fieldValue(batch, 'child-1', 'parentId')).toBeNull();
+      expect(fieldValue(batch, 'child-1', 'level')).toBe(1);
+      // child-2 adopted by child-1
+      expect(fieldValue(batch, 'child-2', 'parentId')).toBe('child-1');
+    });
+
+    test('blank last child of section: promotes out', () => {
       const todos = [
         makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
         makeTodo('task-1', { position: 'a', parentId: 'sec-a' }),
@@ -221,28 +255,7 @@ describe('buildConvertToSectionEvents', () => {
       expect(batch).toHaveLength(5);
     });
 
-    test('blank child between two L1 sections: promotes between them', () => {
-      const todos = [
-        makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
-        makeTodo('task-1', { position: 'a', parentId: 'sec-a' }),
-        makeTodo('blank', { position: 'b', parentId: 'sec-a', text: '' }),
-        makeSection('sec-b', { position: 'z', parentId: null, level: 1 }),
-        makeTodo('task-2', { position: 'a', parentId: 'sec-b' }),
-      ];
-      const batch = buildConvertToSectionEvents(todos, 'blank')!;
-
-      // blank promoted to root
-      expect(fieldValue(batch, 'blank', 'parentId')).toBeNull();
-      // Positioned between sec-a and sec-b
-      const newPos = fieldValue(batch, 'blank', 'position') as string;
-      expect(newPos > 'a').toBe(true);
-      expect(newPos < 'z').toBe(true);
-      // No children stolen from either section
-      expect(eventsFor(batch, 'task-1')).toHaveLength(0);
-      expect(eventsFor(batch, 'task-2')).toHaveLength(0);
-    });
-
-    test('L1 split: new section stays under L1 with no position change', () => {
+    test('L1 split: stays under L1 with no position change', () => {
       const todos = [
         makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
         makeTodo('child-1', { position: 'a', parentId: 'sec-a' }),
@@ -256,24 +269,28 @@ describe('buildConvertToSectionEvents', () => {
       expect(eventsFor(batch, 'child-1').find(e => e.field === 'position')).toBeUndefined();
     });
 
-    test('L2 split: promoted section positioned after L2 parent, before next sibling', () => {
+    test('blank last child between two sections: promotes between them', () => {
       const todos = [
-        makeSection('l1', { position: 'a', parentId: null, level: 1 }),
-        makeSection('l2-a', { position: 'a', parentId: 'l1', level: 2 }),
-        makeTodo('child-1', { position: 'a', parentId: 'l2-a' }),
-        makeTodo('child-2', { position: 'b', parentId: 'l2-a' }),
-        makeSection('l2-b', { position: 'z', parentId: 'l1', level: 2 }),
+        makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
+        makeTodo('task-1', { position: 'a', parentId: 'sec-a' }),
+        makeTodo('blank', { position: 'b', parentId: 'sec-a', text: '' }),
+        makeSection('sec-b', { position: 'z', parentId: null, level: 1 }),
+        makeTodo('task-2', { position: 'a', parentId: 'sec-b' }),
       ];
-      const batch = buildConvertToSectionEvents(todos, 'child-1')!;
+      const batch = buildConvertToSectionEvents(todos, 'blank')!;
 
-      // child-1 promoted to L1 level (grandparent of l2-a)
-      expect(fieldValue(batch, 'child-1', 'parentId')).toBe('l1');
-      const newPos = fieldValue(batch, 'child-1', 'position') as string;
+      // blank is last child of sec-a → promoted to root
+      expect(fieldValue(batch, 'blank', 'parentId')).toBeNull();
+      // Positioned between sec-a and sec-b
+      const newPos = fieldValue(batch, 'blank', 'position') as string;
       expect(newPos > 'a').toBe(true);
       expect(newPos < 'z').toBe(true);
+      // No children stolen from either section
+      expect(eventsFor(batch, 'task-1')).toHaveLength(0);
+      expect(eventsFor(batch, 'task-2')).toHaveLength(0);
     });
 
-    test('blank sole child of L1 section: promotes to root', () => {
+    test('blank sole child of section: promotes to root', () => {
       const todos = [
         makeSection('sec-a', { position: 'a', parentId: null, level: 1 }),
         makeTodo('blank', { position: 'a', parentId: 'sec-a', text: '' }),
