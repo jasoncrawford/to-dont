@@ -150,28 +150,25 @@ test.describe('Important View', () => {
     });
 
     test('should show level 1 section when a level 2 subsection has important items', async ({ page }) => {
-      // Switch to active view to add items
-      await page.locator('#activeViewBtn').click();
-
-      // Create L1 section
-      await createSection(page, 'Projects');
-      // Promote to level 1
-      const l1Text = page.locator('.section-header .text').last();
-      await l1Text.click();
-      await l1Text.press('Shift+Tab');
-      await expect(page.locator('.section-header').last()).toHaveClass(/level-1/);
-      // Blur to save
-      await page.locator('body').click({ position: { x: 10, y: 10 } });
-
-      // Create L2 section under it
-      await createSection(page, 'Backend');
-
-      // Add important item under the L2 section
-      await addTodo(page, 'Fix critical bug');
-      await toggleImportant(page, 'Fix critical bug');
-
-      // Switch to Important view
-      await page.locator('#importantViewBtn').click();
+      // Set up precise tree structure via events
+      const now = Date.now();
+      await page.evaluate(({ now }: { now: number }) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'l1', type: 'item_created', field: null,
+            value: { text: 'Projects', position: 'f', type: 'section', level: 1, parentId: null },
+            timestamp: now, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'l2', type: 'item_created', field: null,
+            value: { text: 'Backend', position: 'a', type: 'section', level: 2, parentId: 'l1' },
+            timestamp: now + 1, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'item-1', type: 'item_created', field: null,
+            value: { text: 'Fix critical bug', position: 'a', parentId: 'l2', important: true },
+            timestamp: now + 2, clientId: 'test' },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.setItem('decay-todos-view-mode', 'important');
+      }, { now });
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
 
       const sectionTexts = await getSectionTexts(page);
       // Both L1 and L2 sections should be visible
@@ -183,28 +180,31 @@ test.describe('Important View', () => {
     });
 
     test('should hide empty level 2 sections under a level 1 with important items elsewhere', async ({ page }) => {
-      // Switch to active view to add items
-      await page.locator('#activeViewBtn').click();
-
-      // Create L1 section "Projects"
-      await createSection(page, 'Projects');
-      const l1Text = page.locator('.section-header .text').last();
-      await l1Text.click();
-      await l1Text.press('Shift+Tab');
-      await expect(page.locator('.section-header').last()).toHaveClass(/level-1/);
-      await page.locator('body').click({ position: { x: 10, y: 10 } });
-
-      // Create L2 section "Backend" with no important items
-      await createSection(page, 'Backend');
-      await addTodo(page, 'Normal backend task');
-
-      // Create L2 section "Frontend" with an important item
-      await createSection(page, 'Frontend');
-      await addTodo(page, 'Important frontend task');
-      await toggleImportant(page, 'Important frontend task');
-
-      // Switch to Important view
-      await page.locator('#importantViewBtn').click();
+      // Set up precise tree structure via events
+      const now = Date.now();
+      await page.evaluate(({ now }: { now: number }) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'l1', type: 'item_created', field: null,
+            value: { text: 'Projects', position: 'f', type: 'section', level: 1, parentId: null },
+            timestamp: now, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'l2-backend', type: 'item_created', field: null,
+            value: { text: 'Backend', position: 'a', type: 'section', level: 2, parentId: 'l1' },
+            timestamp: now + 1, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'item-backend', type: 'item_created', field: null,
+            value: { text: 'Normal backend task', position: 'a', parentId: 'l2-backend' },
+            timestamp: now + 2, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'l2-frontend', type: 'item_created', field: null,
+            value: { text: 'Frontend', position: 'n', type: 'section', level: 2, parentId: 'l1' },
+            timestamp: now + 3, clientId: 'test' },
+          { id: crypto.randomUUID(), itemId: 'item-frontend', type: 'item_created', field: null,
+            value: { text: 'Important frontend task', position: 'a', parentId: 'l2-frontend', important: true },
+            timestamp: now + 4, clientId: 'test' },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.setItem('decay-todos-view-mode', 'important');
+      }, { now });
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
 
       const sectionTexts = await getSectionTexts(page);
       // Projects (L1) should show because Frontend has important items

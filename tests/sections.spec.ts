@@ -125,6 +125,47 @@ test.describe('Sections and Hierarchy', () => {
     });
   });
 
+  test.describe('Section Split', () => {
+    test('should convert mid-section item to section in place', async ({ page }) => {
+      // Set up: L2 section with 3 items
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'sec-1', type: 'item_created', field: null,
+            value: { text: 'My Section', position: 'n', type: 'section', level: 2, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-1', type: 'item_created', field: null,
+            value: { text: 'First', position: 'f', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-2', type: 'item_created', field: null,
+            value: { text: '', position: 'n', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-3', type: 'item_created', field: null,
+            value: { text: 'Third', position: 'v', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForSelector('.section-header');
+
+      // Focus the empty item (item-2) and press Enter to convert it to a section
+      const items = page.locator('.todo-item .text');
+      await items.nth(1).click(); // empty item is second todo (index 1)
+      await items.nth(1).press('Enter');
+
+      // Verify: the new section should appear between First and Third
+      const stored = await getStoredTodos(page);
+      const texts = stored.map((t: any) => t.text);
+      const types = stored.map((t: any) => t.type || 'todo');
+
+      // Expected order: My Section, First, [new section], Third
+      expect(types).toEqual(['section', 'todo', 'section', 'todo']);
+      expect(texts[0]).toBe('My Section');
+      expect(texts[1]).toBe('First');
+      expect(texts[2]).toBe(''); // new section (empty)
+      expect(texts[3]).toBe('Third');
+    });
+  });
+
   test.describe('Section with Todos', () => {
     test('should group todos under sections', async ({ page }) => {
       // Create first section

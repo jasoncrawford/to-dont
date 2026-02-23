@@ -1,5 +1,5 @@
 import type { TodoItem } from './types';
-import { generatePositionBetween as _generatePositionBetween } from './lib/fractional-index.js';
+import { generatePositionBetween as _generatePositionBetween, generateInitialPositions } from './lib/fractional-index.js';
 import { sanitizeHTML } from './lib/sanitize';
 
 export const FADE_DURATION_DAYS = 14;
@@ -148,6 +148,120 @@ export function getDescendantIds(todos: TodoItem[], sectionId: string): string[]
   }
   collect(sectionId);
   return ids;
+}
+
+export type BatchEvent = { type: string; itemId: string; field?: string; value?: unknown };
+
+// Pure function: compute the batch events for converting an item to a section.
+// Just sets type, level, and clears text. syncHierarchyFromLinearOrder handles
+// parentId and position fixes after the batch is emitted.
+export function buildConvertToSectionEvents(todos: TodoItem[], id: string): BatchEvent[] | null {
+  const item = todos.find(t => t.id === id);
+  if (!item) return null;
+
+  return [
+    { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
+    { type: 'field_changed', itemId: id, field: 'level', value: 2 },
+    { type: 'field_changed', itemId: id, field: 'text', value: '' },
+  ];
+}
+
+// Rebuild parent-child tree from visual (flat) order.
+// Walk items in position order, assign parentIds based on section nesting.
+// Returns only items whose parentId differs from current (the diff).
+export function rebuildParentIds(todos: TodoItem[]): Array<{ itemId: string; field: 'parentId'; value: string | null }> {
+  let currentL1: string | null = null;
+  let currentL2: string | null = null;
+  const changes: Array<{ itemId: string; field: 'parentId'; value: string | null }> = [];
+
+  for (const item of todos) {
+    if (item.archived) continue;
+
+    let expectedParentId: string | null;
+
+    if (item.type === 'section') {
+      const level = item.level || 2;
+      if (level === 1) {
+        expectedParentId = null;
+        currentL1 = item.id;
+        currentL2 = null;
+      } else {
+        expectedParentId = currentL1;
+        currentL2 = item.id;
+      }
+    } else {
+      expectedParentId = currentL2 ?? currentL1 ?? null;
+    }
+
+    if ((item.parentId || null) !== expectedParentId) {
+      changes.push({ itemId: item.id, field: 'parentId', value: expectedParentId });
+    }
+  }
+
+  return changes;
+}
+// Derive hierarchy AND fix positions from the flat visual order.
+// 1. rebuildParentIds fixes parentIds from linear order
+// 2. Position consistency ensures positions within each parent group are monotonically increasing
+// Returns all parentId + position diffs.
+export function syncHierarchyFromLinearOrder(todos: TodoItem[]): Array<{ itemId: string; field: string; value: unknown }> {
+  // Step 1: Get parentId diffs
+  const parentIdChanges = rebuildParentIds(todos);
+
+  // Step 2: Apply parentId diffs to a working copy (just need id→parentId map)
+  const parentIdMap = new Map<string, string | null>();
+  for (const item of todos) {
+    parentIdMap.set(item.id, item.parentId || null);
+  }
+  for (const change of parentIdChanges) {
+    parentIdMap.set(change.itemId, change.value);
+  }
+
+  // Step 3: Group items by corrected parentId, preserving linear array order
+  const groups = new Map<string, string[]>(); // parentId (or '__null__') → itemId[]
+  for (const item of todos) {
+    if (item.archived) continue;
+    const pid = parentIdMap.get(item.id) ?? null;
+    const key = pid ?? '__null__';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(item.id);
+  }
+
+  // Step 4: For each group, check if positions are monotonically increasing
+  const positionChanges: Array<{ itemId: string; field: string; value: unknown }> = [];
+  const posMap = new Map<string, string>();
+  for (const item of todos) {
+    posMap.set(item.id, item.position || 'n');
+  }
+
+  for (const [, itemIds] of groups) {
+    const positions = itemIds.map(id => posMap.get(id)!);
+    let monotonic = true;
+    for (let i = 1; i < positions.length; i++) {
+      if (positions[i] <= positions[i - 1]) {
+        monotonic = false;
+        break;
+      }
+    }
+
+    if (!monotonic) {
+      // Reassign positions using generateInitialPositions
+      const newPositions = generateInitialPositions(itemIds.length);
+      for (let i = 0; i < itemIds.length; i++) {
+        if (newPositions[i] !== posMap.get(itemIds[i])) {
+          positionChanges.push({ itemId: itemIds[i], field: 'position', value: newPositions[i] });
+        }
+      }
+    }
+  }
+
+  // Combine all changes
+  const allChanges: Array<{ itemId: string; field: string; value: unknown }> = [
+    ...parentIdChanges,
+    ...positionChanges,
+  ];
+
+  return allChanges;
 }
 
 export function splitOnArrow(text: string): { before: string; after: string } | null {
