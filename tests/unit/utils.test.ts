@@ -9,6 +9,7 @@ import {
   getDescendantIds,
   splitOnArrow,
   rebuildParentIds,
+  syncHierarchyFromLinearOrder,
   FADE_DURATION_DAYS,
   IMPORTANT_ESCALATION_DAYS,
 } from '../../src/utils';
@@ -415,5 +416,105 @@ describe('rebuildParentIds', () => {
 
   test('empty list returns no changes', () => {
     expect(rebuildParentIds([])).toEqual([]);
+  });
+});
+
+describe('syncHierarchyFromLinearOrder', () => {
+  function makeTodo(id: string, overrides: Partial<TodoItem> = {}): TodoItem {
+    return {
+      id, text: id, createdAt: Date.now(), important: false, completed: false,
+      archived: false, position: 'n', textUpdatedAt: 0, importantUpdatedAt: 0,
+      completedUpdatedAt: 0, positionUpdatedAt: 0, typeUpdatedAt: 0,
+      levelUpdatedAt: 0, indentedUpdatedAt: 0,
+      ...overrides,
+    };
+  }
+
+  function makeSection(id: string, level: number, overrides: Partial<TodoItem> = {}): TodoItem {
+    return makeTodo(id, { type: 'section', level, ...overrides });
+  }
+
+  test('consistent array returns no changes', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null, position: 'f' }),
+      makeTodo('a', { parentId: 'l1', position: 'n' }),
+      makeTodo('b', { parentId: 'l1', position: 'v' }),
+    ];
+    const changes = syncHierarchyFromLinearOrder(todos);
+    expect(changes).toEqual([]);
+  });
+
+  test('parentId diffs only (positions already correct)', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null, position: 'f' }),
+      makeTodo('a', { parentId: null, position: 'n' }),
+      makeTodo('b', { parentId: null, position: 'v' }),
+    ];
+    const changes = syncHierarchyFromLinearOrder(todos);
+    // Should fix parentIds but not positions (a < b within the l1 group)
+    const parentChanges = changes.filter(c => c.field === 'parentId');
+    const posChanges = changes.filter(c => c.field === 'position');
+    expect(parentChanges).toEqual([
+      { itemId: 'a', field: 'parentId', value: 'l1' },
+      { itemId: 'b', field: 'parentId', value: 'l1' },
+    ]);
+    expect(posChanges).toEqual([]);
+  });
+
+  test('position diffs (parentIds correct but positions out of order)', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null, position: 'f' }),
+      makeTodo('a', { parentId: 'l1', position: 'z' }),
+      makeTodo('b', { parentId: 'l1', position: 'a' }),
+    ];
+    const changes = syncHierarchyFromLinearOrder(todos);
+    // parentIds are correct, but positions are out of order (z then a)
+    const parentChanges = changes.filter(c => c.field === 'parentId');
+    const posChanges = changes.filter(c => c.field === 'position');
+    expect(parentChanges).toEqual([]);
+    expect(posChanges.length).toBeGreaterThan(0);
+    // New positions should be monotonically increasing
+    const newPosA = posChanges.find(c => c.itemId === 'a')?.value as string ?? 'z';
+    const newPosB = posChanges.find(c => c.itemId === 'b')?.value as string ?? 'a';
+    expect(newPosA < newPosB).toBe(true);
+  });
+
+  test('combined parentId + position fixes', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null, position: 'f' }),
+      makeTodo('a', { parentId: null, position: 'z' }),
+      makeTodo('b', { parentId: null, position: 'a' }),
+    ];
+    const changes = syncHierarchyFromLinearOrder(todos);
+    const parentChanges = changes.filter(c => c.field === 'parentId');
+    const posChanges = changes.filter(c => c.field === 'position');
+    // parentIds should be fixed
+    expect(parentChanges).toContainEqual({ itemId: 'a', field: 'parentId', value: 'l1' });
+    expect(parentChanges).toContainEqual({ itemId: 'b', field: 'parentId', value: 'l1' });
+    // After correcting parentIds, a(z) and b(a) are in l1 group in linear order: a, b
+    // Positions z, a are NOT monotonically increasing, so positions should be fixed too
+    expect(posChanges.length).toBeGreaterThan(0);
+  });
+
+  test('archived items are skipped', () => {
+    const todos = [
+      makeSection('l1', 1, { parentId: null, position: 'f' }),
+      makeTodo('archived-item', { parentId: 'wrong', archived: true, position: 'n' }),
+      makeTodo('active-item', { parentId: null, position: 'v' }),
+    ];
+    const changes = syncHierarchyFromLinearOrder(todos);
+    // archived-item should not appear in any changes
+    expect(changes.filter(c => c.itemId === 'archived-item')).toEqual([]);
+    // active-item should get parentId fixed
+    expect(changes).toContainEqual({ itemId: 'active-item', field: 'parentId', value: 'l1' });
+  });
+
+  test('empty list returns no changes', () => {
+    expect(syncHierarchyFromLinearOrder([])).toEqual([]);
+  });
+
+  test('single item returns no changes if already correct', () => {
+    const todos = [makeTodo('a', { parentId: null, position: 'n' })];
+    expect(syncHierarchyFromLinearOrder(todos)).toEqual([]);
   });
 });
