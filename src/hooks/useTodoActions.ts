@@ -87,7 +87,23 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
-    window.EventLog.emitItemDeleted(id);
+    const todos = loadTodos();
+    const item = todos.find(t => t.id === id);
+
+    // When deleting a section, reparent its direct children to the section's parent first
+    if (item && item.type === 'section') {
+      const children = todos.filter(t => (t.parentId || null) === id);
+      const newParentId = item.parentId || null;
+      const batch: Array<{ type: string; itemId: string; field?: string; value?: unknown }> = [];
+      for (const child of children) {
+        batch.push({ type: 'field_changed', itemId: child.id, field: 'parentId', value: newParentId });
+      }
+      batch.push({ type: 'item_deleted', itemId: id });
+      window.EventLog.emitBatch(batch);
+    } else {
+      window.EventLog.emitItemDeleted(id);
+    }
+
     syncAndEmit();
     notifyStateChange();
   }, []);
