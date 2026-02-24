@@ -64,11 +64,15 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     const textEl = textRef.current;
     if (!div || !textEl) return;
 
-    // Tab: demote to level 2
+    // Tab: demote — L1 → L2, L2 → item
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       actions.updateTodoText(section.id, textEl.innerHTML || '');
-      actions.setSectionLevel(section.id, 2);
+      if ((section.level || 2) === 1) {
+        actions.setSectionLevel(section.id, 2);
+      } else {
+        actions.convertSectionToItem(section.id);
+      }
       return;
     }
 
