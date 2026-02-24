@@ -178,6 +178,7 @@ body {
   letter-spacing: 0.5px;
   outline: none;
   min-height: 1.4em;
+  min-width: 1px;
 }
 
 .section-header.level-2 .text {
@@ -188,6 +189,7 @@ body {
   letter-spacing: 0.5px;
   outline: none;
   min-height: 1.4em;
+  min-width: 1px;
 }
 
 .section-header .text:empty:before {

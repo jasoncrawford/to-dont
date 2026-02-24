@@ -227,20 +227,11 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       if (!range.collapsed) return; // Let default behavior delete selection
 
       if (getCursorOffset(textEl) === 0) {
-        const todoList = document.getElementById('todoList');
-        if (!todoList) return;
-        const items = Array.from(todoList.querySelectorAll('.todo-item, .section-header'));
-        const currentIndex = items.indexOf(div);
-        if (currentIndex > 0) {
-          const prevItem = items[currentIndex - 1] as HTMLElement;
-          if (prevItem.classList.contains('todo-item')) {
-            e.preventDefault();
-            const prevId = prevItem.dataset.id;
-            textEl.blur();
-            if (prevId) actions.mergeWithPrevious(todo.id, prevId);
-            return;
-          }
-        }
+        e.preventDefault();
+        actions.updateTodoText(todo.id, textEl.innerHTML || '');
+        textEl.blur();
+        actions.backspaceOnLine(todo.id);
+        return;
       }
     }
 
@@ -259,14 +250,14 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
       if (offset === 0) {
         textEl.blur();
-        actions.insertTodoBefore(todo.id);
+        actions.insertLineBefore(todo.id);
       } else if (offset >= content.length) {
         textEl.blur();
         actions.insertTodoAfter(todo.id);
       } else {
         const { before, after } = splitHTMLAtCursor(textEl);
         textEl.blur();
-        actions.splitTodoAt(todo.id, before, after);
+        actions.splitLineAt(todo.id, before, after);
       }
       return;
     }

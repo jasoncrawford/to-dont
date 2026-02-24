@@ -179,6 +179,9 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
     const newId = generateId();
     const value: Record<string, unknown> = { text: '', position, parentId };
+    if (afterItem.type !== 'section' && afterItem.indented) {
+      value.indented = true;
+    }
     if (viewMode === 'important') {
       value.important = true;
     }
@@ -187,7 +190,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const insertTodoBefore = useCallback((beforeId: string) => {
+  const insertLineBefore = useCallback((beforeId: string) => {
     const todos = loadTodos();
     const beforeItem = todos.find(t => t.id === beforeId);
     if (!beforeItem) return;
@@ -195,48 +198,102 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const { parentId, position } = positionBeforeSibling(todos, beforeId);
     const newId = generateId();
     const value: Record<string, unknown> = { text: '', position, parentId };
-    if (viewMode === 'important') {
-      value.important = true;
+
+    if (beforeItem.type === 'section') {
+      value.type = 'section';
+      value.level = beforeItem.level || 2;
+    } else {
+      if (beforeItem.indented) {
+        value.indented = true;
+      }
+      if (viewMode === 'important') {
+        value.important = true;
+      }
     }
+
     window.EventLog.emitItemCreated(newId, value);
+    if (beforeItem.type === 'section') syncAndEmit();
     pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const splitTodoAt = useCallback((id: string, textBefore: string, textAfter: string) => {
+  const splitLineAt = useCallback((id: string, textBefore: string, textAfter: string) => {
     const todos = loadTodos();
     const item = todos.find(t => t.id === id);
     if (!item) return;
 
-    // New item is a sibling after the current item
     const { parentId, position } = positionAfterSibling(todos, id);
     const newId = generateId();
     const newItemValue: Record<string, unknown> = { text: textAfter.trim(), position, parentId };
-    if (viewMode === 'important') {
-      newItemValue.important = true;
+
+    if (item.type === 'section') {
+      const level = item.level || 2;
+      newItemValue.type = 'section';
+      newItemValue.level = level;
+
+      // Reparent original section's direct children to the new section
+      const children = getSiblings(todos, id);
+      const reparentEvents = children.map(child => ({
+        type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
+      }));
+
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+        { type: 'item_created', itemId: newId, value: newItemValue },
+        ...reparentEvents,
+      ]);
+      syncAndEmit();
+    } else {
+      if (item.indented) {
+        newItemValue.indented = true;
+      }
+      if (viewMode === 'important') {
+        newItemValue.important = true;
+      }
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+        { type: 'item_created', itemId: newId, value: newItemValue },
+      ]);
     }
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-      { type: 'item_created', itemId: newId, value: newItemValue },
-    ]);
+
     pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const mergeWithPrevious = useCallback((currentId: string, prevId: string) => {
+  const backspaceOnLine = useCallback((id: string) => {
     const todos = loadTodos();
-    const currentTodo = todos.find(t => t.id === currentId);
-    const prevTodo = todos.find(t => t.id === prevId);
-    if (!currentTodo || !prevTodo) return;
+    const currentItem = todos.find(t => t.id === id);
+    if (!currentItem) return;
 
-    const cursorPos = textLengthOfHTML(prevTodo.text);
-    const mergedText = sanitizeHTML(prevTodo.text + currentTodo.text);
+    const idx = todos.findIndex(t => t.id === id);
 
+    // No previous item — no-op
+    if (idx <= 0) {
+      pendingFocusRef.current = { itemId: id, cursorPos: 0 };
+      notifyStateChange();
+      return;
+    }
+
+    // If section, convert to regular item first
+    if (currentItem.type === 'section') {
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
+        { type: 'field_changed', itemId: id, field: 'level', value: null },
+      ]);
+      syncAndEmit();
+    }
+
+    // Find the previous item in visual order (reload after possible syncAndEmit)
+    const updatedTodos = loadTodos();
+    const prevItem = updatedTodos[updatedTodos.findIndex(t => t.id === id) - 1];
+    const cursorPos = textLengthOfHTML(prevItem.text);
+    const mergedText = sanitizeHTML(prevItem.text + currentItem.text);
     window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: prevId, field: 'text', value: mergedText },
-      { type: 'item_deleted', itemId: currentId },
+      { type: 'field_changed', itemId: prevItem.id, field: 'text', value: mergedText },
+      { type: 'item_deleted', itemId: id },
     ]);
-    pendingFocusRef.current = { itemId: prevId, cursorPos };
+    syncAndEmit();
+    pendingFocusRef.current = { itemId: prevItem.id, cursorPos };
     notifyStateChange();
   }, [pendingFocusRef]);
 
@@ -373,9 +430,9 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     toggleComplete,
     toggleImportant,
     insertTodoAfter,
-    insertTodoBefore,
-    splitTodoAt,
-    mergeWithPrevious,
+    insertLineBefore,
+    splitLineAt,
+    backspaceOnLine,
     convertToSection,
     setTodoIndent,
     setSectionLevel,
