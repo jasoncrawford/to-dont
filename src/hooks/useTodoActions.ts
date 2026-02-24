@@ -1,10 +1,11 @@
 import { useCallback, useRef } from 'react';
-import { loadTodos, notifyStateChange } from '../store';
+import { loadTodos, notifyStateChange, getViewMode } from '../store';
 import {
   generateId, generatePositionBetween, getSiblings, splitOnArrow,
   buildConvertToSectionEvents, syncHierarchyFromLinearOrder,
 } from '../utils';
 import { sanitizeHTML, textLengthOfHTML } from '../lib/sanitize';
+import { pushUndo, isSaveSuppressed } from '../lib/undo-manager';
 import type { TodoItem, ViewMode } from '../types';
 import type { PendingFocus } from './useFocusManager';
 
@@ -42,360 +43,559 @@ function syncAndEmit() {
 }
 
 export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | null>, viewMode: ViewMode = 'active') {
-  const saveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const saveTimersRef = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; text: string }>());
+
+  // withUndo: wraps an action to capture events and push to undo stack
+  function withUndo(
+    beforeFocus: PendingFocus | null,
+    action: () => void,
+    afterFocus?: PendingFocus | null,
+  ): void {
+    const beforeViewMode = getViewMode();
+    window.EventLog.beginCapture();
+    action();
+    const captured = window.EventLog.endCapture();
+    const afterViewMode = getViewMode();
+    if (captured && captured.length > 0) {
+      pushUndo({
+        addedEventIds: captured.map(c => c.id),
+        addedEvents: captured.map(c => c.event),
+        beforeViewMode,
+        beforeFocus,
+        afterViewMode,
+        afterFocus: afterFocus !== undefined ? afterFocus : pendingFocusRef.current,
+      });
+    }
+  }
 
   const debouncedSave = useCallback((id: string, text: string) => {
+    if (isSaveSuppressed()) return;
     const timers = saveTimersRef.current;
     if (timers.has(id)) {
-      clearTimeout(timers.get(id));
+      clearTimeout(timers.get(id)!.timer);
     }
-    timers.set(id, setTimeout(() => {
-      timers.delete(id);
-      window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(text).trim());
-    }, SAVE_DEBOUNCE_MS));
+    timers.set(id, {
+      timer: setTimeout(() => {
+        timers.delete(id);
+        withUndo(
+          { itemId: id },
+          () => window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(text).trim()),
+          { itemId: id },
+        );
+      }, SAVE_DEBOUNCE_MS),
+      text,
+    });
   }, []);
 
   const updateTodoText = useCallback((id: string, newText: string) => {
-    window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(newText).trim());
+    if (isSaveSuppressed()) return;
+    const sanitized = sanitizeHTML(newText).trim();
+    // Skip if item doesn't exist or text hasn't changed
+    const todos = loadTodos();
+    const item = todos.find(t => t.id === id);
+    if (!item) return;
+    if (item.text === sanitized) {
+      // Still cancel any pending debounce
+      const timers = saveTimersRef.current;
+      if (timers.has(id)) {
+        clearTimeout(timers.get(id)!.timer);
+        timers.delete(id);
+      }
+      return;
+    }
+    withUndo(
+      { itemId: id },
+      () => {
+        window.EventLog.emitFieldChanged(id, 'text', sanitized);
+        const timers = saveTimersRef.current;
+        if (timers.has(id)) {
+          clearTimeout(timers.get(id)!.timer);
+          timers.delete(id);
+        }
+      },
+      { itemId: id },
+    );
+  }, []);
+
+  const flushPendingSaves = useCallback(() => {
     const timers = saveTimersRef.current;
-    if (timers.has(id)) {
-      clearTimeout(timers.get(id));
+    for (const [id, { timer, text }] of timers.entries()) {
+      clearTimeout(timer);
       timers.delete(id);
+      withUndo(
+        { itemId: id },
+        () => window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(text).trim()),
+        { itemId: id },
+      );
     }
   }, []);
 
   const addTodo = useCallback((text: string): string => {
     if (!text.trim()) return '';
-    const todos = loadTodos();
+    let newId = '';
+    withUndo(
+      null,
+      () => {
+        const todos = loadTodos();
+        const rootSiblings = getSiblings(todos, null);
+        const lastPos = rootSiblings.length > 0 ? rootSiblings[rootSiblings.length - 1].position : null;
+        const position = generatePositionBetween(lastPos, null);
 
-    // Add at end of root-level siblings
-    const rootSiblings = getSiblings(todos, null);
-    const lastPos = rootSiblings.length > 0 ? rootSiblings[rootSiblings.length - 1].position : null;
-    const position = generatePositionBetween(lastPos, null);
-
-    const newId = generateId();
-    const value: Record<string, unknown> = {
-      text: sanitizeHTML(text).trim(), position, parentId: null,
-    };
-    if (viewMode === 'important') {
-      value.important = true;
-    }
-    window.EventLog.emitItemCreated(newId, value);
-    pendingFocusRef.current = { itemId: newId, atEnd: true };
-    notifyStateChange();
+        newId = generateId();
+        const value: Record<string, unknown> = {
+          text: sanitizeHTML(text).trim(), position, parentId: null,
+        };
+        if (viewMode === 'important') {
+          value.important = true;
+        }
+        window.EventLog.emitItemCreated(newId, value);
+        pendingFocusRef.current = { itemId: newId, atEnd: true };
+        notifyStateChange();
+      },
+    );
     return newId;
   }, [pendingFocusRef, viewMode]);
 
   const deleteTodo = useCallback((id: string) => {
     const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-
-    // When deleting a section, reparent its direct children to the section's parent first
-    if (item && item.type === 'section') {
-      const children = todos.filter(t => (t.parentId || null) === id);
-      const newParentId = item.parentId || null;
-      const batch: Array<{ type: string; itemId: string; field?: string; value?: unknown }> = [];
-      for (const child of children) {
-        batch.push({ type: 'field_changed', itemId: child.id, field: 'parentId', value: newParentId });
-      }
-      batch.push({ type: 'item_deleted', itemId: id });
-      window.EventLog.emitBatch(batch);
-    } else {
-      window.EventLog.emitItemDeleted(id);
-    }
-
-    syncAndEmit();
-    notifyStateChange();
+    const idx = todos.findIndex(t => t.id === id);
+    const prevItem = idx > 0 ? todos[idx - 1] : null;
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos2 = loadTodos();
+        const item = todos2.find(t => t.id === id);
+        if (item && item.type === 'section') {
+          const children = todos2.filter(t => (t.parentId || null) === id);
+          const newParentId = item.parentId || null;
+          const batch: Array<{ type: string; itemId: string; field?: string; value?: unknown }> = [];
+          for (const child of children) {
+            batch.push({ type: 'field_changed', itemId: child.id, field: 'parentId', value: newParentId });
+          }
+          batch.push({ type: 'item_deleted', itemId: id });
+          window.EventLog.emitBatch(batch);
+        } else {
+          window.EventLog.emitItemDeleted(id);
+        }
+        syncAndEmit();
+        notifyStateChange();
+      },
+      prevItem ? { itemId: prevItem.id } : null,
+    );
   }, []);
 
   const toggleComplete = useCallback((id: string) => {
-    const todos = loadTodos();
-    const todo = todos.find(t => t.id === id);
-    if (!todo) return;
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos = loadTodos();
+        const todo = todos.find(t => t.id === id);
+        if (!todo) return;
 
-    const newCompleted = !todo.completed;
-    const batch: Array<{ type: string; itemId: string; field?: string; value?: unknown }> = [
-      { type: 'field_changed', itemId: id, field: 'completed', value: newCompleted },
-    ];
+        const newCompleted = !todo.completed;
+        const batch: Array<{ type: string; itemId: string; field?: string; value?: unknown }> = [
+          { type: 'field_changed', itemId: id, field: 'completed', value: newCompleted },
+        ];
 
-    if (newCompleted) {
-      // Extract plain text for arrow detection (links are lost on arrow-split)
-      const plainDiv = document.createElement('div');
-      plainDiv.innerHTML = todo.text;
-      const split = splitOnArrow(plainDiv.textContent || '');
-      if (split) {
-        batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
+        if (newCompleted) {
+          const plainDiv = document.createElement('div');
+          plainDiv.innerHTML = todo.text;
+          const split = splitOnArrow(plainDiv.textContent || '');
+          if (split) {
+            batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
+            const { parentId, position } = positionAfterSibling(todos, id);
+            const newId = generateId();
+            batch.push({
+              type: 'item_created', itemId: newId, value: {
+                text: split.after, position, parentId,
+                indented: todo.indented || false,
+              },
+            });
+          }
+        }
 
-        // New item is a sibling after the completed item
-        const { parentId, position } = positionAfterSibling(todos, id);
-        const newId = generateId();
-        batch.push({
-          type: 'item_created', itemId: newId, value: {
-            text: split.after, position, parentId,
-            indented: todo.indented || false,
-          },
-        });
-      }
-    }
-
-    window.EventLog.emitBatch(batch);
-    notifyStateChange();
+        window.EventLog.emitBatch(batch);
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, []);
 
   const toggleImportant = useCallback((id: string) => {
-    const todos = loadTodos();
-    const todo = todos.find(t => t.id === id);
-    if (!todo) return;
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos = loadTodos();
+        const todo = todos.find(t => t.id === id);
+        if (!todo) return;
 
-    const newImportant = !todo.important;
-    const events: Array<{ itemId: string; field: string; value: unknown }> = [
-      { itemId: id, field: 'important', value: newImportant },
-    ];
-    if (todo.archived && newImportant) {
-      events.push({ itemId: id, field: 'archived', value: false });
-    }
-    window.EventLog.emitFieldsChanged(events);
-    notifyStateChange();
+        const newImportant = !todo.important;
+        const events: Array<{ itemId: string; field: string; value: unknown }> = [
+          { itemId: id, field: 'important', value: newImportant },
+        ];
+        if (todo.archived && newImportant) {
+          events.push({ itemId: id, field: 'archived', value: false });
+        }
+        window.EventLog.emitFieldsChanged(events);
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, []);
 
   const insertTodoAfter = useCallback((afterId: string) => {
-    const todos = loadTodos();
-    const afterItem = todos.find(t => t.id === afterId);
-    if (!afterItem) return;
+    withUndo(
+      { itemId: afterId },
+      () => {
+        const todos = loadTodos();
+        const afterItem = todos.find(t => t.id === afterId);
+        if (!afterItem) return;
 
-    let parentId: string | null;
-    let position: string;
+        let parentId: string | null;
+        let position: string;
 
-    if (afterItem.type === 'section') {
-      // Enter on section header → new item is first child of section
-      parentId = afterItem.id;
-      const children = getSiblings(todos, parentId);
-      const after = children.length > 0 ? children[0].position : null;
-      position = generatePositionBetween(null, after);
-    } else {
-      // Enter at end of item → new sibling after current
-      ({ parentId, position } = positionAfterSibling(todos, afterId));
-    }
+        if (afterItem.type === 'section') {
+          parentId = afterItem.id;
+          const children = getSiblings(todos, parentId);
+          const after = children.length > 0 ? children[0].position : null;
+          position = generatePositionBetween(null, after);
+        } else {
+          ({ parentId, position } = positionAfterSibling(todos, afterId));
+        }
 
-    const newId = generateId();
-    const value: Record<string, unknown> = { text: '', position, parentId };
-    if (afterItem.type !== 'section' && afterItem.indented) {
-      value.indented = true;
-    }
-    if (viewMode === 'important') {
-      value.important = true;
-    }
-    window.EventLog.emitItemCreated(newId, value);
-    pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
-    notifyStateChange();
+        const newId = generateId();
+        const value: Record<string, unknown> = { text: '', position, parentId };
+        if (afterItem.type !== 'section' && afterItem.indented) {
+          value.indented = true;
+        }
+        if (viewMode === 'important') {
+          value.important = true;
+        }
+        window.EventLog.emitItemCreated(newId, value);
+        pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
+        notifyStateChange();
+      },
+    );
   }, [pendingFocusRef, viewMode]);
 
   const insertLineBefore = useCallback((beforeId: string) => {
-    const todos = loadTodos();
-    const beforeItem = todos.find(t => t.id === beforeId);
-    if (!beforeItem) return;
+    withUndo(
+      { itemId: beforeId, cursorPos: 0 },
+      () => {
+        const todos = loadTodos();
+        const beforeItem = todos.find(t => t.id === beforeId);
+        if (!beforeItem) return;
 
-    const { parentId, position } = positionBeforeSibling(todos, beforeId);
-    const newId = generateId();
-    const value: Record<string, unknown> = { text: '', position, parentId };
+        const { parentId, position } = positionBeforeSibling(todos, beforeId);
+        const newId = generateId();
+        const value: Record<string, unknown> = { text: '', position, parentId };
 
-    if (beforeItem.type === 'section') {
-      value.type = 'section';
-      value.level = beforeItem.level || 2;
-    } else {
-      if (beforeItem.indented) {
-        value.indented = true;
-      }
-      if (viewMode === 'important') {
-        value.important = true;
-      }
-    }
+        if (beforeItem.type === 'section') {
+          value.type = 'section';
+          value.level = beforeItem.level || 2;
+        } else {
+          if (beforeItem.indented) {
+            value.indented = true;
+          }
+          if (viewMode === 'important') {
+            value.important = true;
+          }
+        }
 
-    window.EventLog.emitItemCreated(newId, value);
-    if (beforeItem.type === 'section') syncAndEmit();
-    pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
-    notifyStateChange();
+        window.EventLog.emitItemCreated(newId, value);
+        if (beforeItem.type === 'section') syncAndEmit();
+        pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
+        notifyStateChange();
+      },
+    );
   }, [pendingFocusRef, viewMode]);
 
   const splitLineAt = useCallback((id: string, textBefore: string, textAfter: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item) return;
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos = loadTodos();
+        const item = todos.find(t => t.id === id);
+        if (!item) return;
 
-    const { parentId, position } = positionAfterSibling(todos, id);
-    const newId = generateId();
-    const newItemValue: Record<string, unknown> = { text: textAfter.trim(), position, parentId };
+        const { parentId, position } = positionAfterSibling(todos, id);
+        const newId = generateId();
+        const newItemValue: Record<string, unknown> = { text: textAfter.trim(), position, parentId };
 
-    if (item.type === 'section') {
-      const level = item.level || 2;
-      newItemValue.type = 'section';
-      newItemValue.level = level;
+        if (item.type === 'section') {
+          const level = item.level || 2;
+          newItemValue.type = 'section';
+          newItemValue.level = level;
 
-      // Reparent original section's direct children to the new section
-      const children = getSiblings(todos, id);
-      const reparentEvents = children.map(child => ({
-        type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
-      }));
+          const children = getSiblings(todos, id);
+          const reparentEvents = children.map(child => ({
+            type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
+          }));
 
-      window.EventLog.emitBatch([
-        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-        { type: 'item_created', itemId: newId, value: newItemValue },
-        ...reparentEvents,
-      ]);
-      syncAndEmit();
-    } else {
-      if (item.indented) {
-        newItemValue.indented = true;
-      }
-      if (viewMode === 'important') {
-        newItemValue.important = true;
-      }
-      window.EventLog.emitBatch([
-        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-        { type: 'item_created', itemId: newId, value: newItemValue },
-      ]);
-    }
+          window.EventLog.emitBatch([
+            { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+            { type: 'item_created', itemId: newId, value: newItemValue },
+            ...reparentEvents,
+          ]);
+          syncAndEmit();
+        } else {
+          if (item.indented) {
+            newItemValue.indented = true;
+          }
+          if (viewMode === 'important') {
+            newItemValue.important = true;
+          }
+          window.EventLog.emitBatch([
+            { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+            { type: 'item_created', itemId: newId, value: newItemValue },
+          ]);
+        }
 
-    pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
-    notifyStateChange();
+        pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
+        notifyStateChange();
+      },
+    );
   }, [pendingFocusRef, viewMode]);
 
-  const backspaceOnLine = useCallback((id: string) => {
+  const backspaceOnLine = useCallback((id: string, currentText?: string) => {
     const todos = loadTodos();
     const currentItem = todos.find(t => t.id === id);
     if (!currentItem) return;
-
     const idx = todos.findIndex(t => t.id === id);
 
-    // No previous item — no-op
-    if (idx <= 0) {
-      pendingFocusRef.current = { itemId: id, cursorPos: 0 };
-      notifyStateChange();
-      return;
-    }
+    // For beforeFocus, we'll figure out the cursor position that will result
+    const prevItem = idx > 0 ? todos[idx - 1] : null;
 
-    // If section, convert to regular item first
-    if (currentItem.type === 'section') {
-      window.EventLog.emitBatch([
-        { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
-        { type: 'field_changed', itemId: id, field: 'level', value: null },
-      ]);
-      syncAndEmit();
-    }
+    withUndo(
+      { itemId: id, cursorPos: 0 },
+      () => {
+        // If currentText provided, emit text change and cancel pending debounce
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
 
-    // Find the previous item in visual order (reload after possible syncAndEmit)
-    const updatedTodos = loadTodos();
-    const prevItem = updatedTodos[updatedTodos.findIndex(t => t.id === id) - 1];
-    const cursorPos = textLengthOfHTML(prevItem.text);
-    const mergedText = sanitizeHTML(prevItem.text + currentItem.text);
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: prevItem.id, field: 'text', value: mergedText },
-      { type: 'item_deleted', itemId: id },
-    ]);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: prevItem.id, cursorPos };
-    notifyStateChange();
+        const latestTodos = loadTodos();
+        const latestItem = latestTodos.find(t => t.id === id);
+        if (!latestItem) return;
+        const latestIdx = latestTodos.findIndex(t => t.id === id);
+
+        if (latestIdx <= 0) {
+          pendingFocusRef.current = { itemId: id, cursorPos: 0 };
+          notifyStateChange();
+          return;
+        }
+
+        if (latestItem.type === 'section') {
+          window.EventLog.emitBatch([
+            { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
+            { type: 'field_changed', itemId: id, field: 'level', value: null },
+          ]);
+          syncAndEmit();
+        }
+
+        const updatedTodos = loadTodos();
+        const updatedPrev = updatedTodos[updatedTodos.findIndex(t => t.id === id) - 1];
+        const cursorPos = textLengthOfHTML(updatedPrev.text);
+        const mergedText = sanitizeHTML(updatedPrev.text + latestItem.text);
+        window.EventLog.emitBatch([
+          { type: 'field_changed', itemId: updatedPrev.id, field: 'text', value: mergedText },
+          { type: 'item_deleted', itemId: id },
+        ]);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: updatedPrev.id, cursorPos };
+        notifyStateChange();
+      },
+      prevItem ? { itemId: prevItem.id, cursorPos: textLengthOfHTML(prevItem.text) } : { itemId: id, cursorPos: 0 },
+    );
   }, [pendingFocusRef]);
 
   const convertToSection = useCallback((id: string) => {
-    const todos = loadTodos();
-    const batch = buildConvertToSectionEvents(todos, id);
-    if (!batch) return;
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos = loadTodos();
+        const batch = buildConvertToSectionEvents(todos, id);
+        if (!batch) return;
 
-    window.EventLog.emitBatch(batch);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id, cursorPos: 0 };
-    notifyStateChange();
+        window.EventLog.emitBatch(batch);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id, cursorPos: 0 };
+        notifyStateChange();
+      },
+      { itemId: id, cursorPos: 0 },
+    );
   }, [pendingFocusRef]);
 
-  const promoteItemToSection = useCallback((id: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item || item.type === 'section') return;
+  const promoteItemToSection = useCallback((id: string, currentText?: string) => {
+    withUndo(
+      { itemId: id },
+      () => {
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
 
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
-      { type: 'field_changed', itemId: id, field: 'level', value: 2 },
-      { type: 'field_changed', itemId: id, field: 'indented', value: false },
-    ]);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id };
-    notifyStateChange();
+        const todos = loadTodos();
+        const item = todos.find(t => t.id === id);
+        if (!item || item.type === 'section') return;
+
+        window.EventLog.emitBatch([
+          { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
+          { type: 'field_changed', itemId: id, field: 'level', value: 2 },
+          { type: 'field_changed', itemId: id, field: 'indented', value: false },
+        ]);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id };
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
-  const convertSectionToItem = useCallback((id: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item || item.type !== 'section') return;
+  const convertSectionToItem = useCallback((id: string, currentText?: string) => {
+    withUndo(
+      { itemId: id },
+      () => {
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
 
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
-      { type: 'field_changed', itemId: id, field: 'level', value: null },
-    ]);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id };
-    notifyStateChange();
+        const todos = loadTodos();
+        const item = todos.find(t => t.id === id);
+        if (!item || item.type !== 'section') return;
+
+        window.EventLog.emitBatch([
+          { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
+          { type: 'field_changed', itemId: id, field: 'level', value: null },
+        ]);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id };
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
   const setTodoIndent = useCallback((id: string, indented: boolean) => {
-    const todos = loadTodos();
-    const todo = todos.find(t => t.id === id);
-    if (todo && todo.type !== 'section') {
-      window.EventLog.emitFieldChanged(id, 'indented', indented);
-      pendingFocusRef.current = { itemId: id };
-      notifyStateChange();
-    }
+    withUndo(
+      { itemId: id },
+      () => {
+        const todos = loadTodos();
+        const todo = todos.find(t => t.id === id);
+        if (todo && todo.type !== 'section') {
+          window.EventLog.emitFieldChanged(id, 'indented', indented);
+          pendingFocusRef.current = { itemId: id };
+          notifyStateChange();
+        }
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
-  const setSectionLevel = useCallback((id: string, level: number) => {
-    window.EventLog.emitFieldChanged(id, 'level', level);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id };
-    notifyStateChange();
+  const setSectionLevel = useCallback((id: string, level: number, currentText?: string) => {
+    withUndo(
+      { itemId: id },
+      () => {
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
+
+        window.EventLog.emitFieldChanged(id, 'level', level);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id };
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
-  const moveItemUp = useCallback((id: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item) return;
+  const moveItemUp = useCallback((id: string, currentText?: string) => {
+    withUndo(
+      { itemId: id },
+      () => {
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
 
-    // Move among siblings (same parentId), skipping archived
-    const parentId = item.parentId || null;
-    const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
-    const idx = siblings.findIndex(t => t.id === id);
-    if (idx <= 0) return;
+        const todos = loadTodos();
+        const item = todos.find(t => t.id === id);
+        if (!item) return;
 
-    // Position before the previous sibling
-    const prevSibling = siblings[idx - 1];
-    const beforePrev = idx > 1 ? siblings[idx - 2].position : null;
-    const newPosition = generatePositionBetween(beforePrev, prevSibling.position);
+        const parentId = item.parentId || null;
+        const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
+        const idx = siblings.findIndex(t => t.id === id);
+        if (idx <= 0) return;
 
-    window.EventLog.emitFieldChanged(id, 'position', newPosition);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id };
-    notifyStateChange();
+        const prevSibling = siblings[idx - 1];
+        const beforePrev = idx > 1 ? siblings[idx - 2].position : null;
+        const newPosition = generatePositionBetween(beforePrev, prevSibling.position);
+
+        window.EventLog.emitFieldChanged(id, 'position', newPosition);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id };
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
-  const moveItemDown = useCallback((id: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item) return;
+  const moveItemDown = useCallback((id: string, currentText?: string) => {
+    withUndo(
+      { itemId: id },
+      () => {
+        if (currentText !== undefined) {
+          window.EventLog.emitFieldChanged(id, 'text', sanitizeHTML(currentText).trim());
+          const timers = saveTimersRef.current;
+          if (timers.has(id)) {
+            clearTimeout(timers.get(id)!.timer);
+            timers.delete(id);
+          }
+        }
 
-    // Move among siblings (same parentId), skipping archived
-    const parentId = item.parentId || null;
-    const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
-    const idx = siblings.findIndex(t => t.id === id);
-    if (idx === -1 || idx >= siblings.length - 1) return;
+        const todos = loadTodos();
+        const item = todos.find(t => t.id === id);
+        if (!item) return;
 
-    // Position after the next sibling
-    const nextSibling = siblings[idx + 1];
-    const afterNext = idx < siblings.length - 2 ? siblings[idx + 2].position : null;
-    const newPosition = generatePositionBetween(nextSibling.position, afterNext);
+        const parentId = item.parentId || null;
+        const siblings = getSiblings(todos, parentId).filter(t => !t.archived);
+        const idx = siblings.findIndex(t => t.id === id);
+        if (idx === -1 || idx >= siblings.length - 1) return;
 
-    window.EventLog.emitFieldChanged(id, 'position', newPosition);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: id };
-    notifyStateChange();
+        const nextSibling = siblings[idx + 1];
+        const afterNext = idx < siblings.length - 2 ? siblings[idx + 2].position : null;
+        const newPosition = generatePositionBetween(nextSibling.position, afterNext);
+
+        window.EventLog.emitFieldChanged(id, 'position', newPosition);
+        syncAndEmit();
+        pendingFocusRef.current = { itemId: id };
+        notifyStateChange();
+      },
+      { itemId: id },
+    );
   }, [pendingFocusRef]);
 
   const archiveOldItems = useCallback(() => {
@@ -414,46 +614,56 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
   }, []);
 
   const archiveCompleted = useCallback(() => {
-    const todos = loadTodos();
-    const toArchive = todos.filter(t => t.completed && !t.archived);
-    if (toArchive.length > 0) {
-      window.EventLog.emitFieldsChanged(toArchive.map(t => ({ itemId: t.id, field: 'archived', value: true })));
-      notifyStateChange();
-    }
+    withUndo(
+      null,
+      () => {
+        const todos = loadTodos();
+        const toArchive = todos.filter(t => t.completed && !t.archived);
+        if (toArchive.length > 0) {
+          window.EventLog.emitFieldsChanged(toArchive.map(t => ({ itemId: t.id, field: 'archived', value: true })));
+          notifyStateChange();
+        }
+      },
+    );
   }, []);
 
   const reorderTodo = useCallback((draggedId: string, targetId: string) => {
-    const todos = loadTodos();
-    const dragged = todos.find(t => t.id === draggedId);
-    const target = todos.find(t => t.id === targetId);
-    if (!dragged || !target) return;
+    withUndo(
+      { itemId: draggedId },
+      () => {
+        const todos = loadTodos();
+        const dragged = todos.find(t => t.id === draggedId);
+        const target = todos.find(t => t.id === targetId);
+        if (!dragged || !target) return;
 
-    // Determine new parentId: same as target's parent (insert as sibling before target)
-    const newParentId = target.parentId || null;
-    const siblings = getSiblings(todos, newParentId).filter(t => t.id !== draggedId);
-    const targetIdx = siblings.findIndex(t => t.id === targetId);
+        const newParentId = target.parentId || null;
+        const siblings = getSiblings(todos, newParentId).filter(t => t.id !== draggedId);
+        const targetIdx = siblings.findIndex(t => t.id === targetId);
 
-    const before = targetIdx > 0 ? siblings[targetIdx - 1].position : null;
-    const after = target.position;
-    const newPos = generatePositionBetween(before, after);
+        const before = targetIdx > 0 ? siblings[targetIdx - 1].position : null;
+        const after = target.position;
+        const newPos = generatePositionBetween(before, after);
 
-    const events: Array<{ itemId: string; field: string; value: unknown }> = [
-      { itemId: draggedId, field: 'position', value: newPos },
-    ];
+        const events: Array<{ itemId: string; field: string; value: unknown }> = [
+          { itemId: draggedId, field: 'position', value: newPos },
+        ];
 
-    // Update parentId if moving across sections
-    if ((dragged.parentId || null) !== newParentId) {
-      events.push({ itemId: draggedId, field: 'parentId', value: newParentId });
-    }
+        if ((dragged.parentId || null) !== newParentId) {
+          events.push({ itemId: draggedId, field: 'parentId', value: newParentId });
+        }
 
-    window.EventLog.emitFieldsChanged(events);
-    syncAndEmit();
-    notifyStateChange();
+        window.EventLog.emitFieldsChanged(events);
+        syncAndEmit();
+        notifyStateChange();
+      },
+      { itemId: draggedId },
+    );
   }, []);
 
   return {
     debouncedSave,
     updateTodoText,
+    flushPendingSaves,
     addTodo,
     deleteTodo,
     toggleComplete,

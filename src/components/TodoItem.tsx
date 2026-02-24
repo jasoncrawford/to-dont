@@ -217,8 +217,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       if (todo.indented) {
         actions.setTodoIndent(todo.id, false);
       } else {
-        actions.updateTodoText(todo.id, textEl.innerHTML || '');
-        actions.promoteItemToSection(todo.id);
+        actions.promoteItemToSection(todo.id, textEl.innerHTML || '');
       }
       return;
     }
@@ -233,9 +232,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
       if (getCursorOffset(textEl) === 0) {
         e.preventDefault();
-        actions.updateTodoText(todo.id, textEl.innerHTML || '');
-        textEl.blur();
-        actions.backspaceOnLine(todo.id);
+        actions.backspaceOnLine(todo.id, textEl.innerHTML || '');
         return;
       }
     }
