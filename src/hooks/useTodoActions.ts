@@ -256,9 +256,17 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const level = item.level || 2;
     const { parentId, position } = positionAfterSibling(todos, id);
     const newId = generateId();
+
+    // Reparent original section's direct children to the new section
+    const children = getSiblings(todos, id);
+    const reparentEvents = children.map(child => ({
+      type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
+    }));
+
     window.EventLog.emitBatch([
       { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
       { type: 'item_created', itemId: newId, value: { text: textAfter.trim(), position, parentId, type: 'section', level } },
+      ...reparentEvents,
     ]);
     syncAndEmit();
     pendingFocusRef.current = { itemId: newId, cursorPos: 0 };

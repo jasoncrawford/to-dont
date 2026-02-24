@@ -425,6 +425,45 @@ test.describe('Keyboard Navigation', () => {
       expect(sectionItems[0].text.toLowerCase()).toBe('hello');
       expect(sectionItems[1].text.toLowerCase()).toBe('world');
     });
+
+    test('should place split section immediately after original, with children under new section', async ({ page }) => {
+      await createSection(page, 'HelloWorld');
+      await addTodo(page, 'Child');
+
+      // Verify child is under the section
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+
+      // Position cursor after "Hello" (5 chars)
+      await page.evaluate(() => {
+        const el = document.querySelector('.section-header .text') as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        const textNode = el.firstChild as Text;
+        range.setStart(textNode, 5);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await sectionText.press('Enter');
+
+      // Visual order should be: Hello section, World section, Child item
+      const allTextEls = page.locator('.section-header .text, .todo-item .text');
+      await expect(allTextEls).toHaveCount(3);
+
+      const allTexts = await allTextEls.allTextContents();
+      // Section text is uppercased in display
+      expect(allTexts[0].toLowerCase()).toBe('hello');
+      expect(allTexts[1].toLowerCase()).toBe('world');
+      expect(allTexts[2]).toBe('Child');
+
+      // Child should be under the new (World) section, not the original (Hello)
+      const stored = await getStoredTodos(page);
+      const worldSection = stored.find((t: any) => t.type === 'section' && t.text.toLowerCase() === 'world');
+      const child = stored.find((t: any) => t.text === 'Child');
+      expect(child.parentId).toBe(worldSection.id);
+    });
   });
 
   test.describe('Backspace Key Behavior', () => {
