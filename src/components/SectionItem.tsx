@@ -87,7 +87,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         e.preventDefault();
         actions.updateTodoText(section.id, textEl.innerHTML || '');
         textEl.blur();
-        actions.backspaceOnSection(section.id);
+        actions.backspaceOnLine(section.id);
         return;
       }
     }
@@ -102,7 +102,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         // Insert same-level section above
         actions.updateTodoText(section.id, textEl.innerHTML || '');
         textEl.blur();
-        actions.insertSectionBefore(section.id);
+        actions.insertLineBefore(section.id);
       } else if (offset >= content.length) {
         // Insert child item after section (existing behavior)
         textEl.blur();
@@ -111,7 +111,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         // Split section text into two sections
         const { before, after } = splitHTMLAtCursor(textEl);
         textEl.blur();
-        actions.splitSectionAt(section.id, before, after);
+        actions.splitLineAt(section.id, before, after);
       }
       return;
     }

@@ -174,7 +174,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const insertTodoBefore = useCallback((beforeId: string) => {
+  const insertLineBefore = useCallback((beforeId: string) => {
     const todos = loadTodos();
     const beforeItem = todos.find(t => t.id === beforeId);
     if (!beforeItem) return;
@@ -182,126 +182,98 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const { parentId, position } = positionBeforeSibling(todos, beforeId);
     const newId = generateId();
     const value: Record<string, unknown> = { text: '', position, parentId };
-    if (beforeItem.indented) {
-      value.indented = true;
+
+    if (beforeItem.type === 'section') {
+      value.type = 'section';
+      value.level = beforeItem.level || 2;
+    } else {
+      if (beforeItem.indented) {
+        value.indented = true;
+      }
+      if (viewMode === 'important') {
+        value.important = true;
+      }
     }
-    if (viewMode === 'important') {
-      value.important = true;
-    }
+
     window.EventLog.emitItemCreated(newId, value);
+    if (beforeItem.type === 'section') syncAndEmit();
     pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const splitTodoAt = useCallback((id: string, textBefore: string, textAfter: string) => {
+  const splitLineAt = useCallback((id: string, textBefore: string, textAfter: string) => {
     const todos = loadTodos();
     const item = todos.find(t => t.id === id);
     if (!item) return;
 
-    // New item is a sibling after the current item
     const { parentId, position } = positionAfterSibling(todos, id);
     const newId = generateId();
     const newItemValue: Record<string, unknown> = { text: textAfter.trim(), position, parentId };
-    if (item.indented) {
-      newItemValue.indented = true;
+
+    if (item.type === 'section') {
+      const level = item.level || 2;
+      newItemValue.type = 'section';
+      newItemValue.level = level;
+
+      // Reparent original section's direct children to the new section
+      const children = getSiblings(todos, id);
+      const reparentEvents = children.map(child => ({
+        type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
+      }));
+
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+        { type: 'item_created', itemId: newId, value: newItemValue },
+        ...reparentEvents,
+      ]);
+      syncAndEmit();
+    } else {
+      if (item.indented) {
+        newItemValue.indented = true;
+      }
+      if (viewMode === 'important') {
+        newItemValue.important = true;
+      }
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
+        { type: 'item_created', itemId: newId, value: newItemValue },
+      ]);
     }
-    if (viewMode === 'important') {
-      newItemValue.important = true;
-    }
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-      { type: 'item_created', itemId: newId, value: newItemValue },
-    ]);
+
     pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
     notifyStateChange();
   }, [pendingFocusRef, viewMode]);
 
-  const mergeWithPrevious = useCallback((currentId: string, prevId: string) => {
+  const backspaceOnLine = useCallback((id: string) => {
     const todos = loadTodos();
-    const currentTodo = todos.find(t => t.id === currentId);
-    const prevTodo = todos.find(t => t.id === prevId);
-    if (!currentTodo || !prevTodo) return;
+    const currentItem = todos.find(t => t.id === id);
+    if (!currentItem) return;
 
-    const cursorPos = textLengthOfHTML(prevTodo.text);
-    const mergedText = sanitizeHTML(prevTodo.text + currentTodo.text);
+    // If section, convert to regular item first
+    if (currentItem.type === 'section') {
+      window.EventLog.emitBatch([
+        { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
+        { type: 'field_changed', itemId: id, field: 'level', value: null },
+      ]);
+      syncAndEmit();
+    }
 
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: prevId, field: 'text', value: mergedText },
-      { type: 'item_deleted', itemId: currentId },
-    ]);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: prevId, cursorPos };
-    notifyStateChange();
-  }, [pendingFocusRef]);
-
-  const insertSectionBefore = useCallback((beforeId: string) => {
-    const todos = loadTodos();
-    const beforeItem = todos.find(t => t.id === beforeId);
-    if (!beforeItem) return;
-
-    const level = beforeItem.level || 2;
-    const { parentId, position } = positionBeforeSibling(todos, beforeId);
-    const newId = generateId();
-    window.EventLog.emitItemCreated(newId, { text: '', position, parentId, type: 'section', level });
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: beforeId, cursorPos: 0 };
-    notifyStateChange();
-  }, [pendingFocusRef]);
-
-  const splitSectionAt = useCallback((id: string, textBefore: string, textAfter: string) => {
-    const todos = loadTodos();
-    const item = todos.find(t => t.id === id);
-    if (!item) return;
-
-    const level = item.level || 2;
-    const { parentId, position } = positionAfterSibling(todos, id);
-    const newId = generateId();
-
-    // Reparent original section's direct children to the new section
-    const children = getSiblings(todos, id);
-    const reparentEvents = children.map(child => ({
-      type: 'field_changed', itemId: child.id, field: 'parentId', value: newId,
-    }));
-
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
-      { type: 'item_created', itemId: newId, value: { text: textAfter.trim(), position, parentId, type: 'section', level } },
-      ...reparentEvents,
-    ]);
-    syncAndEmit();
-    pendingFocusRef.current = { itemId: newId, cursorPos: 0 };
-    notifyStateChange();
-  }, [pendingFocusRef]);
-
-  const backspaceOnSection = useCallback((sectionId: string) => {
-    const todos = loadTodos();
-    const section = todos.find(t => t.id === sectionId);
-    if (!section) return;
-
-    // Convert section to regular item
-    window.EventLog.emitBatch([
-      { type: 'field_changed', itemId: sectionId, field: 'type', value: 'todo' },
-      { type: 'field_changed', itemId: sectionId, field: 'level', value: null },
-    ]);
-    syncAndEmit();
-
-    // Find the previous item in visual order (reload after syncAndEmit changed things)
+    // Find the previous item in visual order (reload after possible syncAndEmit)
     const updatedTodos = loadTodos();
-    const idx = updatedTodos.findIndex(t => t.id === sectionId);
+    const idx = updatedTodos.findIndex(t => t.id === id);
     if (idx > 0) {
       const prevItem = updatedTodos[idx - 1];
-      // Merge: append section text to prev item, delete former section
       const cursorPos = textLengthOfHTML(prevItem.text);
-      const mergedText = sanitizeHTML(prevItem.text + section.text);
+      const mergedText = sanitizeHTML(prevItem.text + currentItem.text);
       window.EventLog.emitBatch([
         { type: 'field_changed', itemId: prevItem.id, field: 'text', value: mergedText },
-        { type: 'item_deleted', itemId: sectionId },
+        { type: 'item_deleted', itemId: id },
       ]);
       syncAndEmit();
       pendingFocusRef.current = { itemId: prevItem.id, cursorPos };
     } else {
-      // No previous item — just focus the converted item
-      pendingFocusRef.current = { itemId: sectionId, cursorPos: 0 };
+      // No previous item — just focus at position 0
+      pendingFocusRef.current = { itemId: id, cursorPos: 0 };
     }
     notifyStateChange();
   }, [pendingFocusRef]);
@@ -439,12 +411,9 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     toggleComplete,
     toggleImportant,
     insertTodoAfter,
-    insertTodoBefore,
-    splitTodoAt,
-    mergeWithPrevious,
-    insertSectionBefore,
-    splitSectionAt,
-    backspaceOnSection,
+    insertLineBefore,
+    splitLineAt,
+    backspaceOnLine,
     convertToSection,
     setTodoIndent,
     setSectionLevel,
