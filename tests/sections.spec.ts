@@ -95,6 +95,97 @@ test.describe('Sections and Hierarchy', () => {
       section = page.locator('.section-header').first();
       await expect(section).toHaveClass(/level-2/);
     });
+
+    test('should convert L2 section to item with Tab', async ({ page }) => {
+      await createSection(page, 'Demote me');
+
+      // Verify it's a section
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.todo-item')).toHaveCount(0);
+
+      // Focus the section text and press Tab (L2 → item)
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+      await sectionText.press('Tab');
+
+      // Should now be a regular item, not a section
+      await expect(page.locator('.section-header')).toHaveCount(0);
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+
+      // Text should be preserved
+      const stored = await getStoredTodos(page);
+      expect(stored[0].type).not.toBe('section');
+      expect(stored[0].text).toBe('Demote me');
+    });
+
+    test('should convert non-indented item to L2 section with Shift+Tab', async ({ page }) => {
+      await addTodo(page, 'Promote me');
+
+      // Verify it's a regular item
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+      await expect(page.locator('.section-header')).toHaveCount(0);
+
+      // Focus the item and press Shift+Tab (item → L2 section)
+      const todoText = page.locator('.todo-item .text').first();
+      await todoText.click();
+      await todoText.press('Shift+Tab');
+
+      // Should now be a section
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.todo-item')).toHaveCount(0);
+
+      const section = page.locator('.section-header').first();
+      await expect(section).toHaveClass(/level-2/);
+
+      // Text should be preserved
+      const stored = await getStoredTodos(page);
+      expect(stored[0].type).toBe('section');
+      expect(stored[0].text).toBe('Promote me');
+    });
+
+    test('should cycle through full hierarchy with Tab and Shift+Tab', async ({ page }) => {
+      // Start with an item
+      await addTodo(page, 'Cycle test');
+
+      const getItemText = () => page.locator('.todo-item .text, .section-header .text').first();
+
+      // Item → Tab → indented item
+      let text = getItemText();
+      await text.click();
+      await text.press('Tab');
+      await expect(page.locator('.todo-item.indented')).toHaveCount(1);
+
+      // Indented item → Shift-Tab → non-indented item
+      text = getItemText();
+      await text.press('Shift+Tab');
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+      await expect(page.locator('.todo-item.indented')).toHaveCount(0);
+
+      // Non-indented item → Shift-Tab → L2 section
+      text = getItemText();
+      await text.press('Shift+Tab');
+      await expect(page.locator('.section-header.level-2')).toHaveCount(1);
+
+      // L2 section → Shift-Tab → L1 section
+      text = getItemText();
+      await text.press('Shift+Tab');
+      await expect(page.locator('.section-header.level-1')).toHaveCount(1);
+
+      // L1 section → Tab → L2 section
+      text = getItemText();
+      await text.press('Tab');
+      await expect(page.locator('.section-header.level-2')).toHaveCount(1);
+
+      // L2 section → Tab → item
+      text = getItemText();
+      await text.press('Tab');
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+      await expect(page.locator('.section-header')).toHaveCount(0);
+
+      // Text should be preserved throughout
+      const stored = await getStoredTodos(page);
+      expect(stored[0].text).toBe('Cycle test');
+    });
   });
 
   test.describe('Todo Indentation', () => {

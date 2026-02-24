@@ -308,6 +308,35 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     notifyStateChange();
   }, [pendingFocusRef]);
 
+  const promoteItemToSection = useCallback((id: string) => {
+    const todos = loadTodos();
+    const item = todos.find(t => t.id === id);
+    if (!item || item.type === 'section') return;
+
+    window.EventLog.emitBatch([
+      { type: 'field_changed', itemId: id, field: 'type', value: 'section' },
+      { type: 'field_changed', itemId: id, field: 'level', value: 2 },
+      { type: 'field_changed', itemId: id, field: 'indented', value: false },
+    ]);
+    syncAndEmit();
+    pendingFocusRef.current = { itemId: id };
+    notifyStateChange();
+  }, [pendingFocusRef]);
+
+  const convertSectionToItem = useCallback((id: string) => {
+    const todos = loadTodos();
+    const item = todos.find(t => t.id === id);
+    if (!item || item.type !== 'section') return;
+
+    window.EventLog.emitBatch([
+      { type: 'field_changed', itemId: id, field: 'type', value: 'todo' },
+      { type: 'field_changed', itemId: id, field: 'level', value: null },
+    ]);
+    syncAndEmit();
+    pendingFocusRef.current = { itemId: id };
+    notifyStateChange();
+  }, [pendingFocusRef]);
+
   const setTodoIndent = useCallback((id: string, indented: boolean) => {
     const todos = loadTodos();
     const todo = todos.find(t => t.id === id);
@@ -434,6 +463,8 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     splitLineAt,
     backspaceOnLine,
     convertToSection,
+    promoteItemToSection,
+    convertSectionToItem,
     setTodoIndent,
     setSectionLevel,
     moveItemUp,

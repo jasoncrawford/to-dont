@@ -211,10 +211,15 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       return;
     }
 
-    // Shift-Tab: unindent
+    // Shift-Tab: promote — indented → non-indented, non-indented → L2 section
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
-      actions.setTodoIndent(todo.id, false);
+      if (todo.indented) {
+        actions.setTodoIndent(todo.id, false);
+      } else {
+        actions.updateTodoText(todo.id, textEl.innerHTML || '');
+        actions.promoteItemToSection(todo.id);
+      }
       return;
     }
 
