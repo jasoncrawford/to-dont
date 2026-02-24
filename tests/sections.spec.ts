@@ -192,6 +192,167 @@ test.describe('Sections and Hierarchy', () => {
     });
   });
 
+  test.describe('Deleting Section Header', () => {
+    test('should only delete the header, not its items (via events)', async ({ page }) => {
+      // Set up a section with children via events
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'sec-1', type: 'item_created', field: null,
+            value: { text: 'My Section', position: 'n', type: 'section', level: 2, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-1', type: 'item_created', field: null,
+            value: { text: 'Task 1', position: 'f', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-2', type: 'item_created', field: null,
+            value: { text: 'Task 2', position: 'n', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-3', type: 'item_created', field: null,
+            value: { text: 'Task 3', position: 'v', parentId: 'sec-1' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForSelector('.section-header');
+
+      // Verify initial state
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.todo-item')).toHaveCount(3);
+
+      // Delete the section header
+      const sectionHeader = page.locator('.section-header');
+      await sectionHeader.hover();
+      await sectionHeader.locator('.actions button:has-text("×")').click();
+
+      // Section header should be gone
+      await expect(page.locator('.section-header')).toHaveCount(0);
+
+      // All items should still be present
+      await expect(page.locator('.todo-item')).toHaveCount(3);
+
+      const stored = await getStoredTodos(page);
+      const texts = stored.map((t: any) => t.text);
+      expect(texts).toContain('Task 1');
+      expect(texts).toContain('Task 2');
+      expect(texts).toContain('Task 3');
+    });
+
+    test('should preserve items when deleting L2 section under L1', async ({ page }) => {
+      // Set up: L1 section with an L2 subsection containing items
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'l1-sec', type: 'item_created', field: null,
+            value: { text: 'L1 Section', position: 'f', type: 'section', level: 1, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'l2-sec', type: 'item_created', field: null,
+            value: { text: 'L2 Section', position: 'f', type: 'section', level: 2, parentId: 'l1-sec' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-1', type: 'item_created', field: null,
+            value: { text: 'Child 1', position: 'f', parentId: 'l2-sec' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'item-2', type: 'item_created', field: null,
+            value: { text: 'Child 2', position: 'n', parentId: 'l2-sec' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForSelector('.section-header');
+
+      // Verify initial state
+      await expect(page.locator('.section-header')).toHaveCount(2);
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+
+      // Delete the L2 section header
+      const l2Section = page.locator('.section-header.level-2');
+      await l2Section.hover();
+      await l2Section.locator('.actions button:has-text("×")').click();
+
+      // Only L1 section should remain
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.section-header.level-1')).toHaveCount(1);
+
+      // Both items should still be present
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+      const texts = await page.locator('.todo-item .text').allTextContents();
+      expect(texts).toContain('Child 1');
+      expect(texts).toContain('Child 2');
+    });
+
+    test('should only delete the header, not its items (via UI)', async ({ page }) => {
+      // Create section and items through the UI
+      await createSection(page, 'Work');
+      await addTodo(page, 'Task A');
+      await addTodo(page, 'Task B');
+
+      // Verify initial state
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+
+      // Delete the section header
+      const sectionHeader = page.locator('.section-header');
+      await sectionHeader.hover();
+      await sectionHeader.locator('.actions button:has-text("×")').click();
+
+      // Section header should be gone
+      await expect(page.locator('.section-header')).toHaveCount(0);
+
+      // Items should still be present
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+
+      const texts = await page.locator('.todo-item .text').allTextContents();
+      expect(texts).toContain('Task A');
+      expect(texts).toContain('Task B');
+    });
+
+    test('should preserve items when deleting middle section between two sections', async ({ page }) => {
+      // Set up: Section A > items, Section B > items, Section C > items
+      const now = Date.now();
+      await page.evaluate((now: number) => {
+        const events = [
+          { id: crypto.randomUUID(), itemId: 'sec-a', type: 'item_created', field: null,
+            value: { text: 'Section A', position: 'b', type: 'section', level: 2, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'a1', type: 'item_created', field: null,
+            value: { text: 'A1', position: 'n', parentId: 'sec-a' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'sec-b', type: 'item_created', field: null,
+            value: { text: 'Section B', position: 'f', type: 'section', level: 2, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'b1', type: 'item_created', field: null,
+            value: { text: 'B1', position: 'f', parentId: 'sec-b' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'b2', type: 'item_created', field: null,
+            value: { text: 'B2', position: 'n', parentId: 'sec-b' }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'sec-c', type: 'item_created', field: null,
+            value: { text: 'Section C', position: 'v', type: 'section', level: 2, parentId: null }, timestamp: now, clientId: 'test', seq: 0 },
+          { id: crypto.randomUUID(), itemId: 'c1', type: 'item_created', field: null,
+            value: { text: 'C1', position: 'n', parentId: 'sec-c' }, timestamp: now, clientId: 'test', seq: 0 },
+        ];
+        localStorage.setItem('decay-events', JSON.stringify(events));
+        localStorage.removeItem('decay-todos');
+        localStorage.setItem('decay-todos-view-mode', 'active');
+      }, now);
+      await page.reload();
+      await page.waitForSelector('.section-header');
+
+      // Verify initial state: 3 sections, 4 items
+      await expect(page.locator('.section-header')).toHaveCount(3);
+      await expect(page.locator('.todo-item')).toHaveCount(4);
+
+      // Delete Section B
+      const sectionB = page.locator('.section-header:has(.text:text-is("Section B"))');
+      await sectionB.hover();
+      await sectionB.locator('.actions button:has-text("×")').click();
+
+      // Only 2 sections should remain
+      await expect(page.locator('.section-header')).toHaveCount(2);
+
+      // All 4 items should still be present
+      await expect(page.locator('.todo-item')).toHaveCount(4);
+
+      const texts = await page.locator('.todo-item .text').allTextContents();
+      expect(texts).toContain('A1');
+      expect(texts).toContain('B1');
+      expect(texts).toContain('B2');
+      expect(texts).toContain('C1');
+    });
+  });
+
   test.describe('Section Group Reordering', () => {
     // Helper: set up two root-level sections with children via events (tree structure)
     async function setupTwoSections(page: any) {
