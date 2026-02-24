@@ -578,7 +578,7 @@ test.describe('Keyboard Navigation', () => {
       expect(stored[0].text.toLowerCase()).toContain('mysection');
     });
 
-    test('should convert section to regular item when backspace at start with no item above', async ({ page }) => {
+    test('should do nothing when backspace at start of first section with no item above', async ({ page }) => {
       await createSection(page, 'OnlySection');
 
       // Focus the section and position cursor at start
@@ -588,13 +588,13 @@ test.describe('Keyboard Navigation', () => {
 
       await sectionText.press('Backspace');
 
-      // Section should be converted to a regular item
-      await expect(page.locator('.section-header')).toHaveCount(0);
-      await expect(page.locator('.todo-item')).toHaveCount(1);
+      // Section should remain unchanged — no-op
+      await expect(page.locator('.section-header')).toHaveCount(1);
+      await expect(page.locator('.todo-item')).toHaveCount(0);
 
       const stored = await getStoredTodos(page);
       expect(stored.length).toBe(1);
-      expect(stored[0].type).toBe('todo');
+      expect(stored[0].type).toBe('section');
       expect(stored[0].text.toLowerCase()).toContain('onlysection');
     });
   });

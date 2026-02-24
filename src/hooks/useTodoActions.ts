@@ -249,6 +249,15 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
     const currentItem = todos.find(t => t.id === id);
     if (!currentItem) return;
 
+    const idx = todos.findIndex(t => t.id === id);
+
+    // No previous item — no-op
+    if (idx <= 0) {
+      pendingFocusRef.current = { itemId: id, cursorPos: 0 };
+      notifyStateChange();
+      return;
+    }
+
     // If section, convert to regular item first
     if (currentItem.type === 'section') {
       window.EventLog.emitBatch([
@@ -260,21 +269,15 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
 
     // Find the previous item in visual order (reload after possible syncAndEmit)
     const updatedTodos = loadTodos();
-    const idx = updatedTodos.findIndex(t => t.id === id);
-    if (idx > 0) {
-      const prevItem = updatedTodos[idx - 1];
-      const cursorPos = textLengthOfHTML(prevItem.text);
-      const mergedText = sanitizeHTML(prevItem.text + currentItem.text);
-      window.EventLog.emitBatch([
-        { type: 'field_changed', itemId: prevItem.id, field: 'text', value: mergedText },
-        { type: 'item_deleted', itemId: id },
-      ]);
-      syncAndEmit();
-      pendingFocusRef.current = { itemId: prevItem.id, cursorPos };
-    } else {
-      // No previous item — just focus at position 0
-      pendingFocusRef.current = { itemId: id, cursorPos: 0 };
-    }
+    const prevItem = updatedTodos[updatedTodos.findIndex(t => t.id === id) - 1];
+    const cursorPos = textLengthOfHTML(prevItem.text);
+    const mergedText = sanitizeHTML(prevItem.text + currentItem.text);
+    window.EventLog.emitBatch([
+      { type: 'field_changed', itemId: prevItem.id, field: 'text', value: mergedText },
+      { type: 'item_deleted', itemId: id },
+    ]);
+    syncAndEmit();
+    pendingFocusRef.current = { itemId: prevItem.id, cursorPos };
     notifyStateChange();
   }, [pendingFocusRef]);
 
