@@ -3,6 +3,7 @@ import {
   setupPage,
   addTodo,
   getTodoTexts,
+  getSectionTexts,
   getStoredTodos,
   createSection,
   CMD,
@@ -348,6 +349,82 @@ test.describe('Keyboard Navigation', () => {
       expect(stored[0].text).toBe('Hello');
       expect(stored[1].text).toBe('World');
     });
+
+    test('should insert empty section above when Enter at start of section', async ({ page }) => {
+      await createSection(page, 'MySection');
+
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+      await sectionText.press('Home');
+      await sectionText.press('Enter');
+
+      // Should now have two sections
+      const sections = await getSectionTexts(page);
+      expect(sections.length).toBe(2);
+      expect(sections[0]).toBe('');
+      expect(sections[1]).toBe('MySection');
+
+      // Focus should remain on the original section (now second)
+      const secondSection = page.locator('.section-header .text').nth(1);
+      await expect(secondSection).toBeFocused();
+    });
+
+    test('should insert indented item above when Enter at start of indented item', async ({ page }) => {
+      await createSection(page, 'Sec');
+      await addTodo(page, 'Child');
+
+      // Indent the child item
+      const childText = page.locator('.todo-item .text').first();
+      await childText.click();
+      await childText.press('Tab');
+
+      // Verify it's indented
+      await expect(page.locator('.todo-item.indented')).toHaveCount(1);
+
+      // Press Enter at start
+      await childText.press('Home');
+      await childText.press('Enter');
+
+      // Should have 2 items, both indented
+      const items = page.locator('.todo-item');
+      await expect(items).toHaveCount(2);
+      await expect(page.locator('.todo-item.indented')).toHaveCount(2);
+
+      const texts = await getTodoTexts(page);
+      expect(texts[0]).toBe('');
+      expect(texts[1]).toBe('Child');
+    });
+
+    test('should split section into two sections when Enter in middle', async ({ page }) => {
+      await createSection(page, 'HelloWorld');
+
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+
+      // Position cursor after "Hello" (5 chars)
+      await page.evaluate(() => {
+        const el = document.querySelector('.section-header .text') as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        const textNode = el.firstChild as Text;
+        range.setStart(textNode, 5);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await sectionText.press('Enter');
+
+      // Should now have two sections
+      const sections = await getSectionTexts(page);
+      expect(sections.length).toBe(2);
+      // Section text is uppercased in display, so check stored data
+      const stored = await getStoredTodos(page);
+      const sectionItems = stored.filter((t: any) => t.type === 'section');
+      expect(sectionItems.length).toBe(2);
+      expect(sectionItems[0].text.toLowerCase()).toBe('hello');
+      expect(sectionItems[1].text.toLowerCase()).toBe('world');
+    });
   });
 
   test.describe('Backspace Key Behavior', () => {
@@ -417,6 +494,69 @@ test.describe('Keyboard Navigation', () => {
       const stored = await getStoredTodos(page);
       expect(stored.length).toBe(1);
       expect(stored[0].text).toBe('Only item');
+    });
+
+    test('should merge item text into section header when backspace at start of item after section', async ({ page }) => {
+      await createSection(page, 'Header');
+      await addTodo(page, 'Child');
+
+      // Focus the child item and position cursor at start
+      const childText = page.locator('.todo-item .text').first();
+      await childText.click();
+      await childText.press('Home');
+
+      await childText.press('Backspace');
+
+      // Item should be merged into section header
+      await expect(page.locator('.todo-item')).toHaveCount(0);
+      await expect(page.locator('.section-header')).toHaveCount(1);
+
+      const stored = await getStoredTodos(page);
+      const sectionItem = stored.find((t: any) => t.type === 'section');
+      expect(sectionItem).toBeDefined();
+      expect(sectionItem.text.toLowerCase()).toContain('header');
+      expect(sectionItem.text.toLowerCase()).toContain('child');
+    });
+
+    test('should convert section to item and merge with previous when backspace at start of section', async ({ page }) => {
+      await addTodo(page, 'Above');
+      await createSection(page, 'MySection');
+
+      // Focus the section and position cursor at start
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+      await sectionText.press('Home');
+
+      await sectionText.press('Backspace');
+
+      // Section should be converted and merged with item above
+      await expect(page.locator('.section-header')).toHaveCount(0);
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(1);
+      expect(stored[0].text.toLowerCase()).toContain('above');
+      expect(stored[0].text.toLowerCase()).toContain('mysection');
+    });
+
+    test('should convert section to regular item when backspace at start with no item above', async ({ page }) => {
+      await createSection(page, 'OnlySection');
+
+      // Focus the section and position cursor at start
+      const sectionText = page.locator('.section-header .text').first();
+      await sectionText.click();
+      await sectionText.press('Home');
+
+      await sectionText.press('Backspace');
+
+      // Section should be converted to a regular item
+      await expect(page.locator('.section-header')).toHaveCount(0);
+      await expect(page.locator('.todo-item')).toHaveCount(1);
+
+      const stored = await getStoredTodos(page);
+      expect(stored.length).toBe(1);
+      expect(stored[0].type).toBe('todo');
+      expect(stored[0].text.toLowerCase()).toContain('onlysection');
     });
   });
 

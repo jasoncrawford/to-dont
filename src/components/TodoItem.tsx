@@ -233,11 +233,11 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         const currentIndex = items.indexOf(div);
         if (currentIndex > 0) {
           const prevItem = items[currentIndex - 1] as HTMLElement;
-          if (prevItem.classList.contains('todo-item')) {
+          const prevId = prevItem.dataset.id;
+          if (prevId) {
             e.preventDefault();
-            const prevId = prevItem.dataset.id;
             textEl.blur();
-            if (prevId) actions.mergeWithPrevious(todo.id, prevId);
+            actions.mergeWithPrevious(todo.id, prevId);
             return;
           }
         }

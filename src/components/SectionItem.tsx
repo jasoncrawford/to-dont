@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useLayoutEffect } from 'react';
 import type { TodoItem as TodoItemType, ViewMode } from '../types';
+import { getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
 import type { TodoActions } from '../hooks/useTodoActions';
@@ -79,11 +80,39 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
       return;
     }
 
-    // Enter: insert new todo after section
+    // Backspace at start: convert to item and merge with previous
+    if (e.key === 'Backspace') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && sel.getRangeAt(0).collapsed && getCursorOffset(textEl) === 0) {
+        e.preventDefault();
+        actions.updateTodoText(section.id, textEl.innerHTML || '');
+        textEl.blur();
+        actions.backspaceOnSection(section.id);
+        return;
+      }
+    }
+
+    // Enter: depends on cursor position
     if (e.key === 'Enter') {
       e.preventDefault();
-      textEl.blur();
-      actions.insertTodoAfter(section.id);
+      const content = textEl.textContent || '';
+      const offset = getCursorOffset(textEl);
+
+      if (offset === 0) {
+        // Insert same-level section above
+        actions.updateTodoText(section.id, textEl.innerHTML || '');
+        textEl.blur();
+        actions.insertSectionBefore(section.id);
+      } else if (offset >= content.length) {
+        // Insert child item after section (existing behavior)
+        textEl.blur();
+        actions.insertTodoAfter(section.id);
+      } else {
+        // Split section text into two sections
+        const { before, after } = splitHTMLAtCursor(textEl);
+        textEl.blur();
+        actions.splitSectionAt(section.id, before, after);
+      }
       return;
     }
 
