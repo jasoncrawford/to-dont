@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { loadTodos, notifyStateChange } from '../store';
+import { loadTodos, notifyStateChange, getViewMode } from '../store';
 import { getDescendantIds, getSiblings, generatePositionBetween, syncHierarchyFromLinearOrder } from '../utils';
+import { pushUndo } from '../lib/undo-manager';
 import type { TodoItem } from '../types';
 
 interface DragState {
@@ -289,6 +290,10 @@ export function useDragAndDrop() {
       return;
     }
 
+    // Wrap all event emissions in undo capture
+    const beforeViewMode = getViewMode();
+    window.EventLog.beginCapture();
+
     if (isDraggingSection) {
       const parentId = draggedItem.parentId || null;
       const siblings = getSiblings(todos, parentId).filter(t => !t.archived && t.id !== dragState.id);
@@ -385,6 +390,19 @@ export function useDragAndDrop() {
     if (changes.length > 0) {
       window.EventLog.emitFieldsChanged(changes);
     }
+
+    const captured = window.EventLog.endCapture();
+    if (captured && captured.length > 0) {
+      pushUndo({
+        addedEventIds: captured.map(c => c.id),
+        addedEvents: captured.map(c => c.event),
+        beforeViewMode,
+        beforeFocus: { itemId: dragState.id },
+        afterViewMode: beforeViewMode,
+        afterFocus: { itemId: dragState.id },
+      });
+    }
+
     notifyStateChange();
   }
 
