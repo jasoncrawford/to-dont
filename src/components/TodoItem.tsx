@@ -3,6 +3,7 @@ import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
+import { beginGroup, endGroup } from '../lib/undo-manager';
 
 import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
@@ -39,7 +40,11 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
   });
 
   const onImportantChange = useCallback((_id: string, _newImportant: boolean) => {
+    // Group the pending text save with the importance toggle so they undo together
+    beginGroup();
+    actions.flushPendingSaves();
     actions.toggleImportant(todo.id);
+    endGroup();
   }, [actions, todo.id]);
 
   const { handleBlur, handleInput, handlePaste, initExclamationCount } = useContentEditable({

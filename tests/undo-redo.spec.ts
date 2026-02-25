@@ -70,6 +70,22 @@ test.describe('Undo/Redo', () => {
     await expect(page.locator('.important-btn.active')).toHaveCount(0, { timeout: 2000 });
   });
 
+  test('should undo exclamation-mark importance in one step', async ({ page }) => {
+    await addTodo(page, 'My task');
+
+    // Type ! to trigger importance
+    const textEl = page.locator('.todo-item .text').first();
+    await textEl.click();
+    await textEl.press('End');
+    await textEl.pressSequentially('!');
+    await expect(page.locator('.important-btn.active')).toHaveCount(1);
+
+    // Single undo should revert both the text and the importance
+    await page.keyboard.press(`${CMD}+z`);
+    await expect(page.locator('.important-btn.active')).toHaveCount(0, { timeout: 2000 });
+    await expect(page.locator('.todo-item .text').first()).toHaveText('My task', { timeout: 2000 });
+  });
+
   test('should undo text change via blur', async ({ page }) => {
     await addTodo(page, 'Original');
 
