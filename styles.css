@@ -760,12 +760,12 @@ body {
   }
 
   /* Prevent text selection on long-press unless actively editing.
-     On touch devices, text starts non-contenteditable and becomes
-     contenteditable on tap. This ensures iOS respects user-select. */
-  .todo-item .text:not([contenteditable="true"]),
-  .section-header .text:not([contenteditable="true"]) {
-    -webkit-user-select: none;
-    user-select: none;
+     Unfocused text passes touch events to the parent, so iOS can't
+     start text selection. Taps still work via handleDivClick which
+     programmatically focuses the text element. */
+  .todo-item .text:not(:focus),
+  .section-header .text:not(:focus) {
+    pointer-events: none;
   }
 }
 

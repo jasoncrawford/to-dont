@@ -1,9 +1,8 @@
-import React, { useRef, useCallback, useLayoutEffect, useState } from 'react';
+import React, { useRef, useCallback, useLayoutEffect } from 'react';
 import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
-import { isTouchDevice } from '../lib/touch-detect';
 import type { TodoActions } from '../hooks/useTodoActions';
 import type { TouchProps } from './TodoList';
 
@@ -19,7 +18,6 @@ interface SectionItemProps {
 export function SectionItemComponent({ section, viewMode, actions, onKeyDown, onDragStart, touchProps }: SectionItemProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
-  const [touchEditing, setTouchEditing] = useState(false);
 
   // Sync text from props to DOM on every render when not focused.
   useLayoutEffect(() => {
@@ -30,17 +28,12 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     }
   });
 
-  const { handleBlur: onBlurSave, handleInput, handlePaste } = useContentEditable({
+  const { handleBlur, handleInput, handlePaste } = useContentEditable({
     itemId: section.id,
     isImportant: false,
     onSave: actions.updateTodoText,
     onDebouncedSave: actions.debouncedSave,
   });
-
-  const handleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
-    setTouchEditing(false);
-    onBlurSave(e);
-  }, [onBlurSave]);
 
   const handleDivClick = useCallback((e: React.MouseEvent) => {
     // If swipe tray is open or was just closed, close it and blur instead of focusing
@@ -51,13 +44,9 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     }
 
     const target = e.target as HTMLElement;
+    if (target === textRef.current || target.closest('.actions')) return;
     const el = textRef.current;
-    if (!el) return;
-
-    // On touch devices, tapping text when not editing should enter edit mode
-    if (isTouchDevice && !touchEditing && (target === el || el.contains(target))) {
-      setTouchEditing(true);
-      el.setAttribute('contenteditable', 'true');
+    if (el) {
       el.focus();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -67,25 +56,8 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      return;
     }
-
-    if (target === el || target.closest('.actions')) return;
-
-    if (isTouchDevice && !touchEditing) {
-      setTouchEditing(true);
-      el.setAttribute('contenteditable', 'true');
-    }
-    el.focus();
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
-    const sel = window.getSelection();
-    if (sel) {
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, section.id, touchEditing]);
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, section.id]);
 
   const handleTextKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const div = divRef.current;
@@ -194,7 +166,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
         <div
           ref={textRef}
           className="text"
-          contentEditable={isTouchDevice ? touchEditing : true}
+          contentEditable="true"
           suppressContentEditableWarning
           onBlur={handleBlur}
           onInput={handleInput}
