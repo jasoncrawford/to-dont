@@ -1,5 +1,5 @@
 import { test, expect, CDPSession } from '@playwright/test';
-import { setupPage, addTodo, getTodoTexts, createSection } from './helpers';
+import { setupPage, addTodo, getTodoTexts, createSection, CMD } from './helpers';
 
 // All tests in this file use touch emulation
 test.use({ hasTouch: true });
@@ -446,6 +446,85 @@ test.describe('Touch Gestures', () => {
       await page.waitForTimeout(100);
       const userSelectAfter = await page.evaluate(() => document.body.style.userSelect);
       expect(userSelectAfter).toBe('');
+    });
+  });
+
+  test.describe('Touch text editing', () => {
+    test('tap on text focuses it for editing', async ({ page }) => {
+      await addTodo(page, 'Tap to edit');
+
+      const textEl = page.locator('.todo-item .text').first();
+
+      // Text should not be focused initially
+      const focusedBefore = await textEl.evaluate(el => document.activeElement === el);
+      expect(focusedBefore).toBe(false);
+
+      // Tap on the text
+      await textEl.tap();
+
+      // Text should now be focused
+      const focusedAfter = await textEl.evaluate(el => document.activeElement === el);
+      expect(focusedAfter).toBe(true);
+    });
+
+    test('typing and pressing Enter preserves text and focuses new item', async ({ page }) => {
+      await addTodo(page, 'First item');
+
+      // Tap on the text to focus it
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.tap();
+      await page.keyboard.press('End');
+      await page.keyboard.press('Enter');
+
+      // Should now have two items
+      await expect(page.locator('.todo-item')).toHaveCount(2);
+
+      // First item text should be preserved
+      const firstText = await page.locator('.todo-item .text').first().textContent();
+      expect(firstText).toBe('First item');
+
+      // Second (new) item should be focused
+      const newItemFocused = await page.locator('.todo-item .text').nth(1).evaluate(
+        el => document.activeElement === el
+      );
+      expect(newItemFocused).toBe(true);
+    });
+
+    test('typing and tapping away saves text', async ({ page }) => {
+      await addTodo(page, 'Original');
+
+      // Tap on the text to focus it
+      const textEl = page.locator('.todo-item .text').first();
+      await textEl.tap();
+
+      // Select all and type new text
+      await page.keyboard.press(`${CMD}+a`);
+      await page.keyboard.type('Updated text');
+
+      // Tap away to blur
+      await page.locator('body').tap({ position: { x: 10, y: 10 } });
+      await page.waitForTimeout(100);
+
+      // Text should be saved
+      const savedText = await page.locator('.todo-item .text').first().textContent();
+      expect(savedText).toBe('Updated text');
+    });
+
+    test('unfocused text has pointer-events none on touch devices', async ({ page }) => {
+      await addTodo(page, 'No pointer events');
+
+      const textEl = page.locator('.todo-item .text').first();
+
+      // Unfocused text should have pointer-events: none
+      const pointerEvents = await textEl.evaluate(el => getComputedStyle(el).pointerEvents);
+      expect(pointerEvents).toBe('none');
+
+      // Focus the text via the parent (simulates how handleDivClick works)
+      await page.locator('.todo-item').first().tap();
+
+      // Focused text should have pointer-events restored
+      const pointerEventsFocused = await textEl.evaluate(el => getComputedStyle(el).pointerEvents);
+      expect(pointerEventsFocused).toBe('auto');
     });
   });
 });
