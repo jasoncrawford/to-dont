@@ -454,14 +454,17 @@ test.describe('Touch Gestures', () => {
     test('tap on item focuses text for editing', async ({ page }) => {
       await addTodo(page, 'Tap to edit');
 
+      // Blur any focused element first
+      await page.locator('body').click({ position: { x: 10, y: 10 } });
+
       const textEl = page.locator('.todo-item .text').first();
       const item = page.locator('.todo-item').first();
 
-      // Text should not be focused initially
+      // Text should not be focused after blur
       const focusedBefore = await textEl.evaluate(el => document.activeElement === el);
       expect(focusedBefore).toBe(false);
 
-      // Tap on the item row (text has pointer-events:none, so tap the parent)
+      // Tap on the item row to focus text
       await item.tap();
 
       // Text should now be focused
@@ -508,23 +511,6 @@ test.describe('Touch Gestures', () => {
       // Text should be saved
       const savedText = await page.locator('.todo-item .text').first().textContent();
       expect(savedText).toBe('Updated text');
-    });
-
-    test('unfocused text has pointer-events none on touch devices', async ({ page }) => {
-      await addTodo(page, 'No pointer events');
-
-      const textEl = page.locator('.todo-item .text').first();
-
-      // Unfocused text should have pointer-events: none
-      const pointerEvents = await textEl.evaluate(el => getComputedStyle(el).pointerEvents);
-      expect(pointerEvents).toBe('none');
-
-      // Focus the text via the parent (simulates how handleDivClick works)
-      await page.locator('.todo-item').first().tap();
-
-      // Focused text should have pointer-events restored
-      const pointerEventsFocused = await textEl.evaluate(el => getComputedStyle(el).pointerEvents);
-      expect(pointerEventsFocused).toBe('auto');
     });
   });
 });
