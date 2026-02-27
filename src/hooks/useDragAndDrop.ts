@@ -150,9 +150,15 @@ export function useDragAndDrop() {
   // Public: long-press touch handler
   const handleTouchStartForDrag = useCallback((itemId: string, div: HTMLElement, isSection: boolean, touch: { clientX: number; clientY: number }) => {
     cancelLongPress();
+
+    // Prevent text selection during long-press wait period
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+
     const timerId = setTimeout(() => {
       longPressRef.current = null;
       navigator.vibrate?.(50);
+      // user-select already set, initDrag will maintain it
       if (isSection) {
         initSectionDrag(touch.clientX, touch.clientY, itemId, div, true);
       } else {
@@ -174,6 +180,11 @@ export function useDragAndDrop() {
     if (longPressRef.current) {
       clearTimeout(longPressRef.current.timerId);
       longPressRef.current = null;
+      // Restore text selection if long-press was canceled before drag started
+      if (!dragStateRef.current) {
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+      }
     }
   }, []);
 

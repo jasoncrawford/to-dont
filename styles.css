@@ -758,6 +758,15 @@ body {
   .section-content {
     touch-action: pan-y;
   }
+
+  /* Prevent text selection on long-press unless actively editing.
+     Unfocused text passes touch events to the parent, so iOS can't
+     start text selection. Taps still work via handleDivClick which
+     programmatically focuses the text element. */
+  .todo-item .text:not(:focus),
+  .section-header .text:not(:focus) {
+    pointer-events: none;
+  }
 }
 
 /* Responsive: narrow screens */
