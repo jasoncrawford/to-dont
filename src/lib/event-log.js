@@ -14,6 +14,10 @@ const CLIENT_ID_KEY = 'decay-client-id';
 let _eventsCacheJson = null;
 let _eventsCache = null;
 
+// Capture mechanism for undo: null = not capturing, [] = capturing
+let _capturedEvents = null;
+let _captureDepth = 0;
+
 // ============================================
 // Client ID
 // ============================================
@@ -85,6 +89,11 @@ function appendEvents(newEvents) {
   events.push(...newEvents);
   saveEvents(events);
 
+  // Capture for undo if active
+  if (_capturedEvents !== null) {
+    _capturedEvents.push(...newEvents.map(e => ({ id: e.id, event: structuredClone(e) })));
+  }
+
   // Re-project and materialize state
   const state = projectState(events);
   materializeState(state);
@@ -145,6 +154,44 @@ function emitItemDeleted(itemId) {
 function emitBatch(eventSpecs) {
   const events = eventSpecs.map(s => createEvent(s.type, s.itemId, s.field || null, s.value));
   appendEvents(events);
+}
+
+// ============================================
+// Undo/Redo Capture
+// ============================================
+
+function beginCapture() {
+  _captureDepth++;
+  if (_captureDepth === 1) {
+    _capturedEvents = [];
+  }
+}
+
+function endCapture() {
+  _captureDepth--;
+  if (_captureDepth === 0) {
+    const result = _capturedEvents;
+    _capturedEvents = null;
+    return result;
+  }
+  // Nested capture: return null to indicate "still capturing"
+  return null;
+}
+
+function removeEventsByIds(eventIds) {
+  const idSet = new Set(eventIds);
+  const events = loadEvents().filter(e => !idSet.has(e.id));
+  saveEvents(events);
+  const state = projectState(events);
+  materializeState(state);
+}
+
+function reappendEvents(eventsToAdd) {
+  const events = loadEvents();
+  events.push(...eventsToAdd);
+  saveEvents(events);
+  const state = projectState(events);
+  materializeState(state);
 }
 
 // ============================================
@@ -398,6 +445,12 @@ const EventLog = {
 
   // State access
   projectState,
+
+  // Undo/redo capture
+  beginCapture,
+  endCapture,
+  removeEventsByIds,
+  reappendEvents,
 
   // Sync helpers
   getClientId: function() { return clientId; },

@@ -145,6 +145,5 @@ if (viewMode === 'done') {
 ## Known Limitations
 
 - No keyboard shortcuts help in UI
-- No undo/redo
 - Single-user (no collaboration features)
 - Bearer token auth (visible in page source)

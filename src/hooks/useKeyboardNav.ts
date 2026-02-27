@@ -1,28 +1,47 @@
 import { useCallback } from 'react';
 import { setCursorPosition, getCursorOffset } from '../utils';
+import { performUndo, performRedo, canUndo, canRedo } from '../lib/undo-manager';
 import type { TodoActions } from './useTodoActions';
+import type { PendingFocus } from './useFocusManager';
 
 // Shared keyboard navigation handlers for both todos and sections
-export function useCommonKeydown(actions: TodoActions) {
+export function useCommonKeydown(actions: TodoActions, pendingFocusRef: React.RefObject<PendingFocus | null>) {
   return useCallback((
     e: React.KeyboardEvent<HTMLDivElement>,
     div: HTMLElement,
     textEl: HTMLElement,
     itemId: string,
   ): boolean => {
+    // Cmd+Z: undo
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      e.preventDefault();
+      if (canUndo()) {
+        actions.flushPendingSaves();
+        performUndo(pendingFocusRef);
+      }
+      return true;
+    }
+
+    // Shift+Cmd+Z: redo
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      e.preventDefault();
+      if (canRedo()) {
+        performRedo(pendingFocusRef);
+      }
+      return true;
+    }
+
     // Cmd+Shift+Up: move item up
     if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(itemId, textEl.innerHTML || '');
-      actions.moveItemUp(itemId);
+      actions.moveItemUp(itemId, textEl.innerHTML || '');
       return true;
     }
 
     // Cmd+Shift+Down: move item down
     if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(itemId, textEl.innerHTML || '');
-      actions.moveItemDown(itemId);
+      actions.moveItemDown(itemId, textEl.innerHTML || '');
       return true;
     }
 
@@ -127,5 +146,5 @@ export function useCommonKeydown(actions: TodoActions) {
     }
 
     return false;
-  }, [actions]);
+  }, [actions, pendingFocusRef]);
 }

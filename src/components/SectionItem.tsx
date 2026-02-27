@@ -67,11 +67,10 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     // Tab: demote — L1 → L2, L2 → item
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(section.id, textEl.innerHTML || '');
       if ((section.level || 2) === 1) {
-        actions.setSectionLevel(section.id, 2);
+        actions.setSectionLevel(section.id, 2, textEl.innerHTML || '');
       } else {
-        actions.convertSectionToItem(section.id);
+        actions.convertSectionToItem(section.id, textEl.innerHTML || '');
       }
       return;
     }
@@ -79,8 +78,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
     // Shift-Tab: promote to level 1
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
-      actions.updateTodoText(section.id, textEl.innerHTML || '');
-      actions.setSectionLevel(section.id, 1);
+      actions.setSectionLevel(section.id, 1, textEl.innerHTML || '');
       return;
     }
 
@@ -89,9 +87,7 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && sel.getRangeAt(0).collapsed && getCursorOffset(textEl) === 0) {
         e.preventDefault();
-        actions.updateTodoText(section.id, textEl.innerHTML || '');
-        textEl.blur();
-        actions.backspaceOnLine(section.id);
+        actions.backspaceOnLine(section.id, textEl.innerHTML || '');
         return;
       }
     }
@@ -104,7 +100,6 @@ export function SectionItemComponent({ section, viewMode, actions, onKeyDown, on
 
       if (offset === 0) {
         // Insert same-level section above
-        actions.updateTodoText(section.id, textEl.innerHTML || '');
         textEl.blur();
         actions.insertLineBefore(section.id);
       } else if (offset >= content.length) {

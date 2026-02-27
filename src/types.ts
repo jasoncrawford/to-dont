@@ -35,6 +35,10 @@ declare global {
       emitFieldsChanged: (changes: Array<{ itemId: string; field: string; value: unknown }>) => void;
       emitItemDeleted: (itemId: string) => void;
       emitBatch: (specs: Array<{ type: string; itemId: string; field?: string; value?: unknown }>) => void;
+      beginCapture: () => void;
+      endCapture: () => Array<{ id: string; event: unknown }> | null;
+      removeEventsByIds: (ids: string[]) => void;
+      reappendEvents: (events: unknown[]) => void;
       projectState: (events: unknown[]) => TodoItem[];
       getClientId: () => string;
       loadEvents: () => unknown[];

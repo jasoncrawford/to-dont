@@ -6,6 +6,7 @@ import { useTodoActions } from './hooks/useTodoActions';
 import { useCommonKeydown } from './hooks/useKeyboardNav';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useSwipeToReveal } from './hooks/useSwipeToReveal';
+import { beginGroup, endGroup, performUndo, performRedo, canUndo, canRedo } from './lib/undo-manager';
 import { ViewToggle } from './components/ViewToggle';
 import { TestModePanel } from './components/TestModePanel';
 import { NewItemInput } from './components/NewItemInput';
@@ -19,15 +20,40 @@ export default function App() {
   const authState = useAuthState();
   const { pendingFocusRef } = useFocusManager();
   const actions = useTodoActions(pendingFocusRef, viewMode);
-  const handleCommonKeydown = useCommonKeydown(actions);
+  const handleCommonKeydown = useCommonKeydown(actions, pendingFocusRef);
   const { startItemDrag, startSectionDrag, handleTouchStartForDrag, cancelLongPress, isDragActive } = useDragAndDrop();
   const { getSwipedItemId, bindSwipeTarget, closeSwipe, wasRecentlyClosed } = useSwipeToReveal();
 
   // NewItemInput Enter: create the typed item, then an empty line after it
   const handleNewItemAdd = useCallback((text: string) => {
+    beginGroup();
     const newId = actions.addTodo(text);
     if (newId) actions.insertTodoAfter(newId);
+    endGroup();
   }, [actions]);
+
+  // Document-level undo/redo for when no item is focused
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+        // Only handle if no contenteditable is focused (items handle it themselves)
+        const active = document.activeElement;
+        if (active && (active as HTMLElement).isContentEditable) return;
+
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (canRedo()) performRedo(pendingFocusRef);
+        } else {
+          if (canUndo()) {
+            actions.flushPendingSaves();
+            performUndo(pendingFocusRef);
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [pendingFocusRef, actions]);
 
   // Periodic re-render when not editing
   useEffect(() => {

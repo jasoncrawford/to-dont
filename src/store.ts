@@ -66,6 +66,10 @@ if (_viewMode === 'custom' as string || _viewMode === 'auto' as string) {
 let _viewListeners: Set<() => void> = new Set();
 let _viewVersion = 0;
 
+export function getViewMode(): ViewMode {
+  return _viewMode;
+}
+
 export function setViewMode(mode: ViewMode): void {
   _viewMode = mode;
   localStorage.setItem('decay-todos-view-mode', mode);

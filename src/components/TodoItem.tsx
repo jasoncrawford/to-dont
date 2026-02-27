@@ -3,7 +3,8 @@ import type { TodoItem as TodoItemType, ViewMode } from '../types';
 import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset, splitHTMLAtCursor } from '../utils';
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
-import { notifyStateChange } from '../store';
+import { beginGroup, endGroup } from '../lib/undo-manager';
+
 import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
 import type { TouchProps } from './TodoList';
@@ -38,10 +39,13 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     }
   });
 
-  const onImportantChange = useCallback((id: string, newImportant: boolean) => {
-    window.EventLog.emitFieldChanged(id, 'important', newImportant);
-    notifyStateChange();
-  }, []);
+  const onImportantChange = useCallback((_id: string, _newImportant: boolean) => {
+    // Group the pending text save with the importance toggle so they undo together
+    beginGroup();
+    actions.flushPendingSaves();
+    actions.toggleImportant(todo.id);
+    endGroup();
+  }, [actions, todo.id]);
 
   const { handleBlur, handleInput, handlePaste, initExclamationCount } = useContentEditable({
     itemId: todo.id,
@@ -217,8 +221,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       if (todo.indented) {
         actions.setTodoIndent(todo.id, false);
       } else {
-        actions.updateTodoText(todo.id, textEl.innerHTML || '');
-        actions.promoteItemToSection(todo.id);
+        actions.promoteItemToSection(todo.id, textEl.innerHTML || '');
       }
       return;
     }
@@ -233,9 +236,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
 
       if (getCursorOffset(textEl) === 0) {
         e.preventDefault();
-        actions.updateTodoText(todo.id, textEl.innerHTML || '');
-        textEl.blur();
-        actions.backspaceOnLine(todo.id);
+        actions.backspaceOnLine(todo.id, textEl.innerHTML || '');
         return;
       }
     }
