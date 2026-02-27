@@ -4,6 +4,7 @@ import { formatDate, getFadeOpacity, getImportanceLevel, getCursorOffset, splitH
 import { useContentEditable } from '../hooks/useContentEditable';
 import { sanitizeHTML } from '../lib/sanitize';
 import { beginGroup, endGroup } from '../lib/undo-manager';
+import { isTouchDevice } from '../lib/touch-detect';
 
 import { LinkEditor } from './LinkEditor';
 import type { TodoActions } from '../hooks/useTodoActions';
@@ -29,6 +30,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
   const divRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const [linkEditorState, setLinkEditorState] = useState<LinkEditorState | null>(null);
+  const [touchEditing, setTouchEditing] = useState(false);
 
   // Sync text from props to DOM on every render when not focused.
   useLayoutEffect(() => {
@@ -47,13 +49,18 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     endGroup();
   }, [actions, todo.id]);
 
-  const { handleBlur, handleInput, handlePaste, initExclamationCount } = useContentEditable({
+  const { handleBlur: onBlurSave, handleInput, handlePaste, initExclamationCount } = useContentEditable({
     itemId: todo.id,
     isImportant: todo.important,
     onSave: actions.updateTodoText,
     onDebouncedSave: actions.debouncedSave,
     onImportantChange: viewMode !== 'done' ? onImportantChange : undefined,
   });
+
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    setTouchEditing(false);
+    onBlurSave(e);
+  }, [onBlurSave]);
 
   useEffect(() => {
     initExclamationCount(todo.text);
@@ -82,10 +89,14 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
     }
 
     const target = e.target as HTMLElement;
-    if (target === textRef.current || target.closest('.actions')) return;
-
     const el = textRef.current;
-    if (el) {
+    if (!el) return;
+
+    // On touch devices, tapping text when not editing should enter edit mode
+    if (isTouchDevice && !touchEditing && (target === el || el.contains(target))) {
+      setTouchEditing(true);
+      // Must set attribute directly so focus works before re-render
+      el.setAttribute('contenteditable', 'true');
       el.focus();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -95,8 +106,25 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         sel.removeAllRanges();
         sel.addRange(range);
       }
+      return;
     }
-  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, todo.id]);
+
+    if (target === el || target.closest('.actions')) return;
+
+    if (isTouchDevice && !touchEditing) {
+      setTouchEditing(true);
+      el.setAttribute('contenteditable', 'true');
+    }
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, [touchProps.getSwipedItemId, touchProps.closeSwipe, touchProps.wasRecentlyClosed, todo.id, touchEditing]);
 
   const handleTextMouseDown = useCallback((e: React.MouseEvent) => {
     // If swipe tray is open, prevent focusing and close it
@@ -330,7 +358,7 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
         <div
           ref={textRef}
           className="text"
-          contentEditable={!todo.archived}
+          contentEditable={todo.archived ? false : (isTouchDevice ? touchEditing : true)}
           suppressContentEditableWarning
           onBlur={handleBlur}
           onInput={handleInput}

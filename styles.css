@@ -758,6 +758,15 @@ body {
   .section-content {
     touch-action: pan-y;
   }
+
+  /* Prevent text selection on long-press unless actively editing.
+     On touch devices, text starts non-contenteditable and becomes
+     contenteditable on tap. This ensures iOS respects user-select. */
+  .todo-item .text:not([contenteditable="true"]),
+  .section-header .text:not([contenteditable="true"]) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 /* Responsive: narrow screens */
