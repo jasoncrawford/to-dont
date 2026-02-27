@@ -302,9 +302,10 @@ test.describe('Touch Gestures', () => {
     test('text field tap does not trigger drag', async ({ page }) => {
       await addTodo(page, 'Tappable text');
 
-      // Tap on the text element - should not start drag
-      const textEl = page.locator('.todo-item .text').first();
-      await textEl.tap();
+      // Tap on the item row (text has pointer-events:none on touch,
+      // so a tap goes to the parent) — should not start drag
+      const item = page.locator('.todo-item').first();
+      await item.tap();
 
       await page.waitForTimeout(500);
 
@@ -450,17 +451,18 @@ test.describe('Touch Gestures', () => {
   });
 
   test.describe('Touch text editing', () => {
-    test('tap on text focuses it for editing', async ({ page }) => {
+    test('tap on item focuses text for editing', async ({ page }) => {
       await addTodo(page, 'Tap to edit');
 
       const textEl = page.locator('.todo-item .text').first();
+      const item = page.locator('.todo-item').first();
 
       // Text should not be focused initially
       const focusedBefore = await textEl.evaluate(el => document.activeElement === el);
       expect(focusedBefore).toBe(false);
 
-      // Tap on the text
-      await textEl.tap();
+      // Tap on the item row (text has pointer-events:none, so tap the parent)
+      await item.tap();
 
       // Text should now be focused
       const focusedAfter = await textEl.evaluate(el => document.activeElement === el);
@@ -470,9 +472,8 @@ test.describe('Touch Gestures', () => {
     test('typing and pressing Enter preserves text and focuses new item', async ({ page }) => {
       await addTodo(page, 'First item');
 
-      // Tap on the text to focus it
-      const textEl = page.locator('.todo-item .text').first();
-      await textEl.tap();
+      // Tap on the item to focus text
+      await page.locator('.todo-item').first().tap();
       await page.keyboard.press('End');
       await page.keyboard.press('Enter');
 
@@ -493,9 +494,8 @@ test.describe('Touch Gestures', () => {
     test('typing and tapping away saves text', async ({ page }) => {
       await addTodo(page, 'Original');
 
-      // Tap on the text to focus it
-      const textEl = page.locator('.todo-item .text').first();
-      await textEl.tap();
+      // Tap on the item to focus text
+      await page.locator('.todo-item').first().tap();
 
       // Select all and type new text
       await page.keyboard.press(`${CMD}+a`);

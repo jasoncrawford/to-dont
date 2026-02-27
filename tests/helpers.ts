@@ -51,7 +51,9 @@ export async function addTodo(page: Page, text: string) {
       // Add after last item by pressing Enter at the end
       const lastItem = page.locator('.todo-item, .section-header').last();
       const lastText = lastItem.locator('.text');
-      await lastText.click();
+      // Click the parent row — on touch devices, text has pointer-events:none
+      // so clicking the row triggers handleDivClick which focuses the text
+      await lastItem.click();
       await lastText.press('End');
       await lastText.press('Enter');
 
@@ -126,8 +128,9 @@ export async function createSection(page: Page, title: string = '') {
   // First add a placeholder todo
   await addTodo(page, 'x');
 
-  // Click the 'x' item, clear its text, and convert to section
-  const xItem = page.locator('.todo-item .text:text-is("x")').last();
+  // Click the 'x' item row to focus its text (click parent, not text,
+  // because touch devices have pointer-events:none on unfocused text)
+  const xItem = page.locator('.todo-item:has(.text:text-is("x"))').last();
   await xItem.click();
 
   // Select all and delete to clear the text
@@ -148,8 +151,10 @@ export async function createSection(page: Page, title: string = '') {
 
   // If title provided, fill it in
   if (title) {
-    const sectionText = page.locator('.section-header .text').last();
-    await sectionText.click();
+    const section = page.locator('.section-header').last();
+    const sectionText = section.locator('.text');
+    // Click parent row — touch devices have pointer-events:none on unfocused text
+    await section.click();
     await sectionText.pressSequentially(title);
 
     // Blur to save
