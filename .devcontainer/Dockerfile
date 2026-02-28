@@ -3,7 +3,7 @@ FROM node:20
 ARG TZ
 ENV TZ="$TZ"
 
-ARG CLAUDE_CODE_VERSION=latest
+ARG CLAUDE_CODE_CHANNEL=latest
 
 # Install basic development tools and iptables/ipset
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -62,7 +62,7 @@ USER node
 
 # Install global packages
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=$PATH:/usr/local/share/npm-global/bin
+ENV PATH=/home/node/.local/bin:$PATH:/usr/local/share/npm-global/bin
 
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
@@ -81,8 +81,11 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
   -x
 
-# Install Claude Code and Vercel CLI
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} vercel
+# Install Claude Code (native installer, auto-updates at runtime)
+RUN curl -fsSL https://claude.ai/install.sh | bash -s ${CLAUDE_CODE_CHANNEL}
+
+# Install Vercel CLI
+RUN npm install -g vercel
 
 # Copy and set up firewall script
 COPY init-firewall.sh /usr/local/bin/
