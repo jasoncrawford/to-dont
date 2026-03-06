@@ -6,6 +6,7 @@ import {
   getSectionTexts,
   getStoredTodos,
   createSection,
+  completeTodo,
   CMD,
 } from './helpers';
 
@@ -692,6 +693,71 @@ test.describe('Keyboard Navigation', () => {
       // Text should be preserved (use auto-retrying assertions)
       await expect(page.locator('.todo-item .text').first()).toHaveText('Second');
       await expect(page.locator('.todo-item .text').nth(1)).toHaveText('First modified');
+    });
+  });
+
+  test.describe('Mark Done Keyboard Shortcuts', () => {
+    test('should mark item done with Cmd+Enter', async ({ page }) => {
+      await addTodo(page, 'Task');
+
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+      await text.press(`${CMD}+Enter`);
+
+      const stored = await getStoredTodos(page);
+      expect(stored[0].completed).toBe(true);
+    });
+
+    test('should mark done item undone with Shift+Cmd+Enter', async ({ page }) => {
+      await addTodo(page, 'Task');
+
+      // First mark it done via checkbox
+      await completeTodo(page, 'Task');
+
+      // Now mark it undone via keyboard shortcut
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+      await text.press(`Shift+${CMD}+Enter`);
+
+      const stored = await getStoredTodos(page);
+      expect(stored[0].completed).toBe(false);
+    });
+
+    test('should mark done from anywhere in the line', async ({ page }) => {
+      await addTodo(page, 'Long task text');
+
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+
+      // Position cursor in the middle of the text
+      await page.evaluate(() => {
+        const el = document.querySelector('.todo-item .text') as HTMLElement;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(el.firstChild!, 4);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      await page.keyboard.press(`${CMD}+Enter`);
+
+      const stored = await getStoredTodos(page);
+      expect(stored[0].completed).toBe(true);
+    });
+
+    test('should not create a new line when pressing Cmd+Enter', async ({ page }) => {
+      await addTodo(page, 'Task');
+
+      const text = page.locator('.todo-item .text').first();
+      await text.click();
+      await text.press('End');
+      await text.press(`${CMD}+Enter`);
+
+      // Should still be only one item (no new line created)
+      const stored = await getStoredTodos(page);
+      const nonEmpty = stored.filter((t: any) => !t.archived);
+      expect(nonEmpty.length).toBe(1);
     });
   });
 

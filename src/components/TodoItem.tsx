@@ -241,6 +241,14 @@ export function TodoItemComponent({ todo, viewMode, now, actions, onKeyDown, onD
       }
     }
 
+    // Cmd+Enter / Shift+Cmd+Enter: toggle complete
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      actions.flushPendingSaves();
+      actions.toggleComplete(todo.id);
+      return;
+    }
+
     // Enter: depends on cursor position
     if (e.key === 'Enter') {
       const content = textEl.textContent || '';
