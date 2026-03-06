@@ -205,15 +205,12 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
             batch.push({ type: 'field_changed', itemId: id, field: 'text', value: split.before });
             const { parentId, position } = positionAfterSibling(todos, id);
             const newId = generateId();
-            const newItemValue: Record<string, unknown> = {
-              text: split.after, position, parentId,
-              indented: todo.indented || false,
-            };
-            if (todo.important) {
-              newItemValue.important = true;
-            }
             batch.push({
-              type: 'item_created', itemId: newId, value: newItemValue,
+              type: 'item_created', itemId: newId, value: {
+                text: split.after, position, parentId,
+                indented: todo.indented || false,
+                important: todo.important || false,
+              },
             });
           }
         }
@@ -346,9 +343,7 @@ export function useTodoActions(pendingFocusRef: React.RefObject<PendingFocus | n
           if (item.indented) {
             newItemValue.indented = true;
           }
-          if (item.important || viewMode === 'important') {
-            newItemValue.important = true;
-          }
+          newItemValue.important = item.important || viewMode === 'important';
           window.EventLog.emitBatch([
             { type: 'field_changed', itemId: id, field: 'text', value: textBefore.trim() },
             { type: 'item_created', itemId: newId, value: newItemValue },
