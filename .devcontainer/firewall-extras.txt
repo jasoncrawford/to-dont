@@ -1,0 +1,6 @@
+# Supabase
+ikhcklpmrmuzgzmfhczj.supabase.co
+
+# Playwright browser downloads
+playwright.azureedge.net
+playwright-cdn.azureedge.net
