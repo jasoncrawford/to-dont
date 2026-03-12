@@ -14,6 +14,6 @@
     "VERCEL_TOKEN": "${localEnv:VERCEL_TOKEN}",
     "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
   },
-  "postCreateCommand": "npm install && npx playwright install chromium && /usr/local/bin/post-create.sh",
+  "postCreateCommand": "npm install && npx playwright install chromium",
   "waitFor": "postStartCommand"
 }
